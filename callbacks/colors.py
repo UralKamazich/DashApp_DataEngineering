@@ -10,12 +10,13 @@ import plotly.io as pio
 import dash_mantine_components as dmc
 from dash import callback, Output, Input, State, no_update, html, dcc, MATCH, ALL
 
+COLOR_THRESHOLD = 10
+
 from app import app
 from utils import _make_error_notif, apply_custom_colors_safely
 
 logger = logging.getLogger(__name__)
 
-COLOR_THRESHOLD = 10  # дублируем, т.к. в components.py не импортируется
 
 
 # Диалог выбора цвета

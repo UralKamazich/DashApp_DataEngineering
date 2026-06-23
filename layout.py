@@ -29,7 +29,6 @@ from components import (
     dropdown_axes_category, dropdown_overlay,
     dropdown_legend, dropdown_legend_order, input_legend_custom_order,
     bin_column_select, bin_method, bin_k, bin_label_style,
-    create_dropdown, create_multiselect,
 )
 
 

@@ -15,6 +15,7 @@ from app import app
 from utils import (
     read_df_from_store, _empty_fig, _make_error_notif,
     _sort_legend_traces, hide_xlabels_on_upper_facets,
+    needs_text_axis,
 )
 from config import legend_config
 
@@ -96,40 +97,9 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             return bool(col) and (col in plot_df.columns)
         carg = color_col if _valid(color_col) else None
         sarg = size_col  if (bubble and _valid(size_col)) else None
-        def _hide_top_facet_xlabels(fig: go.Figure):
-            try:
-                y0s = []
-                for ya in fig.select_yaxes():
-                    dom = getattr(ya, "domain", None)
-                    if isinstance(dom, (list, tuple)) and len(dom) == 2:
-                        y0s.append(dom[0])
-                if not y0s:
-                    return
-                bottom = min(y0s)
-                for xa in fig.select_xaxes():
-                    anchor = getattr(xa, "anchor", None)
-                    yaxis = getattr(fig.layout, anchor, None) if isinstance(anchor, str) else None
-                    dom = getattr(yaxis, "domain", None) if yaxis is not None else None
-                    if isinstance(dom, (list, tuple)) and len(dom) == 2:
-                        if dom[0] > bottom + 1e-9:
-                            xa.update(showticklabels=False)
-                            xa.update(ticks="")
-                            try:
-                                xa.title.text = None
-                            except Exception:
-                                pass
-            except Exception as e:
-                logger.warning(f"_hide_top_facet_xlabels failed: {e}")
 
         meta = meta or {"numeric": [], "categorical": [], "datetime": []}
-        def needs_text_axis(col: str) -> bool:
-            if not col:
-                return False
-            if col in (meta.get("datetime") or []):
-                return False
-            return col not in (meta.get("numeric") or [])
-
-        x_as_text = needs_text_axis(x_col)
+        x_as_text = needs_text_axis(x_col, meta)
         if x_as_text:
             plot_df[x_col] = plot_df[x_col].astype(str)
 
@@ -365,7 +335,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                     facet_row=facet_row, facet_col=facet_col, category_orders=category_orders
                 )
                 fig.update_traces(contours_coloring="fill", contours_showlines=False)
-            _hide_top_facet_xlabels(fig)
+            hide_xlabels_on_upper_facets(fig)
 
         # Пользовательские цвета
         if isinstance(custom_colors, dict) and custom_colors:
@@ -379,10 +349,12 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             except Exception as _e:
                 logger.warning(f"custom_colors apply skipped: {_e}")
 
+        # Применяем шрифт тиков через полный объект tickfont (семейство + размер)
         if x_as_text:
-            fig.update_xaxes(type='category', categoryorder=dropdown_sort_column)
+            fig.update_xaxes(type='category', categoryorder=dropdown_sort_column,
+                             tickfont=dict(size=font_size_ticks))
         else:
-            fig.update_xaxes(tickfont_size=xaxis_font_size,
+            fig.update_xaxes(tickfont=dict(size=xaxis_font_size),
                              dtick=tick_step_x if tick_step_x and tick_step_x > 0 else None)
 
         def is_categorical_by_name(col):
@@ -391,9 +363,10 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             return False
 
         if is_categorical_by_name(y_col):
-            fig.update_yaxes(type='category', categoryorder=dropdown_sort_column)
+            fig.update_yaxes(type='category', categoryorder=dropdown_sort_column,
+                             tickfont=dict(size=font_size_ticks))
         else:
-            fig.update_yaxes(tickfont_size=yaxis_font_size,
+            fig.update_yaxes(tickfont=dict(size=yaxis_font_size),
                              dtick=tick_step_y if tick_step_y and tick_step_y > 0 else None)
 
         if axes_category == "x" and x_as_text:
@@ -406,7 +379,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             legend_title_text=None,
             xaxis_title_font=dict(size=font_size_ticks),
             yaxis_title_font=dict(size=font_size_ticks),
-            title_font_size=title_font_size,
+            title_font=dict(size=title_font_size),
             template=selected_style
         )
 
@@ -418,7 +391,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         fig.update_xaxes(automargin=True)
         fig.update_yaxes(automargin=True)
         if chart_type != "3D_Scatter" and facet_row:
-           _hide_top_facet_xlabels(fig)
+           hide_xlabels_on_upper_facets(fig)
 
         return fig, []
 
