@@ -352,7 +352,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         # Применяем шрифт тиков через полный объект tickfont (семейство + размер)
         if x_as_text:
             fig.update_xaxes(type='category', categoryorder=dropdown_sort_column,
-                             tickfont=dict(size=font_size_ticks))
+                             tickfont=dict(size=xaxis_font_size))
         else:
             fig.update_xaxes(tickfont=dict(size=xaxis_font_size),
                              dtick=tick_step_x if tick_step_x and tick_step_x > 0 else None)
@@ -364,7 +364,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         if is_categorical_by_name(y_col):
             fig.update_yaxes(type='category', categoryorder=dropdown_sort_column,
-                             tickfont=dict(size=font_size_ticks))
+                             tickfont=dict(size=yaxis_font_size))
         else:
             fig.update_yaxes(tickfont=dict(size=yaxis_font_size),
                              dtick=tick_step_y if tick_step_y and tick_step_y > 0 else None)
