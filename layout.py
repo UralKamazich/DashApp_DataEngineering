@@ -243,6 +243,7 @@ def create_layout():
                                                 persistence=True, persistence_type='local'
                                             )
                                         ], span="content"),
+                                        dmc.GridCol([bar_text_auto_switch], span="content"),
                                         dmc.Grid([
                                             dmc.GridCol([
                                                 dmc.NumberInput(
@@ -289,7 +290,6 @@ def create_layout():
                                             dmc.GridCol([input_legend_custom_order], span="content"),
                                         ]),
                                         dmc.Grid([dmc.GridCol([dropdown_style], span="content")]),
-                                        dmc.Grid([dmc.GridCol([bar_text_auto_switch], span="content")]),
                                         dmc.Grid([
                                             dmc.GridCol([
                                                 dmc.NumberInput(
