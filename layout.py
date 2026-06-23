@@ -29,6 +29,7 @@ from components import (
     dropdown_axes_category, dropdown_overlay,
     dropdown_legend, dropdown_legend_order, input_legend_custom_order,
     bin_column_select, bin_method, bin_k, bin_label_style,
+    bar_text_auto_switch,
 )
 
 
@@ -288,6 +289,7 @@ def create_layout():
                                             dmc.GridCol([input_legend_custom_order], span="content"),
                                         ]),
                                         dmc.Grid([dmc.GridCol([dropdown_style], span="content")]),
+                                        dmc.Grid([dmc.GridCol([bar_text_auto_switch], span="content")]),
                                         dmc.Grid([
                                             dmc.GridCol([
                                                 dmc.NumberInput(

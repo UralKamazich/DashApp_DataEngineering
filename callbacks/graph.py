@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
     Input("InputSizePlot", "value"),
     Input("InputSizePlotW", "value"),
     Input("dropdown_style", "value"),
+    Input("bar-text-auto", "checked"),
 
     State("filtered-data", "data"),
     State("dropdown_hover_data", "value"),
@@ -65,7 +66,7 @@ logger = logging.getLogger(__name__)
     prevent_initial_call=True
 )
 def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_col, dropdown_text_pozition,
-                      chart_type, bubble, MaxSizeBubble, height, width, selected_style,
+                      chart_type, bubble, MaxSizeBubble, height, width, selected_style, bar_text_auto,
                       filtered_json, hover_cols, corr_cols, facet_row, facet_col, filters_state,
                       xaxis_font_size, yaxis_font_size, font_size_ticks, title_font_size,
                       dropdown_sort_column, axes_category, dropdown_overlay, legend, custom_colors,
@@ -151,7 +152,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             fig = px.bar(
                 plot_df, x=x_col, y=y_col, color=carg,
                 height=height, width=width, facet_row=facet_row, facet_col=facet_col,
-                text_auto=True, category_orders=category_orders, template=selected_style
+                text_auto=bar_text_auto, category_orders=category_orders, template=selected_style
             )
             if dropdown_overlay in {'group', 'overlay', 'stack', 'relative'}:
                 fig.update_layout(barmode=dropdown_overlay)

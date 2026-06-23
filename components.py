@@ -382,3 +382,13 @@ bin_label_style = dmc.SegmentedControl(
           {"label": "Индексы", "value": "index"}],
     value="interval", size="xs", fullWidth=True
 )
+
+# Переключатель подписей на графиках Bar
+bar_text_auto_switch = dmc.Switch(
+    id="bar-text-auto",
+    label="Подписи значений на столбцах (Bar)",
+    checked=True,
+    onLabel="Вкл",
+    offLabel="Выкл",
+    size="md"
+)

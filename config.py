@@ -63,8 +63,32 @@ seaborn_custom = go.layout.Template(
 pio.templates["seaborn_custom"] = seaborn_custom
 
 PLOTLY_STYLES = [
-    "plotly", "ggplot2", "seaborn", "seaborn_custom", "simple_white", "plotly_white", "plotly_dark"
+    "plotly", "ggplot2", "seaborn", "seaborn_custom", "simple_white", "plotly_white", "plotly_dark", "plotly_dark_transparent"
 ]
+
+# Прозрачный тёмный стиль (на базе plotly_dark, но с прозрачным фоном)
+plotly_dark_transparent = go.layout.Template()
+plotly_dark_transparent.layout = go.Layout(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#E0E0E0"),
+    title_font=dict(color="#E0E0E0"),
+    xaxis=dict(
+        gridcolor="rgba(255,255,255,0.15)",
+        zerolinecolor="rgba(255,255,255,0.25)",
+        linecolor="rgba(255,255,255,0.4)",
+    ),
+    yaxis=dict(
+        gridcolor="rgba(255,255,255,0.15)",
+        zerolinecolor="rgba(255,255,255,0.25)",
+        linecolor="rgba(255,255,255,0.4)",
+    ),
+    colorway=[
+        "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
+        "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52"
+    ]
+)
+pio.templates["plotly_dark_transparent"] = plotly_dark_transparent
 
 NOTIF_POSITION = "bottom-right"
 
