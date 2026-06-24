@@ -204,8 +204,10 @@ txtcopy_strip_switch = dmc.Switch(
 # =========================
 add_filter_button = dmc.Button("Добавить фильтр", id="add-filter-btn", size="xs", variant="outline", leftSection=html.Div("+"))
 
-segmentedcontrol = dmc.SegmentedControl(
-    id="segmented", value="Scatter",
+dropdown_chart_type = dmc.Select(
+    id="segmented",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
     data=[
         {"value": "Scatter", "label": "Scatter"},
         {"value": "3D_Scatter", "label": "3D Scatter"},
@@ -224,7 +226,11 @@ segmentedcontrol = dmc.SegmentedControl(
         {"value": "Treemap",         "label": "Treemap"},
         {"value": "DensityHeat",     "label": "Density Heatmap"},
         {"value": "DensityContour",  "label": "Density Contour"},
-    ], size="sm"
+    ],
+    value="Scatter",
+    clearable=False,
+    persistence=True,
+    style={"width": "220px", "fontSize": "13px"}
 )
 
 SwitchBubble = dmc.Switch(id="SwitchBubble", size="xs", radius="sm", label="Bubble", checked=False)

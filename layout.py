@@ -20,7 +20,7 @@ from components import (
     agg_exclude_zeros_switch, agg_exclude_empty_switch,
     txtcopy_cols_select, txtcopy_suffix_input, txtcopy_strip_switch,
     add_filter_button,
-    segmentedcontrol,
+    dropdown_chart_type,
     SwitchBubble, update_graf,
     download_button, DownloadFile,
     excel_download_button, DownloadExcel,
@@ -46,12 +46,13 @@ def create_layout():
             dcc.Store(id='selected-sheet'),
             dcc.Store(id='sheet-modal-toggle', data=True),
             dcc.Store(id='custom-colors', data={}),
-            dcc.Store(id='meta-columns'),       # новый: метаданные о колонках
+            dcc.Store(id='meta-columns'),
             dcc.Store(id='cluster-metrics'),
             dcc.Store(id='source-file-path'),
             dcc.Store(id='source-file-name'),
             dcc.Store(id='filters-initialized', data=False),
-    # --- Color modal ---
+
+            # --- Color modal ---
             dmc.Modal(
                 id="color-modal",
                 title="Выберите цвета для классов",
@@ -76,130 +77,165 @@ def create_layout():
                 id="notifications-container"),
             copy_trigger,
 
-            dmc.Grid([
-                dmc.GridCol([
-                    dmc.Paper([
-                        dmc.Group([
-                            dmc.Button("Выбрать файл (.xlsx, .pkl)", id="pick-file-btn", size="xs"),
-                            dmc.Text(id="file-path-message", size="xs", c="dimmed", style={"wordBreak": "break-all"})
-                        ], gap="sm", align="center"),
-
-                        dmc.Modal(
-                            id="de-modal",
-                            title="Data Engineering",
-                            opened=False,
-                            size="xl",
-                            withCloseButton=True,
-                            closeOnClickOutside=True,
-                            closeOnEscape=True,
-                            overlayProps={"opacity": 0.15},
-                            children=[
-                                dmc.Tabs(
-                                    value="de",
-                                    children=[
-                                        dmc.TabsList([
-                                            dmc.TabsTab("Data Engineering", value="de"),
-                                            dmc.TabsTab("Биннинг", value="binning"),
-                                            dmc.TabsTab("Кластеризация", value="clustering"),
-                                        ]),
-                                        dmc.TabsPanel(
-                                            [
-                                                dmc.Text("Расчёт агрегатов по группам: выбираете ключ(и), столбцы и метрики — новые колонки добавляются в конец текущего датасета (после фильтров/кластеризации).", size="sm"),
-                                                dmc.Space(h=10),
-                                                dmc.Grid([
-                                                    dmc.GridCol([dmc.Text("Ключ(и) группировки", c="blue", fw=500, size="sm"), agg_keys_select], span=6, style={"minWidth": 0}),
-                                                    dmc.GridCol([dmc.Text("Столбцы для расчёта", c="blue", fw=500, size="sm"), agg_cols_select], span=6, style={"minWidth": 0}),
-                                                ]),
-                                                dmc.Space(h=8),
-                                                agg_metrics_select,
-                                                dmc.Space(h=10),
-                                                dmc.Group([
-                                                    agg_exclude_zeros_switch,
-                                                    agg_exclude_empty_switch,
-                                                ], gap="xl"),
-                                                dmc.Space(h=10),
-                                                dmc.Group([
-                                                    dmc.Button("Рассчитать", id="btn-agg", size="sm"),
-                                                ], justify="flex-end"),
-                                                dmc.Space(h=6),
-                                                dmc.Text(id="de-agg-status", size="sm", c="dimmed"),
-
-                                                dmc.Space(h=12),
-                                                dmc.Divider(label="Текстовые копии (чтобы Plotly и фильтры видели как текст)"),
-                                                dmc.Space(h=8),
-                                                dmc.Grid([
-                                                    dmc.GridCol([
-                                                        dmc.Text("Столбец(ы) для копирования в текст", c="blue", fw=500, size="sm"),
-                                                        txtcopy_cols_select
-                                                    ], span=8, style={"minWidth": 0}),
-                                                    dmc.GridCol([
-                                                        txtcopy_suffix_input
-                                                    ], span=4, style={"minWidth": 0}),
-                                                ]),
-                                                dmc.Space(h=8),
-                                                dmc.Group([txtcopy_strip_switch], gap="xl"),
-                                                dmc.Space(h=10),
-                                                dmc.Group([
-                                                    dmc.Button("Создать текстовую копию", id="btn-txtcopy", size="sm", variant="light"),
-                                                ], justify="flex-end"),
-                                                dmc.Space(h=6),
-                                                dmc.Text(id="de-txt-status", size="sm", c="dimmed"),
-                                            ],
-                                            value="de"
-                                        ),
-                                        dmc.TabsPanel(
-                                            [
-                                                dmc.Divider(label="Группировка численного столбца (биннинг)"),
-                                                dmc.Grid([
-                                                    dmc.GridCol([html.Center(dmc.Text("Столбец для биннинга", c="blue", fw=500, size="sm")), bin_column_select], span=8, style={"minWidth": 0}),
-                                                    dmc.GridCol([html.Center(dmc.Text("Число групп", c="blue", fw=500, size="sm")), bin_k], span=2, style={"minWidth": 0}),
-                                                    dmc.GridCol([dmc.Button("Группировка", id="btn-grouping", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
-                                                ]),
-                                                dmc.Grid([
-                                                    dmc.GridCol([dmc.Text("Метод", c="blue", fw=500, size="sm"), bin_method], span=6, style={"minWidth": 0}),
-                                                    dmc.GridCol([dmc.Text("Метки", c="blue", fw=500, size="sm"), bin_label_style], span=6, style={"minWidth": 0}),
-                                                ]),
-                                            ],
-                                            value="binning"
-                                        ),
-                                        dmc.TabsPanel(
-                                            [
-                                                dmc.Divider(label="Кластеризация (KMeans)"),
-                                                dmc.Grid([
-                                                    dmc.GridCol([html.Center(dmc.Text("Числовые столбцы для кластеризации", c="blue", fw=500, size="sm")), dropdown_cluster_cols], span=8, style={"minWidth": 0}),
-                                                    dmc.GridCol([html.Center(dmc.Text("К(Кластеры)", c="blue", fw=500, size="sm")),
-                                                                  dmc.NumberInput(id="cluster-k", value=4, min=2, max=20, step=1, debounce=True)], span=2, style={"minWidth": 0}),
-                                                    dmc.GridCol([dmc.Button("Кластеризация", id="btn-cluster", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
-                                                ]),
-                                            ],
-                                            value="clustering"
-                                        ),
-                                    ]
-                                )
-                            ]
+            # ========================
+            # ТЁМНЫЙ ХЕДЕР (ФУТЕР)
+            # ========================
+            dmc.Paper(
+                children=[
+                    dmc.Group([
+                        # Название программы
+                        dmc.Text("DataAnalize", fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
+                        dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
+                        # Кнопка выбора файла
+                        dmc.Button(
+                            "Выбрать файл (.xlsx, .pkl)",
+                            id="pick-file-btn",
+                            size="xs",
+                            variant="outline",
+                            color="gray",
+                            style={"borderColor": "rgba(255,255,255,0.3)", "color": "#ccc"}
                         ),
+                        # Сообщение о загруженном файле
+                        dmc.Text(
+                            id="file-path-message",
+                            size="xs",
+                            c="dimmed",
+                            style={"wordBreak": "break-all", "maxWidth": "500px"}
+                        ),
+                    ], gap="sm", align="center", wrap="nowrap", px="md", py=6),
+                ],
+                shadow="sm",
+                p=0,
+                style={
+                    "backgroundColor": "#1A1B1E",
+                    "borderBottom": "1px solid #2C2E33",
+                },
+                withBorder=False,
+            ),
 
-                        html.Div(
-                            dmc.Modal(
-                                id="sheet-modal",
-                                title="Выберите лист Excel",
-                                opened=False,
-                                centered=True,
-                                zIndex=1000,
-                                children=[]
+            # --- DE Modal ---
+            dmc.Modal(
+                id="de-modal",
+                title="Data Engineering",
+                opened=False,
+                size="xl",
+                withCloseButton=True,
+                closeOnClickOutside=True,
+                closeOnEscape=True,
+                overlayProps={"opacity": 0.15},
+                children=[
+                    dmc.Tabs(
+                        value="de",
+                        children=[
+                            dmc.TabsList([
+                                dmc.TabsTab("Data Engineering", value="de"),
+                                dmc.TabsTab("Биннинг", value="binning"),
+                                dmc.TabsTab("Кластеризация", value="clustering"),
+                            ]),
+                            dmc.TabsPanel(
+                                [
+                                    dmc.Text("Расчёт агрегатов по группам: выбираете ключ(и), столбцы и метрики — новые колонки добавляются в конец текущего датасета (после фильтров/кластеризации).", size="sm"),
+                                    dmc.Space(h=10),
+                                    dmc.Grid([
+                                        dmc.GridCol([dmc.Text("Ключ(и) группировки", c="blue", fw=500, size="sm"), agg_keys_select], span=6, style={"minWidth": 0}),
+                                        dmc.GridCol([dmc.Text("Столбцы для расчёта", c="blue", fw=500, size="sm"), agg_cols_select], span=6, style={"minWidth": 0}),
+                                    ]),
+                                    dmc.Space(h=8),
+                                    agg_metrics_select,
+                                    dmc.Space(h=10),
+                                    dmc.Group([
+                                        agg_exclude_zeros_switch,
+                                        agg_exclude_empty_switch,
+                                    ], gap="xl"),
+                                    dmc.Space(h=10),
+                                    dmc.Group([
+                                        dmc.Button("Рассчитать", id="btn-agg", size="sm"),
+                                    ], justify="flex-end"),
+                                    dmc.Space(h=6),
+                                    dmc.Text(id="de-agg-status", size="sm", c="dimmed"),
+
+                                    dmc.Space(h=12),
+                                    dmc.Divider(label="Текстовые копии (чтобы Plotly и фильтры видели как текст)"),
+                                    dmc.Space(h=8),
+                                    dmc.Grid([
+                                        dmc.GridCol([
+                                            dmc.Text("Столбец(ы) для копирования в текст", c="blue", fw=500, size="sm"),
+                                            txtcopy_cols_select
+                                        ], span=8, style={"minWidth": 0}),
+                                        dmc.GridCol([
+                                            txtcopy_suffix_input
+                                        ], span=4, style={"minWidth": 0}),
+                                    ]),
+                                    dmc.Space(h=8),
+                                    dmc.Group([txtcopy_strip_switch], gap="xl"),
+                                    dmc.Space(h=10),
+                                    dmc.Group([
+                                        dmc.Button("Создать текстовую копию", id="btn-txtcopy", size="sm", variant="light"),
+                                    ], justify="flex-end"),
+                                    dmc.Space(h=6),
+                                    dmc.Text(id="de-txt-status", size="sm", c="dimmed"),
+                                ],
+                                value="de"
                             ),
-                            id="sheet-menu-wrapper"
-                        ),
-                        html.Div(id='status-message', style={'marginTop': 10}),
-                    ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
+                            dmc.TabsPanel(
+                                [
+                                    dmc.Divider(label="Группировка численного столбца (биннинг)"),
+                                    dmc.Grid([
+                                        dmc.GridCol([html.Center(dmc.Text("Столбец для биннинга", c="blue", fw=500, size="sm")), bin_column_select], span=8, style={"minWidth": 0}),
+                                        dmc.GridCol([html.Center(dmc.Text("Число групп", c="blue", fw=500, size="sm")), bin_k], span=2, style={"minWidth": 0}),
+                                        dmc.GridCol([dmc.Button("Группировка", id="btn-grouping", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
+                                    ]),
+                                    dmc.Grid([
+                                        dmc.GridCol([dmc.Text("Метод", c="blue", fw=500, size="sm"), bin_method], span=6, style={"minWidth": 0}),
+                                        dmc.GridCol([dmc.Text("Метки", c="blue", fw=500, size="sm"), bin_label_style], span=6, style={"minWidth": 0}),
+                                    ]),
+                                ],
+                                value="binning"
+                            ),
+                            dmc.TabsPanel(
+                                [
+                                    dmc.Divider(label="Кластеризация (KMeans)"),
+                                    dmc.Grid([
+                                        dmc.GridCol([html.Center(dmc.Text("Числовые столбцы для кластеризации", c="blue", fw=500, size="sm")), dropdown_cluster_cols], span=8, style={"minWidth": 0}),
+                                        dmc.GridCol([html.Center(dmc.Text("К(Кластеры)", c="blue", fw=500, size="sm")),
+                                                      dmc.NumberInput(id="cluster-k", value=4, min=2, max=20, step=1, debounce=True)], span=2, style={"minWidth": 0}),
+                                        dmc.GridCol([dmc.Button("Кластеризация", id="btn-cluster", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
+                                    ]),
+                                ],
+                                value="clustering"
+                            ),
+                        ]
+                    )
+                ]
+            ),
 
+            # --- Sheet modal ---
+            html.Div(
+                dmc.Modal(
+                    id="sheet-modal",
+                    title="Выберите лист Excel",
+                    opened=False,
+                    centered=True,
+                    zIndex=1000,
+                    children=[]
+                ),
+                id="sheet-menu-wrapper"
+            ),
+            html.Div(id='status-message', style={'marginTop': 10}),
+
+            # ========================
+            # ОСНОВНОЙ GRID
+            # ========================
+            dmc.Grid([
+                # ---------- Левая панель (span=4) ----------
+                dmc.GridCol([
+                    # Оси
                     dmc.Paper([
                         dmc.Grid([
                             dmc.GridCol([html.Center(dmc.Text("X", c="blue", fw=500, size="sm")), dropdown_x], span=4, style={"minWidth": 0}),
                             dmc.GridCol([html.Center(dmc.Text("Y", c="blue", fw=500, size="sm")), dropdown_y], span=4, style={"minWidth": 0}),
                             dmc.GridCol([html.Center(dmc.Text("Z", c="blue", fw=500, size="sm")), dropdown_z], span=4, style={"minWidth": 0})
                         ]),
-
                         dmc.Grid([
                             dmc.GridCol([html.Center(dmc.Text("Группировка", c="blue", fw=500, size="sm")), dropdown_color], span=4, style={"minWidth": 0}),
                             dmc.GridCol([html.Center(dmc.Text("Размер пузыpя", c="blue", fw=500, size="sm")), dropdown_size], span=4, style={"minWidth": 0}),
@@ -312,6 +348,7 @@ def create_layout():
                         ]),
                     ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
 
+                    # Фильтры
                     dmc.Paper([
                         html.Center(dmc.Text("Фильтры", c="black", size="sm")),
                         html.Div(id="filters-container", children=[]),
@@ -320,9 +357,16 @@ def create_layout():
                     ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                 ], span=4),
 
+                # ---------- Правая панель (span=8) ----------
                 dmc.GridCol([
-                    dmc.Grid([dmc.GridCol([segmentedcontrol], span="content")], align="center"),
+                    # Панель инструментов: тип графика (dropdown) + кнопка обновить + иконки
                     dmc.Grid([
+                        dmc.GridCol([
+                            dmc.Group([
+                                dmc.Text("Тип графика", size="sm", fw=500, c="dimmed"),
+                                dropdown_chart_type,
+                            ], gap="xs", align="center")
+                        ], span="content"),
                         dmc.GridCol([update_graf], span="content"),
                         dmc.GridCol([download_button, DownloadFile], span="content"),
                         dmc.GridCol([excel_download_button, DownloadExcel], span="content"),
@@ -332,7 +376,7 @@ def create_layout():
                                 label="Изменить цвета",
                                 withArrow=True,
                                 children=dmc.ActionIcon(
-                                    id="shuffle-button",          # тот же ID
+                                    id="shuffle-button",
                                     variant="light",
                                     size="xl",
                                     radius="xl",
@@ -358,7 +402,7 @@ def create_layout():
                                 label="Настройка графика",
                                 withArrow=True,
                                 children=dmc.ActionIcon(
-                                    id="drawer-demo-button",             # тот же ID — колбэк не трогаем
+                                    id="drawer-demo-button",
                                     variant="light",
                                     size="xl",
                                     radius="xl",
@@ -367,6 +411,7 @@ def create_layout():
                             )
                         ], span="content"),
                     ], align="center"),
+                    # График
                     dmc.Paper([
                         dcc.Loading(
                             dcc.Graph(figure={}, id="graph", config={
