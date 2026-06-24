@@ -12,7 +12,7 @@ from dash_iconify import DashIconify
 import pandas as pd
 
 from app import app
-from utils import meta_from_df, _make_error_notif
+from utils import meta_from_df, _make_error_notif, read_df_from_store
 from config import STYLE_CARD
 
 
@@ -20,7 +20,6 @@ from config import STYLE_CARD
 @app.callback(
     Output("source-file-path", "data"),
     Output("source-file-name", "data"),
-    Output("file-path-message", "children"),
     Input("pick-file-btn", "n_clicks"),
     prevent_initial_call=True
 )
@@ -44,9 +43,9 @@ def pick_local_file(n_clicks):
     except PreventUpdate:
         raise
     except Exception as e:
-        return no_update, no_update, f"Локальный выбор файла недоступен: {e}"
+        return no_update, no_update
 
-    return path, os.path.basename(path), f"Путь: {path}"
+    return path, os.path.basename(path)
 
 
 @app.callback(
@@ -55,9 +54,11 @@ def pick_local_file(n_clicks):
     Output('stored-sheet-names', 'data'),
     Output('stored-data', 'data'),
     Output('selected-sheet', 'data'),
-    Output('filtered-data', 'data', allow_duplicate=True),   # NEW
-    Output('meta-columns', 'data', allow_duplicate=True),    # NEW
+    Output('filtered-data', 'data', allow_duplicate=True),
+    Output('meta-columns', 'data', allow_duplicate=True),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
+    Output('file-info-bar', 'children', allow_duplicate=True),
+    Output('file-info-bar', 'style', allow_duplicate=True),
     Input('source-file-path', 'data'),
     State('source-file-name', 'data'),
     prevent_initial_call=True
@@ -177,6 +178,54 @@ def on_sheet_selected(n_clicks, ids):
         raise PreventUpdate
     selected = ids[clicked_idx[0]]['index']
     return selected
+
+
+# ============ Информация о загруженном файле (внизу, серым) ============
+@app.callback(
+    Output('file-info-bar', 'children'),
+    Output('file-info-bar', 'style'),
+    Input('stored-data', 'data'),
+    Input('meta-columns', 'data'),
+    State('source-file-path', 'data'),
+    State('source-file-name', 'data'),
+    State('selected-sheet', 'data'),
+    prevent_initial_call=True
+)
+def update_file_info(stored_json, meta, source_path, source_name, sheet_name):
+    if not stored_json:
+        raise PreventUpdate
+
+    n_rows = "?"
+    n_cols = "?"
+    try:
+        df = read_df_from_store(stored_json, meta)
+        n_rows = len(df)
+        n_cols = len(df.columns)
+    except Exception:
+        if isinstance(meta, dict):
+            n_cols = len(meta.get("columns", []) or [])
+
+    parts = []
+    if source_name:
+        parts.append(f"📄 {source_name}")
+    if sheet_name:
+        parts.append(f"Лист: {sheet_name}")
+    parts.append(f"Строк: {n_rows}")
+    parts.append(f"Столбцов: {n_cols}")
+    if source_path:
+        parts.append(f"Путь: {source_path}")
+
+    info_text = "  |  ".join(parts)
+    info_style = {
+        "marginTop": "8px",
+        "padding": "6px 12px",
+        "display": "block",
+        "color": "#888",
+        "fontSize": "12px",
+        "fontFamily": "monospace",
+        "textAlign": "right",
+    }
+    return info_text, info_style
 
 
 @app.callback(
