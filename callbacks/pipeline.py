@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks: конвейер данных — биннинг, кластеризация, агрегаты (pipeline_graf_dataset).
+Callbacks: конвейер данных — фильтрация, биннинг, кластеризация, агрегаты.
+
+Разделено на два независимых колбэка:
+  1. apply_filters — stored-data + filters-state → filtered-data (чистый датасет)
+  2. run_de_operations — DE-кнопки + filtered-data → filtered-data + новые колонки
 """
 
 import re
@@ -20,8 +24,62 @@ from utils import read_df_from_store, meta_from_df, _make_error_notif
 logger = logging.getLogger(__name__)
 
 
+# =========================
+# Фильтрация: stored-data + filters-state → filtered-data
+# =========================
 @app.callback(
-    Output("cluster-metrics", "data"),
+    Output("filtered-data", "data", allow_duplicate=True),
+    Output("meta-columns", "data", allow_duplicate=True),
+    Input("filters-state", "data"),
+    State("stored-data", "data"),
+    State("meta-columns", "data"),
+    prevent_initial_call=True
+)
+def apply_filters(filters_state, stored_json, meta_state):
+    """Применяет фильтры к исходному датасету → filtered-data (чистый, без DE-колонок)."""
+    if not stored_json:
+        raise PreventUpdate
+
+    try:
+        df = read_df_from_store(stored_json, meta_state)
+    except Exception:
+        raise PreventUpdate
+
+    if df is None or df.empty:
+        raise PreventUpdate
+
+    fs = filters_state if isinstance(filters_state, dict) else {}
+    meta0 = meta_from_df(df)
+
+    # Применяем фильтры
+    if fs:
+        mask = pd.Series(True, index=df.index)
+        for _, cfg in fs.items():
+            col = (cfg or {}).get("column")
+            val = (cfg or {}).get("value")
+            if not col or val in (None, [], '') or col not in df.columns:
+                continue
+            if col in (meta0.get("numeric") or []):
+                lo, hi = (val or [None, None])
+                if lo is not None:
+                    mask &= (pd.to_numeric(df[col], errors="coerce") >= float(lo))
+                if hi is not None:
+                    mask &= (pd.to_numeric(df[col], errors="coerce") <= float(hi))
+            else:
+                vs = val if isinstance(val, list) else [val]
+                mask &= df[col].isin(vs)
+        df = df.loc[mask]
+
+    js = df.to_json(date_format='iso', orient='split')
+    meta = meta_from_df(df)
+    return js, meta
+
+
+# =========================
+# Кластерные метрики (elbow/silhouette)
+# =========================
+@app.callback(
+    Output("cluster-metrics", "data", allow_duplicate=True),
     Input("filtered-data", "data"),
     State("cluster-cols", "value"),
     State("meta-columns", "data"),
@@ -62,15 +120,15 @@ def compute_cluster_metrics(filtered_json, cluster_cols, meta):
     return {"ks": ks, "inertias": inertias, "silhouettes": silhouettes}
 
 
+# =========================
+# DE-операции: биннинг, кластеризация (KMeans), агрегаты
+# =========================
 @app.callback(
     Output("filtered-data", "data", allow_duplicate=True),
     Output("meta-columns", "data", allow_duplicate=True),
     Output("cluster-metrics", "data", allow_duplicate=True),
     Output("notifications-container", "sendNotifications", allow_duplicate=True),
     Output("de-agg-status", "children", allow_duplicate=True),
-
-    Input("stored-data", "data"),
-    Input("filters-state", "data"),
 
     Input("btn-grouping", "n_clicks"),
     Input("btn-cluster",  "n_clicks"),
@@ -93,101 +151,80 @@ def compute_cluster_metrics(filtered_json, cluster_cols, meta):
 
     prevent_initial_call=True
 )
-def pipeline_graf_dataset(stored_json, filters_state,
-                          n_group_btn, n_cluster_btn, n_agg_btn,
-                          bin_col, bin_method, bin_k,
-                          cluster_cols, cluster_k,
-                          agg_keys, agg_cols, agg_metrics, agg_exclude_zeros, agg_exclude_empty,
-                          filtered_json_prev, meta_state):
+def run_de_operations(
+    n_group_btn, n_cluster_btn, n_agg_btn,
+    bin_col, bin_method, bin_k,
+    cluster_cols, cluster_k,
+    agg_keys, agg_cols, agg_metrics, agg_exclude_zeros, agg_exclude_empty,
+    filtered_json, meta_state
+):
+    """Биннинг, кластеризация, агрегаты: добавляют новые колонки в filtered-data."""
     notifications = []
     status_msg = no_update
 
-    if not stored_json:
+    if not filtered_json:
         raise PreventUpdate
+
     try:
-        df0 = read_df_from_store(stored_json, meta_state)
+        df = read_df_from_store(filtered_json, meta_state)
     except Exception:
-        return no_update, no_update, no_update, _make_error_notif("Data Engineering: не удалось прочитать датасет."), no_update
-    if df0 is None or df0.empty:
-        return no_update, no_update, no_update, _make_error_notif("Data Engineering: не удалось прочитать датасет."), no_update
+        return (
+            no_update, no_update, no_update,
+            _make_error_notif("Data Engineering: не удалось прочитать датасет."),
+            no_update,
+        )
+
+    if df is None or df.empty:
+        return (
+            no_update, no_update, no_update,
+            _make_error_notif("Data Engineering: датасет пуст."),
+            no_update,
+        )
 
     trig = _ctx.triggered_id
-    if trig in ("btn-grouping", "btn-cluster", "btn-agg"):
-        if filtered_json_prev:
-            try:
-                df = read_df_from_store(filtered_json_prev, meta_state)
-            except Exception:
-                df = df0.copy()
-        else:
-            df = df0.copy()
-    else:
-        df = df0.copy()
-        meta0 = meta_from_df(df)
-        fs = filters_state if isinstance(filters_state, dict) else {}
 
-        def _apply_filters_simple(frame: pd.DataFrame, fs_dict: dict, meta: dict) -> pd.DataFrame:
-            if not fs_dict or frame.empty:
-                return frame
-            mask = pd.Series(True, index=frame.index)
-            for _, cfg in fs_dict.items():
-                col = (cfg or {}).get("column")
-                val = (cfg or {}).get("value")
-                if not col or val in (None, [], '') or col not in frame.columns:
-                    continue
-                if col in (meta.get("numeric") or []):
-                    lo, hi = (val or [None, None])
-                    if lo is not None:
-                        mask &= (pd.to_numeric(frame[col], errors="coerce") >= float(lo))
-                    if hi is not None:
-                        mask &= (pd.to_numeric(frame[col], errors="coerce") <= float(hi))
-                else:
-                    vs = val if isinstance(val, list) else [val]
-                    mask &= frame[col].isin(vs)
-            return frame.loc[mask]
-
-        df = _apply_filters_simple(df, fs, meta0)
-
-    apply_binning    = (trig in ("btn-grouping", "filters-state", "stored-data"))
-    apply_clustering = (trig in ("btn-cluster",  "filters-state", "stored-data"))
-    apply_agg        = (trig == "btn-agg")
-
-    if apply_binning and bin_col and (bin_col in df.columns) and (bin_k is not None) and (int(bin_k) >= 2):
-        for c in list(df.columns):
-            if isinstance(c, str) and c.startswith("Группа(") and c.endswith(")"):
-                df.drop(columns=[c], inplace=True, errors="ignore")
-        ser = pd.to_numeric(df[bin_col], errors="coerce")
-        valid = ser.dropna()
-        if not valid.empty:
-            try:
-                if bin_method == "width":
-                    cats = pd.cut(valid, bins=int(bin_k), include_lowest=True, duplicates="drop")
-                else:
-                    cats = pd.qcut(valid, q=int(bin_k), duplicates="drop")
-                grp_name = f"Группа({bin_col})"
-                df.loc[valid.index, grp_name] = cats.astype("string")
-            except Exception:
-                pass
-
-    if apply_clustering and cluster_cols and len(cluster_cols) >= 2 and (cluster_k or 0) >= 2:
-        use_cols = [c for c in cluster_cols if c in df.columns]
-        if len(use_cols) >= 2:
-            for col in ("PCA1", "PCA2", "Кластеры"):
-                if col in df.columns:
-                    df.drop(columns=[col], inplace=True, errors="ignore")
-            num_df = df[use_cols].select_dtypes(include=[np.number]).dropna(how='any')
-            if num_df.shape[0] >= 3 and num_df.shape[1] >= 2:
-                Xs = StandardScaler().fit_transform(num_df.values)
-                km = KMeans(n_clusters=cluster_k, n_init=10, random_state=42).fit(Xs)
-                labels = pd.Series([f"Кластер {i}" for i in km.labels_], index=num_df.index, dtype="string")
-                df.loc[num_df.index, "Кластеры"] = labels
+    # --- БИННИНГ ---
+    if trig == "btn-grouping":
+        if bin_col and (bin_col in df.columns) and (bin_k is not None) and (int(bin_k) >= 2):
+            for c in list(df.columns):
+                if isinstance(c, str) and c.startswith("Группа(") and c.endswith(")"):
+                    df.drop(columns=[c], inplace=True, errors="ignore")
+            ser = pd.to_numeric(df[bin_col], errors="coerce")
+            valid = ser.dropna()
+            if not valid.empty:
                 try:
-                    pca = PCA(n_components=2).fit_transform(Xs)
-                    pca_df = pd.DataFrame(pca, index=num_df.index, columns=["PCA1", "PCA2"])
-                    df = df.join(pca_df, how="left")
-                except Exception:
-                    pass
+                    if bin_method == "width":
+                        cats = pd.cut(valid, bins=int(bin_k), include_lowest=True, duplicates="drop")
+                    else:
+                        cats = pd.qcut(valid, q=int(bin_k), duplicates="drop")
+                    grp_name = f"Группа({bin_col})"
+                    df.loc[valid.index, grp_name] = cats.astype("string")
+                except Exception as e:
+                    notifications.append(_make_error_notif(f"Ошибка биннинга: {e}")["message"] if isinstance(_make_error_notif(f"Ошибка биннинга: {e}"), dict) else str(e))
 
-    if apply_agg:
+    # --- КЛАСТЕРИЗАЦИЯ ---
+    if trig == "btn-cluster":
+        if cluster_cols and len(cluster_cols) >= 2 and (cluster_k or 0) >= 2:
+            use_cols = [c for c in cluster_cols if c in df.columns]
+            if len(use_cols) >= 2:
+                for col in ("PCA1", "PCA2", "Кластеры"):
+                    if col in df.columns:
+                        df.drop(columns=[col], inplace=True, errors="ignore")
+                num_df = df[use_cols].select_dtypes(include=[np.number]).dropna(how='any')
+                if num_df.shape[0] >= 3 and num_df.shape[1] >= 2:
+                    Xs = StandardScaler().fit_transform(num_df.values)
+                    km = KMeans(n_clusters=cluster_k, n_init=10, random_state=42).fit(Xs)
+                    labels = pd.Series([f"Кластер {i}" for i in km.labels_], index=num_df.index, dtype="string")
+                    df.loc[num_df.index, "Кластеры"] = labels
+                    try:
+                        pca = PCA(n_components=2).fit_transform(Xs)
+                        pca_df = pd.DataFrame(pca, index=num_df.index, columns=["PCA1", "PCA2"])
+                        df = df.join(pca_df, how="left")
+                    except Exception:
+                        pass
+
+    # --- АГРЕГАТЫ ---
+    if trig == "btn-agg":
         status_msg = "Data Engineering: ожидает параметров…"
         if not (agg_keys and agg_cols and agg_metrics):
             notifications.append({
@@ -242,7 +279,7 @@ def pipeline_graf_dataset(stored_json, filters_state,
                 notifications.append({
                     "id": "de-agg-invalid",
                     "title": "Data Engineering",
-                    "message": "Ключи/столбцы не найдены в текущем датасете (после фильтров) или не выбраны метрики.",
+                    "message": "Ключи/столбцы не найдены в текущем датасете или не выбраны метрики.",
                     "color": "orange",
                     "action": "show",
                     "autoClose": 7000,
@@ -416,12 +453,14 @@ def pipeline_graf_dataset(stored_json, filters_state,
                         "autoClose": 7000,
                     })
 
-    js_filtered   = df.to_json(date_format='iso', orient='split')
-    meta_filtered = meta_from_df(df)
+    # Сохраняем результат
+    js = df.to_json(date_format='iso', orient='split')
+    meta = meta_from_df(df)
 
-    cluster_metrics = None
+    # Кластерные метрики (вычисляем всегда, если есть данные)
+    cluster_metrics = no_update
     try:
-        if cluster_cols:
+        if cluster_cols and len(cluster_cols) >= 2:
             X = df[cluster_cols].apply(pd.to_numeric, errors="coerce").dropna()
             if X.shape[0] >= 5:
                 Xs = StandardScaler().fit_transform(X.values)
@@ -439,4 +478,4 @@ def pipeline_graf_dataset(stored_json, filters_state,
     except Exception as e:
         logger.warning(f"[cluster-metrics] fail: {e}")
 
-    return js_filtered, meta_filtered, cluster_metrics, notifications, status_msg
+    return js, meta, cluster_metrics, notifications, status_msg

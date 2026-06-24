@@ -57,8 +57,6 @@ def pick_local_file(n_clicks):
     Output('filtered-data', 'data', allow_duplicate=True),
     Output('meta-columns', 'data', allow_duplicate=True),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
-    Output('file-info-bar', 'children', allow_duplicate=True),
-    Output('file-info-bar', 'style', allow_duplicate=True),
     Input('source-file-path', 'data'),
     State('source-file-name', 'data'),
     prevent_initial_call=True
@@ -87,9 +85,8 @@ def on_excel_upload(local_path, local_name):
             if len(sheets) == 1:
                 meta = meta_from_df(df)
                 js = df.to_json(date_format='iso', orient='split')
-                msg = f"Загружен лист: {sheet_name}, кол-во строк: {len(df)}"
                 return (
-                    html.Div(msg, style={'color': 'green'}),
+                    "",
                     dash.no_update, sheets, js, sheet_name,
                     js, meta, []
                 )
@@ -120,9 +117,8 @@ def on_excel_upload(local_path, local_name):
                     )
                 ]
             )
-            msg = f"Загружен Excel: {filename}, листов: {len(sheets)}"
             return (
-                html.Div(msg, style={'color': 'green'}),
+                "",
                 modal, sheets, dash.no_update, dash.no_update,
                 dash.no_update, dash.no_update, []
             )
@@ -130,9 +126,8 @@ def on_excel_upload(local_path, local_name):
             df = pd.read_pickle(local_path)
             meta = meta_from_df(df)
             js = df.to_json(date_format='iso', orient='split')
-            msg = f"Загружен pkl: {filename}, строки: {len(df)}"
             return (
-                html.Div(msg, style={'color': 'green'}),
+                "",
                 dash.no_update, None, js, None,
                 js, meta, []
             )
@@ -186,12 +181,12 @@ def on_sheet_selected(n_clicks, ids):
     Output('file-info-bar', 'style'),
     Input('stored-data', 'data'),
     Input('meta-columns', 'data'),
-    State('source-file-path', 'data'),
+    Input('selected-sheet', 'data'),
+    Input('source-file-path', 'data'),
     State('source-file-name', 'data'),
-    State('selected-sheet', 'data'),
     prevent_initial_call=True
 )
-def update_file_info(stored_json, meta, source_path, source_name, sheet_name):
+def update_file_info(stored_json, meta, sheet_name, source_path, source_name):
     if not stored_json:
         raise PreventUpdate
 
@@ -217,13 +212,15 @@ def update_file_info(stored_json, meta, source_path, source_name, sheet_name):
 
     info_text = "  |  ".join(parts)
     info_style = {
-        "marginTop": "8px",
-        "padding": "6px 12px",
+        "backgroundColor": "#1A1B1E",
+        "borderTop": "1px solid #2C2E33",
+        "padding": "16px",
         "display": "block",
         "color": "#888",
         "fontSize": "12px",
         "fontFamily": "monospace",
         "textAlign": "right",
+        "minHeight": "36px",
     }
     return info_text, info_style
 
@@ -257,8 +254,7 @@ def load_selected_sheet(sheet_name, local_path):
         meta = meta_from_df(df)
         js = df.to_json(date_format='iso', orient='split')
 
-        msg = f"Загружен лист: {sheet_name}, строки: {len(df)}"
-        return js, html.Div(msg, style={'color': 'green'}), False, js, meta, []
+        return js, "", False, js, meta, []
     except Exception as e:
         notif = _make_error_notif(f"Ошибка загрузки листа: {str(e)}")
         return dash.no_update, html.Div(f"Ошибка: {e}", style={'color': 'red'}), False, dash.no_update, dash.no_update, notif

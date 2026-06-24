@@ -32,7 +32,7 @@ app.clientside_callback(
         var links = document.querySelectorAll('.nav-link');
         for (var i = 0; i < links.length; i++) {
             var link = links[i];
-            if (link.getAttribute('data-href') === pathname) {
+            if (link.getAttribute('href') === pathname) {
                 link.style.color = '#fff';
                 link.style.backgroundColor = 'rgba(255,255,255,0.12)';
             } else {

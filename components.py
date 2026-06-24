@@ -12,6 +12,29 @@ from config import PLOTLY_STYLES, COLOR_THRESHOLD
 
 
 # =========================
+# Цвета плашек для типов колонок
+# =========================
+COLUMN_TYPE_COLORS = {
+    "numeric": "#2196F3",      # синий
+    "categorical": "#4CAF50",  # зелёный
+    "datetime": "#795548",     # коричневый
+}
+
+
+def make_column_badge(col_name: str, col_type: str) -> dmc.Badge:
+    """Плашка-бейдж: название колонки, цвет по типу."""
+    color = COLUMN_TYPE_COLORS.get(col_type, "#9E9E9E")
+    return dmc.Badge(
+        col_name,
+        color=color,
+        variant="light",
+        size="sm",
+        fullWidth=True,
+        style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400},
+    )
+
+
+# =========================
 # Вспомогательные функции создания компонентов
 # =========================
 def create_dropdown(id, options, value=None, clearable=False, multi=False, persistence=True):

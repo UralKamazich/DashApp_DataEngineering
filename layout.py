@@ -2,6 +2,7 @@
 """
 Layout приложения: MantineProvider, Store, Modal, Grid, Paper, Filters, Graph.
 Многостраничное: График | Коррелограмма | Data Engineering | Кластеризация | ML.
+Header + Footer общие на всех страницах.
 """
 
 import dash
@@ -44,11 +45,11 @@ NAV_LINKS = [
 
 
 def make_nav_link(label, href):
-    """Стилизованная ссылка навигации (с data-href для подсветки)."""
-    return html.A(
+    """Стилизованная ссылка навигации — dcc.Link, чтобы не перезагружать страницу."""
+    return dcc.Link(
         label,
         href=href,
-        **{"data-href": href, "className": "nav-link"},
+        className="nav-link",
         style={
             "color": "#aaa",
             "textDecoration": "none",
@@ -57,6 +58,7 @@ def make_nav_link(label, href):
             "padding": "6px 14px",
             "borderRadius": "6px",
             "transition": "all 0.15s",
+            "display": "inline-block",
         },
     )
 
@@ -64,6 +66,13 @@ def make_nav_link(label, href):
 def create_layout():
     return dmc.MantineProvider(
         children=[
+            # ============================================
+            # FLEX-КОНТЕЙНЕР: header (фикс) + content (flex:1) + footer (фикс)
+            # ============================================
+            html.Div(
+                style={"display": "flex", "flexDirection": "column", "minHeight": "100vh"},
+                children=[
+
             # --- URL Location ---
             dcc.Location(id="url", refresh=False),
 
@@ -108,7 +117,7 @@ def create_layout():
             copy_trigger,
 
             # ========================
-            # ТЁМНЫЙ ХЕДЕР с навигацией
+            # HEADER (общий, фиксированный сверху)
             # ========================
             dmc.Paper(
                 children=[
@@ -138,15 +147,52 @@ def create_layout():
                 dmc.Modal(id="sheet-modal", title="Выберите лист Excel", opened=False, centered=True, zIndex=1000, children=[]),
                 id="sheet-menu-wrapper"
             ),
-            html.Div(id='status-message', style={'marginTop': 10}),
+            html.Div(id='status-message', style={'display': 'none'}),
 
             # --- de-modal (скрыт, контент перенесён на страницу) ---
             html.Div(style={"display": "none"}, children=[dmc.Modal(id="de-modal", opened=False, children=[])]),
 
             # ========================
-            # ОБЩАЯ СТРУКТУРА: левая панель (меняется) + правая (общая)
+            # CONTENT: левая панель (меняется) + правая (общая) — растягивается до низа
             # ========================
             dmc.Grid([
+                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК ----------
+                dmc.GridCol([
+                    dmc.Paper(
+                        id="columns-sidebar",
+                        children=[
+                            dmc.Text("Колонки датасета", size="xs", fw=600, c="dimmed"),
+                            dmc.Space(h=6),
+                            dmc.Divider(label="Исходный", labelPosition="center", size="xs"),
+                            dmc.Stack(
+                                id="columns-original-badges",
+                                children=[],
+                                gap="2px",
+                            ),
+                            dmc.Space(h=8),
+                            dmc.Divider(
+                                id="columns-filtered-label",
+                                label="Фильтрованный датасет",
+                                labelPosition="center",
+                                size="xs",
+                            ),
+                            dmc.Stack(
+                                id="columns-filtered-badges",
+                                children=[],
+                                gap="2px",
+                            ),
+                        ],
+                        shadow="sm",
+                        p="xs",
+                        withBorder=True,
+                        style={
+                            "overflowY": "auto",
+                            "maxHeight": "calc(100vh - 100px)",
+                            "padding": "8px",
+                        },
+                    ),
+                ], span=2),
+
                 # ---------- ЛЕВАЯ ПАНЕЛЬ (меняется от страницы) ----------
                 dmc.GridCol([
 
@@ -324,7 +370,7 @@ def create_layout():
                             dmc.Text("Здесь будут: обучение моделей регрессии/классификации, подбор гиперпараметров, оценка метрик, предсказания.", size="sm", c="dimmed"),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
-                ], span=4),
+                ], span=3),
 
                 # ---------- ПРАВАЯ ПАНЕЛЬ (общая: график + тулбар) ----------
                 dmc.GridCol([
@@ -373,15 +419,32 @@ def create_layout():
                         ], style={**STYLE_CARD, "overflow": "visible"}, shadow="md", p="md", withBorder=True),
                     ], style={**PAPER_BASE, "visibility": "hidden"}),
 
-                    # --- Информация о загруженном файле (внизу, серым) ---
-                    html.Div(
-                        id="file-info-bar",
-                        style={"marginTop": "8px", "padding": "4px 8px", "display": "none"},
-                        children=[]
-                    ),
-                ], span=8)
-            ]),
+                ], span=7)
+            ], style={"flex": 1, "margin": 0}),
+
+            # ========================
+            # FOOTER (общий, фиксированный внизу) — информация о файле
+            # ========================
+            dmc.Paper(
+                id="file-info-bar",
+                children=["Файл не выбран"],
+                shadow="sm",
+                p="md",
+                withBorder=False,
+                style={
+                    "backgroundColor": "#1A1B1E",
+                    "borderTop": "1px solid #2C2E33",
+                    "color": "#888",
+                    "fontSize": "12px",
+                    "fontFamily": "monospace",
+                    "textAlign": "right",
+                    "minHeight": "36px",
+                },
+            ),
 
             dcc.Store(id="nav-active-store", data="/"),
+
+                ]  # конец flex-контейнера
+            ),
         ]
     )

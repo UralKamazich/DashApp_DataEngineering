@@ -44,7 +44,7 @@ app.layout = create_layout()
 # =========================
 # Регистрация callbacks (импорт автоматически регистрирует @app.callback)
 # =========================
-from callbacks import modals, file_handling, filters, pipeline, data_engineering, dropdowns, graph, colors, download
+from callbacks import modals, file_handling, filters, pipeline, data_engineering, dropdowns, graph, colors, download, columns_sidebar
 
 # =========================
 # Shutdown route
