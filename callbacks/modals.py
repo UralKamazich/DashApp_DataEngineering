@@ -53,7 +53,8 @@ app.clientside_callback(
 @callback(
     Output("drawer-simple", "opened"),
     Input("drawer-demo-button", "n_clicks"),
-    prevent_initial_call=True
+    Input("context-menu-btn", "n_clicks"),
+    prevent_initial_call=True,
 )
-def drawer_demo(n_clicks):
+def drawer_demo(n1, n2):
     return True

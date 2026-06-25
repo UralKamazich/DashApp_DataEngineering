@@ -116,6 +116,9 @@ def create_layout():
             dmc.NotificationContainer(id="notifications-container"),
             copy_trigger,
 
+            # Скрытая кнопка для контекстного меню (правый клик на графике)
+            html.Button("ctx", id="context-menu-btn", style={"display": "none"}),
+
             # ========================
             # HEADER (общий, фиксированный сверху)
             # ========================
@@ -220,60 +223,6 @@ def create_layout():
                             dmc.Divider(label="Настройки графика"),
                             dmc.Text("Bubble, подписи, шрифты и стили — в панели настроек (иконка шестерёнки).", size="xs", c="dimmed"),
                             dmc.Space(h=6),
-                            html.Div([
-                                dmc.Drawer(
-                                    title="Настройка графика", id="drawer-simple", padding="md", position='right',
-                                    withOverlay=True, overlayProps={"opacity": 0.15}, size=600,
-                                    closeOnClickOutside=True, closeOnEscape=True, withCloseButton=True,
-                                    children=[
-                                        dmc.Grid([
-                                            dmc.GridCol([SwitchBubble], span="content"),
-                                            dmc.GridCol([dmc.NumberInput(id="InputMaxSizeBubble", label="Макс. размер бабла",
-                                                value=30, min=1, max=100, debounce=True, step=5,
-                                                persistence=True, persistence_type='local')], span="content"),
-                                            dmc.GridCol([bar_text_auto_switch], span="content"),
-                                            dmc.Grid([
-                                                dmc.GridCol([dmc.NumberInput(id="InputSizePlot", label="Высота графика",
-                                                    value=750, min=50, max=20000, debounce=True, step=50,
-                                                    persistence=True, persistence_type='local')], span="content"),
-                                                dmc.GridCol([dmc.NumberInput(id="InputSizePlotW", label="Ширина графика",
-                                                    min=50, max=20000, debounce=True, step=50,
-                                                    persistence=True, persistence_type='local')], span="content")
-                                            ]),
-                                            dmc.Grid([
-                                                dmc.GridCol([dmc.NumberInput(id="font-size-xaxis", label="Шрифт X оси", value=14, min=6, max=48, debounce=True, step=1)], span=3),
-                                                dmc.GridCol([dmc.NumberInput(id="font-size-yaxis", label="Шрифт Y оси", value=14, min=6, max=48, debounce=True, step=1)], span=3),
-                                                dmc.GridCol([dmc.NumberInput(id="font-size-title", label="Шрифт заголовка", value=16, min=6, max=48, debounce=True, step=1)], span=3),
-                                            ]),
-                                            dmc.Grid([
-                                                dmc.GridCol([dmc.NumberInput(id="font-size-ticks", label="Шрифт подписей", value=12, min=6, max=48, debounce=True, step=1)], span="content"),
-                                                dmc.GridCol([dropdown_text_pozition], span="content"),
-                                            ]),
-                                            dmc.Grid([
-                                                dmc.GridCol([dropdown_axes_category], span="content"),
-                                                dmc.GridCol([dropdown_category_ascending], span="content"),
-                                            ]),
-                                            dmc.Grid([
-                                                dmc.GridCol([dropdown_overlay], span="content"),
-                                                dmc.GridCol([dropdown_legend], span="content"),
-                                            ]),
-                                            dmc.Grid([
-                                                dmc.GridCol([dropdown_legend_order], span="content"),
-                                                dmc.GridCol([input_legend_custom_order], span="content"),
-                                            ]),
-                                            dmc.Grid([dmc.GridCol([dropdown_style], span="content")]),
-                                            dmc.Grid([
-                                                dmc.GridCol([dmc.NumberInput(id="tick-step-xaxis", label="Шаг тиков X оси",
-                                                    value=0, min=0, step=0.1, decimalScale=2, debounce=True,
-                                                    persistence=True, persistence_type='local')], span="content"),
-                                                dmc.GridCol([dmc.NumberInput(id="tick-step-yaxis", label="Шаг тиков Y оси",
-                                                    value=0, min=0, step=0.1, decimalScale=2, debounce=True,
-                                                    persistence=True, persistence_type='local')], span="content"),
-                                            ]),
-                                        ])
-                                    ]
-                                )
-                            ]),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
 
                         dmc.Paper([
@@ -421,6 +370,62 @@ def create_layout():
 
                 ], span=7)
             ], style={"flex": 1, "margin": 0}),
+
+            # ========================
+            # DRAWER НАСТРОЙКИ ГРАФИКА (общий для всех страниц)
+            # ========================
+            dmc.Drawer(
+                title="Настройка графика", id="drawer-simple", padding="md", position='right',
+                withOverlay=True, overlayProps={"opacity": 0.15}, size=600,
+                closeOnClickOutside=True, closeOnEscape=True, withCloseButton=True,
+                children=[
+                    dmc.Grid([
+                        dmc.GridCol([SwitchBubble], span="content"),
+                        dmc.GridCol([dmc.NumberInput(id="InputMaxSizeBubble", label="Макс. размер бабла",
+                            value=30, min=1, max=100, debounce=True, step=5,
+                            persistence=True, persistence_type='local')], span="content"),
+                        dmc.GridCol([bar_text_auto_switch], span="content"),
+                        dmc.Grid([
+                            dmc.GridCol([dmc.NumberInput(id="InputSizePlot", label="Высота графика",
+                                value=750, min=50, max=20000, debounce=True, step=50,
+                                persistence=True, persistence_type='local')], span="content"),
+                            dmc.GridCol([dmc.NumberInput(id="InputSizePlotW", label="Ширина графика",
+                                min=50, max=20000, debounce=True, step=50,
+                                persistence=True, persistence_type='local')], span="content")
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([dmc.NumberInput(id="font-size-xaxis", label="Шрифт X оси", value=14, min=6, max=48, debounce=True, step=1)], span=3),
+                            dmc.GridCol([dmc.NumberInput(id="font-size-yaxis", label="Шрифт Y оси", value=14, min=6, max=48, debounce=True, step=1)], span=3),
+                            dmc.GridCol([dmc.NumberInput(id="font-size-title", label="Шрифт заголовка", value=16, min=6, max=48, debounce=True, step=1)], span=3),
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([dmc.NumberInput(id="font-size-ticks", label="Шрифт подписей", value=12, min=6, max=48, debounce=True, step=1)], span="content"),
+                            dmc.GridCol([dropdown_text_pozition], span="content"),
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([dropdown_axes_category], span="content"),
+                            dmc.GridCol([dropdown_category_ascending], span="content"),
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([dropdown_overlay], span="content"),
+                            dmc.GridCol([dropdown_legend], span="content"),
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([dropdown_legend_order], span="content"),
+                            dmc.GridCol([input_legend_custom_order], span="content"),
+                        ]),
+                        dmc.Grid([dmc.GridCol([dropdown_style], span="content")]),
+                        dmc.Grid([
+                            dmc.GridCol([dmc.NumberInput(id="tick-step-xaxis", label="Шаг тиков X оси",
+                                value=0, min=0, step=0.1, decimalScale=2, debounce=True,
+                                persistence=True, persistence_type='local')], span="content"),
+                            dmc.GridCol([dmc.NumberInput(id="tick-step-yaxis", label="Шаг тиков Y оси",
+                                value=0, min=0, step=0.1, decimalScale=2, debounce=True,
+                                persistence=True, persistence_type='local')], span="content"),
+                        ]),
+                    ])
+                ]
+            ),
 
             # ========================
             # FOOTER (общий, фиксированный внизу) — информация о файле
