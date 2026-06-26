@@ -66,9 +66,6 @@ def make_nav_link(label, href):
 def create_layout():
     return dmc.MantineProvider(
         children=[
-            # ============================================
-            # FLEX-КОНТЕЙНЕР: header (фикс) + content (flex:1) + footer (фикс)
-            # ============================================
             html.Div(
                 style={"display": "flex", "flexDirection": "column", "minHeight": "100vh"},
                 children=[
@@ -125,7 +122,7 @@ def create_layout():
             dmc.Paper(
                 children=[
                     dmc.Group([
-                        dmc.Text("DataAnalize", fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
+                        dmc.Text("DataAnalize v1.0.23", fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         dmc.Button(
                             "Выбрать файл (.xlsx, .pkl)",
@@ -152,14 +149,14 @@ def create_layout():
             ),
             html.Div(id='status-message', style={'display': 'none'}),
 
-            # --- de-modal (скрыт, контент перенесён на страницу) ---
+            # --- de-modal (скрыт) ---
             html.Div(style={"display": "none"}, children=[dmc.Modal(id="de-modal", opened=False, children=[])]),
 
             # ========================
-            # CONTENT: левая панель (меняется) + правая (общая) — растягивается до низа
+            # CONTENT: сайдбар + левая панель + правая
             # ========================
             dmc.Grid([
-                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК ----------
+                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК (span=2) ----------
                 dmc.GridCol([
                     dmc.Paper(
                         id="columns-sidebar",
@@ -167,11 +164,7 @@ def create_layout():
                             dmc.Text("Колонки датасета", size="xs", fw=600, c="dimmed"),
                             dmc.Space(h=6),
                             dmc.Divider(label="Исходный", labelPosition="center", size="xs"),
-                            dmc.Stack(
-                                id="columns-original-badges",
-                                children=[],
-                                gap="2px",
-                            ),
+                            dmc.Stack(id="columns-original-badges", children=[], gap="2px"),
                             dmc.Space(h=8),
                             dmc.Divider(
                                 id="columns-filtered-label",
@@ -179,32 +172,52 @@ def create_layout():
                                 labelPosition="center",
                                 size="xs",
                             ),
-                            dmc.Stack(
-                                id="columns-filtered-badges",
-                                children=[],
-                                gap="2px",
-                            ),
+                            dmc.Stack(id="columns-filtered-badges", children=[], gap="2px"),
                         ],
                         shadow="sm",
                         p="xs",
                         withBorder=True,
-                        style={
-                            "overflowY": "auto",
-                            "maxHeight": "calc(100vh - 100px)",
-                            "padding": "8px",
-                        },
+                        style={"overflowY": "auto", "maxHeight": "calc(100vh - 100px)", "padding": "8px"},
                     ),
                 ], span=2),
 
-                # ---------- ЛЕВАЯ ПАНЕЛЬ (меняется от страницы) ----------
+                # ---------- ЛЕВАЯ ПАНЕЛЬ (span=3) ----------
                 dmc.GridCol([
 
                     # --- Стр. 1: ГРАФИК — оси + фильтры ---
                     html.Div(id="page-graph", children=[
                         dmc.Paper([
                             dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("X", c="blue", fw=500, size="sm")), dropdown_x], span=4, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("Y", c="blue", fw=500, size="sm")), dropdown_y], span=4, style={"minWidth": 0}),
+                                dmc.GridCol([
+                                    html.Center(dmc.Text("X", c="blue", fw=500, size="sm")),
+                                    html.Div(
+                                        dropdown_x,
+                                        id="drop-zone-x",
+                                        **{"data-drop-target": "dropdown_x"},
+                                        style={
+                                            "border": "2px dashed transparent",
+                                            "borderRadius": "6px",
+                                            "padding": "4px",
+                                            "transition": "border-color 0.2s",
+                                            "minHeight": "40px",
+                                        }
+                                    ),
+                                ], span=4, style={"minWidth": 0}),
+                                dmc.GridCol([
+                                    html.Center(dmc.Text("Y", c="blue", fw=500, size="sm")),
+                                    html.Div(
+                                        dropdown_y,
+                                        id="drop-zone-y",
+                                        **{"data-drop-target": "dropdown_y"},
+                                        style={
+                                            "border": "2px dashed transparent",
+                                            "borderRadius": "6px",
+                                            "padding": "4px",
+                                            "transition": "border-color 0.2s",
+                                            "minHeight": "40px",
+                                        }
+                                    ),
+                                ], span=4, style={"minWidth": 0}),
                                 dmc.GridCol([html.Center(dmc.Text("Z", c="blue", fw=500, size="sm")), dropdown_z], span=4, style={"minWidth": 0})
                             ]),
                             dmc.Grid([
@@ -221,7 +234,7 @@ def create_layout():
                             ]),
                             dmc.Space(h=6),
                             dmc.Divider(label="Настройки графика"),
-                            dmc.Text("Bubble, подписи, шрифты и стили — в панели настроек (иконка шестерёнки).", size="xs", c="dimmed"),
+                            dmc.Text("Bubble, подписи, шрифты — в панели настроек (⚙).", size="xs", c="dimmed"),
                             dmc.Space(h=6),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
 
@@ -241,7 +254,7 @@ def create_layout():
                             dmc.Text("Корреляц. столбцы", c="blue", fw=500, size="sm"),
                             dropdown_corr_columns,
                             dmc.Space(h=10),
-                            dmc.Text("Выберите столбцы для расчёта корреляционной матрицы. Нажмите «Обновить» чтобы построить график.", size="xs", c="dimmed"),
+                            dmc.Text("Выберите столбцы для расчёта корреляционной матрицы.", size="xs", c="dimmed"),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
 
@@ -261,10 +274,10 @@ def create_layout():
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
 
                         dmc.Paper([
-                            dmc.Divider(label="Текстовые копии (чтобы Plotly и фильтры видели как текст)"),
+                            dmc.Divider(label="Текстовые копии"),
                             dmc.Space(h=8),
                             dmc.Grid([
-                                dmc.GridCol([dmc.Text("Столбец(ы) для копирования в текст", c="blue", fw=500, size="sm"), txtcopy_cols_select], span=8, style={"minWidth": 0}),
+                                dmc.GridCol([dmc.Text("Столбец(ы)", c="blue", fw=500, size="sm"), txtcopy_cols_select], span=8, style={"minWidth": 0}),
                                 dmc.GridCol([txtcopy_suffix_input], span=4, style={"minWidth": 0}),
                             ]),
                             dmc.Space(h=8),
@@ -277,11 +290,11 @@ def create_layout():
 
                         dmc.Paper([
                             dmc.Divider(label="Расчёт агрегатов по группам"),
-                            dmc.Text("Выбираете ключ(и), столбцы и метрики — новые колонки добавляются в конец датасета.", size="sm"),
+                            dmc.Text("Ключи, столбцы и метрики — новые колонки в конец датасета.", size="sm"),
                             dmc.Space(h=10),
                             dmc.Grid([
-                                dmc.GridCol([dmc.Text("Ключ(и) группировки", c="blue", fw=500, size="sm"), agg_keys_select], span=6, style={"minWidth": 0}),
-                                dmc.GridCol([dmc.Text("Столбцы для расчёта", c="blue", fw=500, size="sm"), agg_cols_select], span=6, style={"minWidth": 0}),
+                                dmc.GridCol([dmc.Text("Ключ(и)", c="blue", fw=500, size="sm"), agg_keys_select], span=6, style={"minWidth": 0}),
+                                dmc.GridCol([dmc.Text("Столбцы", c="blue", fw=500, size="sm"), agg_cols_select], span=6, style={"minWidth": 0}),
                             ]),
                             dmc.Space(h=8),
                             agg_metrics_select,
@@ -298,11 +311,11 @@ def create_layout():
                     html.Div(id="page-clustering", style={"display": "none"}, children=[
                         dmc.Paper([
                             dmc.Divider(label="Кластеризация (KMeans)"),
-                            dmc.Text("Кластеризация числовых столбцов методом KMeans с визуализацией PCA и метриками качества.", size="sm"),
+                            dmc.Text("Кластеризация числовых столбцов с визуализацией PCA.", size="sm"),
                             dmc.Space(h=8),
                             dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("Числовые столбцы для кластеризации", c="blue", fw=500, size="sm")), dropdown_cluster_cols], span=8, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("К (Кластеры)", c="blue", fw=500, size="sm")),
+                                dmc.GridCol([html.Center(dmc.Text("Числовые столбцы", c="blue", fw=500, size="sm")), dropdown_cluster_cols], span=8, style={"minWidth": 0}),
+                                dmc.GridCol([html.Center(dmc.Text("К", c="blue", fw=500, size="sm")),
                                               dmc.NumberInput(id="cluster-k", value=4, min=2, max=20, step=1, debounce=True)], span=2, style={"minWidth": 0}),
                                 dmc.GridCol([dmc.Button("Кластеризация", id="btn-cluster", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
                             ]),
@@ -316,16 +329,15 @@ def create_layout():
                             dmc.Space(h=8),
                             dmc.Text("Раздел машинного обучения — в разработке.", size="md", c="dimmed"),
                             dmc.Space(h=16),
-                            dmc.Text("Здесь будут: обучение моделей регрессии/классификации, подбор гиперпараметров, оценка метрик, предсказания.", size="sm", c="dimmed"),
+                            dmc.Text("Здесь будут: регрессия, классификация, подбор параметров, предсказания.", size="sm", c="dimmed"),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
                 ], span=3),
 
-                # ---------- ПРАВАЯ ПАНЕЛЬ (общая: график + тулбар) ----------
+                # ---------- ПРАВАЯ ПАНЕЛЬ (span=7) ----------
                 dmc.GridCol([
                     dmc.Grid([
-                        dmc.GridCol([
-                            dmc.Group([
+                        dmc.GridCol([dmc.Group([
                                 dmc.Text("Тип графика", size="sm", fw=500, c="dimmed"),
                                 dropdown_chart_type,
                             ], gap="xs", align="center")
@@ -346,16 +358,64 @@ def create_layout():
                         ], span="content"),
                     ], align="center"),
                     dmc.Paper([
-                        dcc.Loading(
-                            dcc.Graph(figure={}, id="graph", config={
-                                'displaylogo': False,
-                                'modeBarButtonsToRemove': [],
-                                'modeBarButtonsToAdd': ['fullscreen'],
-                                'displayModeBar': True,
-                                'scrollZoom': True
-                            }),
-                            type="default"
-                        )
+                        html.Div(
+                            style={"position": "relative"},
+                            children=[
+                                dcc.Loading(
+                                    dcc.Graph(figure={}, id="graph", config={
+                                        'displaylogo': False,
+                                        'modeBarButtonsToRemove': [],
+                                        'modeBarButtonsToAdd': ['fullscreen'],
+                                        'displayModeBar': True,
+                                        'scrollZoom': True
+                                    }),
+                                    type="default"
+                                ),
+                                # Оверлей с drop-зонами на графике
+                                html.Div(
+                                    id="graph-drop-overlay",
+                                    style={
+                                        "display": "none",
+                                        "position": "absolute",
+                                        "top": "10px", "left": "10px", "right": "10px", "bottom": "10px",
+                                        "pointerEvents": "none",
+                                        "zIndex": "10",
+                                    },
+                                    children=[
+                                        html.Div("X", **{"data-drop-target": "dropdown_x"}, style={
+                                            "position": "absolute", "bottom": "10px", "left": "50%",
+                                            "transform": "translateX(-50%)",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEvents": "auto", "cursor": "copy",
+                                        }),
+                                        html.Div("Y", **{"data-drop-target": "dropdown_y"}, style={
+                                            "position": "absolute", "top": "50%", "left": "10px",
+                                            "transform": "translateY(-50%)",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEvents": "auto", "cursor": "copy",
+                                        }),
+                                        html.Div("Color", **{"data-drop-target": "dropdown_color"}, style={
+                                            "position": "absolute", "top": "10px", "right": "10px",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEvents": "auto", "cursor": "copy",
+                                        }),
+                                        html.Div("Size", **{"data-drop-target": "dropdown_size"}, style={
+                                            "position": "absolute", "top": "10px", "left": "10px",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEffects": "auto", "cursor": "copy",
+                                        }),
+                                    ]
+                                ),
+                            ]
+                        ),
                     ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
 
                     # Графики корреляций / метрик кластеризации
@@ -372,7 +432,7 @@ def create_layout():
             ], style={"flex": 1, "margin": 0}),
 
             # ========================
-            # DRAWER НАСТРОЙКИ ГРАФИКА (общий для всех страниц)
+            # DRAWER НАСТРОЙКИ ГРАФИКА (общий)
             # ========================
             dmc.Drawer(
                 title="Настройка графика", id="drawer-simple", padding="md", position='right',
@@ -428,7 +488,7 @@ def create_layout():
             ),
 
             # ========================
-            # FOOTER (общий, фиксированный внизу) — информация о файле
+            # FOOTER (общий, фиксированный внизу)
             # ========================
             dmc.Paper(
                 id="file-info-bar",
