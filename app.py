@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 app = Dash(
     __name__,
     suppress_callback_exceptions=True,
-    title="DataAnalize ver.1.0.23 DnD Y by Muslimov Ural",
+    title="DataAnalize ver.1.0.27 collapsed panel by Muslimov Ural",
 )
 server = app.server
 

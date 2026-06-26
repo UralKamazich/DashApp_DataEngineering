@@ -122,7 +122,7 @@ def create_layout():
             dmc.Paper(
                 children=[
                     dmc.Group([
-                        dmc.Text("DataAnalize v1.0.23", fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
+                        dmc.Text("DataAnalize v1.0.27", fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         dmc.Button(
                             "Выбрать файл (.xlsx, .pkl)",
@@ -156,7 +156,7 @@ def create_layout():
             # CONTENT: сайдбар + левая панель + правая
             # ========================
             dmc.Grid([
-                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК (span=2) ----------
+                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК (span=2, как и было) ----------
                 dmc.GridCol([
                     dmc.Paper(
                         id="columns-sidebar",
@@ -181,72 +181,162 @@ def create_layout():
                     ),
                 ], span=2),
 
-                # ---------- ЛЕВАЯ ПАНЕЛЬ (span=3) ----------
+                # ---------- ПРАВАЯ ПАНЕЛЬ (span=10) — график + страницы ----------------
                 dmc.GridCol([
+                    dmc.Grid([
+                        dmc.GridCol([dmc.Group([
+                                dmc.Text("Тип графика", size="sm", fw=500, c="dimmed"),
+                                dropdown_chart_type,
+                            ], gap="xs", align="center")
+                        ], span="content"),
+                        dmc.GridCol([update_graf], span="content"),
+                        dmc.GridCol([download_button, DownloadFile], span="content"),
+                        dmc.GridCol([excel_download_button, DownloadExcel], span="content"),
+                        dmc.GridCol([copy_button], span="content"),
+                        dmc.GridCol([
+                            dmc.Tooltip(label="Изменить цвета", withArrow=True,
+                                children=dmc.ActionIcon(id="shuffle-button", variant="light", size="xl", radius="xl",
+                                    children=DashIconify(icon="tabler:palette", width=18)))
+                        ], span="content"),
+                        dmc.GridCol([
+                            dmc.Tooltip(label="Настройка графика", withArrow=True,
+                                children=dmc.ActionIcon(id="drawer-demo-button", variant="light", size="xl", radius="xl",
+                                    children=DashIconify(icon="lucide:settings", width=18)))
+                        ], span="content"),
+                    ], align="center"),
+                    # Drop-зоны X-Y-Z над графиком (лейблы слева)
+                    dmc.Grid([
+                        dmc.GridCol([
+                            dmc.Group([
+                                dmc.Text("X", c="blue", fw=600, size="sm", style={"minWidth": "20px"}),
+                                html.Div(
+                                    dropdown_x,
+                                    id="drop-zone-x",
+                                    **{"data-drop-target": "dropdown_x"},
+                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "40px", "flex": 1}
+                                ),
+                            ], gap="xs", align="center", style={"width": "100%"}),
+                        ], span=4, style={"minWidth": 0}),
+                        dmc.GridCol([
+                            dmc.Group([
+                                dmc.Text("Y", c="blue", fw=600, size="sm", style={"minWidth": "20px"}),
+                                html.Div(
+                                    dropdown_y,
+                                    id="drop-zone-y",
+                                    **{"data-drop-target": "dropdown_y"},
+                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "40px", "flex": 1}
+                                ),
+                            ], gap="xs", align="center", style={"width": "100%"}),
+                        ], span=4, style={"minWidth": 0}),
+                        dmc.GridCol([
+                            dmc.Group([
+                                dmc.Text("Z", c="blue", fw=600, size="sm", style={"minWidth": "20px"}),
+                                html.Div(dropdown_z, style={"flex": 1}),
+                            ], gap="xs", align="center", style={"width": "100%"}),
+                        ], span=4, style={"minWidth": 0}),
+                    ], style={"marginBottom": "8px"}),
 
-                    # --- Стр. 1: ГРАФИК — оси + фильтры ---
-                    html.Div(id="page-graph", children=[
+                    dmc.Paper([
+                        html.Div(
+                            style={"position": "relative"},
+                            children=[
+                                dcc.Loading(
+                                    dcc.Graph(figure={}, id="graph", config={
+                                        'displaylogo': False,
+                                        'modeBarButtonsToRemove': [],
+                                        'modeBarButtonsToAdd': ['fullscreen'],
+                                        'displayModeBar': True,
+                                        'scrollZoom': True
+                                    }),
+                                    type="default"
+                                ),
+                                # Оверлей с drop-зонами на графике (уже только Color/Size)
+                                html.Div(
+                                    id="graph-drop-overlay",
+                                    style={
+                                        "display": "none",
+                                        "position": "absolute",
+                                        "top": "10px", "left": "10px", "right": "10px", "bottom": "10px",
+                                        "pointerEvents": "none",
+                                        "zIndex": "10",
+                                    },
+                                    children=[
+                                        html.Div("X", **{"data-drop-target": "dropdown_x"}, style={
+                                            "position": "absolute", "bottom": "10px", "left": "50%",
+                                            "transform": "translateX(-50%)",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEvents": "auto", "cursor": "copy",
+                                        }),
+                                        html.Div("Y", **{"data-drop-target": "dropdown_y"}, style={
+                                            "position": "absolute", "top": "50%", "left": "10px",
+                                            "transform": "translateY(-50%)",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEvents": "auto", "cursor": "copy",
+                                        }),
+                                        html.Div("Color", **{"data-drop-target": "dropdown_color"}, style={
+                                            "position": "absolute", "top": "10px", "right": "10px",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEvents": "auto", "cursor": "copy",
+                                        }),
+                                        html.Div("Size", **{"data-drop-target": "dropdown_size"}, style={
+                                            "position": "absolute", "top": "10px", "left": "10px",
+                                            "background": "rgba(33,150,243,0.9)", "color": "white",
+                                            "padding": "6px 18px", "borderRadius": "8px",
+                                            "fontWeight": "bold", "fontSize": "14px",
+                                            "pointerEffects": "auto", "cursor": "copy",
+                                        }),
+                                    ]
+                                ),
+                            ]
+                        ),
+                    ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
+
+                    # Drop-зоны Color / Size / Text / Facet + Hover под графиком
+                    dmc.Paper([
+                        dmc.Grid([
+                            dmc.GridCol([html.Center(dmc.Text("Группировка", c="blue", fw=500, size="sm")), dropdown_color], span=4, style={"minWidth": 0}),
+                            dmc.GridCol([html.Center(dmc.Text("Размер пузыpя", c="blue", fw=500, size="sm")), dropdown_size], span=4, style={"minWidth": 0}),
+                            dmc.GridCol([html.Center(dmc.Text("Подпись", c="blue", fw=500, size="sm")), dropdown_text], span=4, style={"minWidth": 0}),
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([html.Center(dmc.Text("Facet Row", c="blue", fw=500, size="sm")), dropdown_facet_row], span=6, style={"minWidth": 0}),
+                            dmc.GridCol([html.Center(dmc.Text("Facet Col", c="blue", fw=500, size="sm")), dropdown_facet_col], span=6, style={"minWidth": 0}),
+                        ]),
+                        dmc.Grid([
+                            dmc.GridCol([html.Center(dmc.Text("Hover Data", c="blue", fw=500, size="sm")), dropdown_hover_data], span=12, style={"minWidth": 0}),
+                        ]),
+                        dmc.Space(h=6),
+                        dmc.Divider(label="Настройки графика"),
+                        dmc.Text("Bubble, подписи, шрифты — в панели настроек (⚙).", size="xs", c="dimmed"),
+                    ], style={**STYLE_CARD, "marginTop": "8px"}, shadow="sm", p="md", withBorder=True),
+
+                    # Фильтры под графиком
+                    dmc.Paper([
+                        html.Center(dmc.Text("Фильтры", c="black", size="sm")),
+                        html.Div(id="filters-container", children=[]),
+                        dmc.Space(h=10),
+                        add_filter_button
+                    ], style={**STYLE_CARD, "marginTop": "8px"}, shadow="sm", p="md", withBorder=True),
+
+                    # Графики корреляций / метрик кластеризации
+                    html.Div(id="corr-bars-section", children=[
                         dmc.Paper([
                             dmc.Grid([
-                                dmc.GridCol([
-                                    html.Center(dmc.Text("X", c="blue", fw=500, size="sm")),
-                                    html.Div(
-                                        dropdown_x,
-                                        id="drop-zone-x",
-                                        **{"data-drop-target": "dropdown_x"},
-                                        style={
-                                            "border": "2px dashed transparent",
-                                            "borderRadius": "6px",
-                                            "padding": "4px",
-                                            "transition": "border-color 0.2s",
-                                            "minHeight": "40px",
-                                        }
-                                    ),
-                                ], span=4, style={"minWidth": 0}),
-                                dmc.GridCol([
-                                    html.Center(dmc.Text("Y", c="blue", fw=500, size="sm")),
-                                    html.Div(
-                                        dropdown_y,
-                                        id="drop-zone-y",
-                                        **{"data-drop-target": "dropdown_y"},
-                                        style={
-                                            "border": "2px dashed transparent",
-                                            "borderRadius": "6px",
-                                            "padding": "4px",
-                                            "transition": "border-color 0.2s",
-                                            "minHeight": "40px",
-                                        }
-                                    ),
-                                ], span=4, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("Z", c="blue", fw=500, size="sm")), dropdown_z], span=4, style={"minWidth": 0})
-                            ]),
-                            dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("Группировка", c="blue", fw=500, size="sm")), dropdown_color], span=4, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("Размер пузыpя", c="blue", fw=500, size="sm")), dropdown_size], span=4, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("Подпись", c="blue", fw=500, size="sm")), dropdown_text], span=4, style={"minWidth": 0}),
-                            ]),
-                            dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("Facet Row", c="blue", fw=500, size="sm")), dropdown_facet_row], span=6, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("Facet Col", c="blue", fw=500, size="sm")), dropdown_facet_col], span=6, style={"minWidth": 0}),
-                            ]),
-                            dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("Hover Data", c="blue", fw=500, size="sm")), dropdown_hover_data], span=12, style={"minWidth": 0}),
-                            ]),
-                            dmc.Space(h=6),
-                            dmc.Divider(label="Настройки графика"),
-                            dmc.Text("Bubble, подписи, шрифты — в панели настроек (⚙).", size="xs", c="dimmed"),
-                            dmc.Space(h=6),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
+                                dmc.GridCol([dcc.Graph(id="corr-bar-x", config={'displaylogo': False, 'responsive': True})], span=6),
+                                dmc.GridCol([dcc.Graph(id="corr-bar-y", config={'displaylogo': False, 'responsive': True})], span=6),
+                            ])
+                        ], style={**STYLE_CARD, "overflow": "visible"}, shadow="md", p="md", withBorder=True),
+                    ], style={**PAPER_BASE, "visibility": "hidden"}),
 
-                        dmc.Paper([
-                            html.Center(dmc.Text("Фильтры", c="black", size="sm")),
-                            html.Div(id="filters-container", children=[]),
-                            dmc.Space(h=10),
-                            add_filter_button
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-                    ]),
+                    # --- Остальные страницы (перенесены из средней панели) ---
+                    html.Div(id="page-graph"),
 
-                    # --- Стр. 2: КОРРЕЛОГРАММА ---
                     html.Div(id="page-correlation", style={"display": "none"}, children=[
                         dmc.Paper([
                             dmc.Text("Корреляционный анализ", fw=600, size="md"),
@@ -258,7 +348,6 @@ def create_layout():
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
 
-                    # --- Стр. 3: DATA ENGINEERING ---
                     html.Div(id="page-data-engineering", style={"display": "none"}, children=[
                         dmc.Paper([
                             dmc.Divider(label="Группировка численного столбца (биннинг)"),
@@ -307,7 +396,6 @@ def create_layout():
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
 
-                    # --- Стр. 4: КЛАСТЕРИЗАЦИЯ ---
                     html.Div(id="page-clustering", style={"display": "none"}, children=[
                         dmc.Paper([
                             dmc.Divider(label="Кластеризация (KMeans)"),
@@ -322,7 +410,6 @@ def create_layout():
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
 
-                    # --- Стр. 5: ML ---
                     html.Div(id="page-ml", style={"display": "none"}, children=[
                         dmc.Paper([
                             dmc.Text("Machine Learning", fw=600, size="lg"),
@@ -332,103 +419,7 @@ def create_layout():
                             dmc.Text("Здесь будут: регрессия, классификация, подбор параметров, предсказания.", size="sm", c="dimmed"),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
-                ], span=3),
-
-                # ---------- ПРАВАЯ ПАНЕЛЬ (span=7) ----------
-                dmc.GridCol([
-                    dmc.Grid([
-                        dmc.GridCol([dmc.Group([
-                                dmc.Text("Тип графика", size="sm", fw=500, c="dimmed"),
-                                dropdown_chart_type,
-                            ], gap="xs", align="center")
-                        ], span="content"),
-                        dmc.GridCol([update_graf], span="content"),
-                        dmc.GridCol([download_button, DownloadFile], span="content"),
-                        dmc.GridCol([excel_download_button, DownloadExcel], span="content"),
-                        dmc.GridCol([copy_button], span="content"),
-                        dmc.GridCol([
-                            dmc.Tooltip(label="Изменить цвета", withArrow=True,
-                                children=dmc.ActionIcon(id="shuffle-button", variant="light", size="xl", radius="xl",
-                                    children=DashIconify(icon="tabler:palette", width=18)))
-                        ], span="content"),
-                        dmc.GridCol([
-                            dmc.Tooltip(label="Настройка графика", withArrow=True,
-                                children=dmc.ActionIcon(id="drawer-demo-button", variant="light", size="xl", radius="xl",
-                                    children=DashIconify(icon="lucide:settings", width=18)))
-                        ], span="content"),
-                    ], align="center"),
-                    dmc.Paper([
-                        html.Div(
-                            style={"position": "relative"},
-                            children=[
-                                dcc.Loading(
-                                    dcc.Graph(figure={}, id="graph", config={
-                                        'displaylogo': False,
-                                        'modeBarButtonsToRemove': [],
-                                        'modeBarButtonsToAdd': ['fullscreen'],
-                                        'displayModeBar': True,
-                                        'scrollZoom': True
-                                    }),
-                                    type="default"
-                                ),
-                                # Оверлей с drop-зонами на графике
-                                html.Div(
-                                    id="graph-drop-overlay",
-                                    style={
-                                        "display": "none",
-                                        "position": "absolute",
-                                        "top": "10px", "left": "10px", "right": "10px", "bottom": "10px",
-                                        "pointerEvents": "none",
-                                        "zIndex": "10",
-                                    },
-                                    children=[
-                                        html.Div("X", **{"data-drop-target": "dropdown_x"}, style={
-                                            "position": "absolute", "bottom": "10px", "left": "50%",
-                                            "transform": "translateX(-50%)",
-                                            "background": "rgba(33,150,243,0.9)", "color": "white",
-                                            "padding": "6px 18px", "borderRadius": "8px",
-                                            "fontWeight": "bold", "fontSize": "14px",
-                                            "pointerEvents": "auto", "cursor": "copy",
-                                        }),
-                                        html.Div("Y", **{"data-drop-target": "dropdown_y"}, style={
-                                            "position": "absolute", "top": "50%", "left": "10px",
-                                            "transform": "translateY(-50%)",
-                                            "background": "rgba(33,150,243,0.9)", "color": "white",
-                                            "padding": "6px 18px", "borderRadius": "8px",
-                                            "fontWeight": "bold", "fontSize": "14px",
-                                            "pointerEvents": "auto", "cursor": "copy",
-                                        }),
-                                        html.Div("Color", **{"data-drop-target": "dropdown_color"}, style={
-                                            "position": "absolute", "top": "10px", "right": "10px",
-                                            "background": "rgba(33,150,243,0.9)", "color": "white",
-                                            "padding": "6px 18px", "borderRadius": "8px",
-                                            "fontWeight": "bold", "fontSize": "14px",
-                                            "pointerEvents": "auto", "cursor": "copy",
-                                        }),
-                                        html.Div("Size", **{"data-drop-target": "dropdown_size"}, style={
-                                            "position": "absolute", "top": "10px", "left": "10px",
-                                            "background": "rgba(33,150,243,0.9)", "color": "white",
-                                            "padding": "6px 18px", "borderRadius": "8px",
-                                            "fontWeight": "bold", "fontSize": "14px",
-                                            "pointerEffects": "auto", "cursor": "copy",
-                                        }),
-                                    ]
-                                ),
-                            ]
-                        ),
-                    ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-
-                    # Графики корреляций / метрик кластеризации
-                    html.Div(id="corr-bars-section", children=[
-                        dmc.Paper([
-                            dmc.Grid([
-                                dmc.GridCol([dcc.Graph(id="corr-bar-x", config={'displaylogo': False, 'responsive': True})], span=6),
-                                dmc.GridCol([dcc.Graph(id="corr-bar-y", config={'displaylogo': False, 'responsive': True})], span=6),
-                            ])
-                        ], style={**STYLE_CARD, "overflow": "visible"}, shadow="md", p="md", withBorder=True),
-                    ], style={**PAPER_BASE, "visibility": "hidden"}),
-
-                ], span=7)
+                ], span=10)
             ], style={"flex": 1, "margin": 0}),
 
             # ========================
