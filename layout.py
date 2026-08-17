@@ -67,7 +67,12 @@ def create_layout():
     return dmc.MantineProvider(
         children=[
             html.Div(
-                style={"display": "flex", "flexDirection": "column", "minHeight": "100vh"},
+                style={
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "height": "100vh",
+                    "overflow": "hidden",
+                },
                 children=[
 
             # --- URL Location ---
@@ -117,7 +122,7 @@ def create_layout():
             html.Button("ctx", id="context-menu-btn", style={"display": "none"}),
 
             # ========================
-            # HEADER (общий, фиксированный сверху)
+            # HEADER (фиксированный сверху)
             # ========================
             dmc.Paper(
                 children=[
@@ -138,7 +143,12 @@ def create_layout():
                 ],
                 shadow="sm",
                 p=0,
-                style={"backgroundColor": "#1A1B1E", "borderBottom": "1px solid #2C2E33"},
+                style={
+                    "backgroundColor": "#1A1B1E",
+                    "borderBottom": "1px solid #2C2E33",
+                    "flexShrink": "0",
+                    "zIndex": "100",
+                },
                 withBorder=False,
             ),
 
@@ -153,8 +163,15 @@ def create_layout():
             html.Div(style={"display": "none"}, children=[dmc.Modal(id="de-modal", opened=False, children=[])]),
 
             # ========================
-            # CONTENT: сайдбар + левая панель + правая
+            # CONTENT: скроллируемая область между header и footer
             # ========================
+            html.Div(
+                style={
+                    "flex": "1",
+                    "overflow": "auto",
+                    "padding": "8px",
+                },
+                children=[
             dmc.Grid([
                 # ---------- САЙДБАР ПЛАШЕК КОЛОНОК (span=2, как и было) ----------
                 dmc.GridCol([
@@ -420,7 +437,9 @@ def create_layout():
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
                 ], span=10)
-            ], style={"flex": 1, "margin": 0}),
+            ], style={"margin": "0"}),
+                ]  # конец скроллируемого контейнера
+            ),
 
             # ========================
             # DRAWER НАСТРОЙКИ ГРАФИКА (общий)
@@ -479,7 +498,7 @@ def create_layout():
             ),
 
             # ========================
-            # FOOTER (общий, фиксированный внизу)
+            # FOOTER (фиксированный внизу)
             # ========================
             dmc.Paper(
                 id="file-info-bar",
@@ -495,6 +514,8 @@ def create_layout():
                     "fontFamily": "monospace",
                     "textAlign": "right",
                     "minHeight": "36px",
+                    "flexShrink": "0",
+                    "zIndex": "100",
                 },
             ),
 

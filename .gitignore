@@ -7,7 +7,5 @@ venv/
 .venv/
 .DS_Store
 dash_app.log
-
-# SSL certificates (generate locally with: python generate_cert.py)
-cert.pem
-key.pem
+node_modules/
+dist/
