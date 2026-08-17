@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 
-from app import app
+from dash_app import app
 from utils import (
     read_df_from_store, _empty_fig, _make_error_notif,
     _sort_legend_traces, hide_xlabels_on_upper_facets,

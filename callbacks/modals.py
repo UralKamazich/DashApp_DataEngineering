@@ -5,7 +5,7 @@ Callbacks: открытие/закрытие drawer и переключение 
 
 from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
-from app import app
+from dash_app import app
 
 
 # ============ Переключение страниц + подсветка активной ссылки (клиентский колбэк) ============

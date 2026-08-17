@@ -11,7 +11,7 @@ from dash.exceptions import PreventUpdate
 from dash_iconify import DashIconify
 import pandas as pd
 
-from app import app
+from dash_app import app
 from utils import meta_from_df, _make_error_notif, read_df_from_store
 from config import STYLE_CARD
 

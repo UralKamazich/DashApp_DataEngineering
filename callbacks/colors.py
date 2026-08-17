@@ -12,7 +12,7 @@ from dash import callback, Output, Input, State, no_update, html, dcc, MATCH, AL
 
 COLOR_THRESHOLD = 10
 
-from app import app
+from dash_app import app
 from utils import _make_error_notif, apply_custom_colors_safely
 
 logger = logging.getLogger(__name__)

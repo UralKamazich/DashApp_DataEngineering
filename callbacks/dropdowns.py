@@ -3,7 +3,7 @@
 Callbacks: обновление опций для всех дропдаунов (update_dropdown_options_all).
 """
 
-from app import app
+from dash_app import app
 from dash import callback, Output, Input, State
 from utils import read_df_from_store, classify_simple
 

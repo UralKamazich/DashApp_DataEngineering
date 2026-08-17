@@ -9,7 +9,7 @@ import numpy as np
 from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 
-from app import app
+from dash_app import app
 from utils import read_df_from_store, meta_from_df
 
 

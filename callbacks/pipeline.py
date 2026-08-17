@@ -18,7 +18,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 
-from app import app
+from dash_app import app
 from utils import read_df_from_store, meta_from_df, _make_error_notif
 
 logger = logging.getLogger(__name__)

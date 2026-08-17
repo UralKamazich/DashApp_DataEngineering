@@ -9,7 +9,7 @@ from dash import callback, Output, Input, State, html
 import dash_mantine_components as dmc
 from dash.exceptions import PreventUpdate
 
-from app import app
+from dash_app import app
 from utils import read_df_from_store, classify_simple
 from components import make_column_badge
 

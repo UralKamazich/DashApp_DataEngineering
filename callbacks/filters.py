@@ -8,7 +8,7 @@ from dash import callback, Output, Input, State, no_update, html, dcc, MATCH, AL
 import dash_mantine_components as dmc
 from dash.exceptions import PreventUpdate
 
-from app import app
+from dash_app import app
 from utils import classify_simple, read_df_from_store, create_value_control
 from components import create_dropdown
 
