@@ -25,13 +25,18 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
     """Плашка-бейдж: название колонки, цвет по типу (c drag-and-drop)."""
     color = COLUMN_TYPE_COLORS.get(col_type, "#9E9E9E")
     return html.Div(
-        dmc.Badge(
-            col_name,
-            color=color,
-            variant="light",
-            size="sm",
-            fullWidth=True,
-            style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"},
+        dmc.Tooltip(
+            dmc.Badge(
+                col_name,
+                color=color,
+                variant="light",
+                size="sm",
+                fullWidth=True,
+                style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"},
+            ),
+            label=str(col_name),
+            openDelay=200,
+            withArrow=True,
         ),
         draggable="true",
         **{"data-column-name": str(col_name)},
