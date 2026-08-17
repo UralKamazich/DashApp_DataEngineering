@@ -6,8 +6,6 @@
   "use strict";
 
   let _menuVisible = false;
-  let _lastX = 0;
-  let _lastY = 0;
 
   /* ---- Создание меню (один раз) ---- */
   function createMenu() {
@@ -16,15 +14,29 @@
     const menu = document.createElement("div");
     menu.id = "graph-ctx-menu";
     menu.innerHTML =
-      '<div class="ctx-item" data-action="open-settings">' +
-        '<span class="ctx-icon">\u2699</span>Настройки графика' +
+      '<div class="ctx-item" data-action="refresh">' +
+        '<span class="ctx-icon">\u{1F504}</span>Обновить график' +
+      '</div>' +
+      '<div class="ctx-sep"></div>' +
+      '<div class="ctx-item" data-action="download-html">' +
+        '<span class="ctx-icon">\u{1F4C4}</span>Сохранить HTML' +
+      '</div>' +
+      '<div class="ctx-item" data-action="download-excel">' +
+        '<span class="ctx-icon">\u{1F4CA}</span>Сохранить Excel' +
+      '</div>' +
+      '<div class="ctx-item" data-action="copy-png">' +
+        '<span class="ctx-icon">\u{1F5BC}</span>Копировать PNG' +
+      '</div>' +
+      '<div class="ctx-sep"></div>' +
+      '<div class="ctx-item" data-action="change-colors">' +
+        '<span class="ctx-icon">\u{1F3A8}</span>Сменить цвета' +
       '</div>' +
       '<div class="ctx-item" data-action="reset-view">' +
         '<span class="ctx-icon">\u21BA</span>Сбросить масштаб' +
       '</div>' +
       '<div class="ctx-sep"></div>' +
-      '<div class="ctx-item" data-action="download-png">' +
-        '<span class="ctx-icon">\uD83D\uDCF7</span>Скачать как PNG' +
+      '<div class="ctx-item" data-action="open-settings">' +
+        '<span class="ctx-icon">\u2699</span>Настройки графика' +
       '</div>';
 
     menu.addEventListener("click", handleItemClick);
@@ -64,21 +76,41 @@
     executeAction(action);
   }
 
+  /* ---- Клик по скрытой кнопке Dash ---- */
+  function clickButton(id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.click();
+  }
+
   /* ---- Действия ---- */
   function executeAction(action) {
     switch (action) {
-      case "open-settings":
-        // Кликаем скрытую кнопку — она уже открывает Drawer через callback
-        const btn = document.getElementById("context-menu-btn");
-        if (btn) btn.click();
+      case "refresh":
+        clickButton("update-graf");
+        break;
+
+      case "download-html":
+        clickButton("download-button");
+        break;
+
+      case "download-excel":
+        clickButton("download-excel-button");
+        break;
+
+      case "copy-png":
+        clickButton("copy-png-button");
+        break;
+
+      case "change-colors":
+        clickButton("shuffle-button");
         break;
 
       case "reset-view":
         resetGraphView();
         break;
 
-      case "download-png":
-        downloadGraphPng();
+      case "open-settings":
+        clickButton("context-menu-btn");
         break;
     }
   }
@@ -91,7 +123,6 @@
     if (!gd || !window.Plotly) return;
 
     try {
-      // Для 3D-графиков
       if (gd.data && gd.data[0] && gd.data[0].type === "scatter3d") {
         Plotly.relayout(gd, {
           "scene.camera.eye": {},
@@ -99,7 +130,6 @@
           "scene.camera.up": {},
         });
       } else {
-        // Для 2D — убираем user-set диапазоны осей
         const update = {};
         const layout = gd.layout || {};
         for (const key of Object.keys(layout)) {
@@ -120,41 +150,17 @@
     }
   }
 
-  /* ---- Скачать PNG ---- */
-  function downloadGraphPng() {
-    const host = document.getElementById("graph");
-    if (!host) return;
-    const gd = host.querySelector(".js-plotly-plot");
-    if (!gd || !window.Plotly) return;
-
-    Plotly.toImage(gd, { format: "png", scale: 2 })
-      .then(function (dataUrl) {
-        const a = document.createElement("a");
-        a.href = dataUrl;
-        a.download = "graph.png";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      })
-      .catch(function (err) {
-        console.error("[ctx-menu] PNG download error:", err);
-      });
-  }
-
   /* ---- Привязка contextmenu к графику ---- */
   function bindGraphContextMenu() {
     const graphHost = document.getElementById("graph");
     if (!graphHost || graphHost.dataset.ctxBound === "1") return;
 
-    // Capture-фаза: перехватываем ДО Plotly
     graphHost.addEventListener(
       "contextmenu",
       function (e) {
         e.preventDefault();
         e.stopPropagation();
-        _lastX = e.clientX;
-        _lastY = e.clientY;
-        showMenu(_lastX, _lastY);
+        showMenu(e.clientX, e.clientY);
       },
       true
     );
@@ -164,21 +170,18 @@
 
   /* ---- Глобальные обработчики ---- */
   function setupGlobalListeners() {
-    // Клик в любое место — закрыть меню
     document.addEventListener("mousedown", function (e) {
       if (_menuVisible && !e.target.closest("#graph-ctx-menu")) {
         hideMenu();
       }
     });
 
-    // Escape — закрыть меню
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && _menuVisible) {
         hideMenu();
       }
     });
 
-    // Скролл — закрыть меню
     document.addEventListener("scroll", function () {
       if (_menuVisible) hideMenu();
     }, true);
@@ -190,9 +193,6 @@
     bindGraphContextMenu();
     setupGlobalListeners();
 
-    // MutationObserver: если graph перерендерится, привязка сохраняется
-    // благодаря dataset.ctxBound. Но если graph появится заново —
-    // пере-привязываем.
     new MutationObserver(function () {
       const graphHost = document.getElementById("graph");
       if (graphHost && graphHost.dataset.ctxBound !== "1") {

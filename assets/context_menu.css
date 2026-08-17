@@ -45,3 +45,47 @@
     background: #444;
     margin: 4px 8px;
 }
+
+/* ===== Сайдбар колонок — обрезка длинных названий ===== */
+
+#columns-sidebar .mantine-Badge-root {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#columns-sidebar .mantine-Badge-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
+
+/* ===== Закладки датасета — стиль настоящих закладок ===== */
+
+#columns-sidebar .mantine-Tabs-list {
+    gap: 2px;
+}
+
+#columns-sidebar .mantine-Tabs-tab {
+    font-size: 10px;
+    padding: 4px 8px;
+    color: #888;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    transition: all 0.2s;
+}
+
+#columns-sidebar .mantine-Tabs-tab:hover {
+    background: #333;
+    color: #aaa;
+}
+
+#columns-sidebar .mantine-Tabs-tab[data-active] {
+    background: #3a3a3a;
+    color: #fff;
+    border-color: #555;
+}

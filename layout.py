@@ -7,7 +7,6 @@ Header + Footer общие на всех страницах.
 
 import dash
 from dash import dcc, html
-from dash_iconify import DashIconify
 import dash_mantine_components as dmc
 
 from config import STYLE_CARD, PAPER_BASE, initial_fig
@@ -23,10 +22,8 @@ from components import (
     txtcopy_cols_select, txtcopy_suffix_input, txtcopy_strip_switch,
     add_filter_button,
     dropdown_chart_type,
-    SwitchBubble, update_graf,
-    download_button, DownloadFile,
-    excel_download_button, DownloadExcel,
-    copy_button, copy_trigger,
+    SwitchBubble,
+    copy_trigger,
     dropdown_text_pozition, dropdown_category_ascending,
     dropdown_axes_category, dropdown_overlay,
     dropdown_legend, dropdown_legend_order, input_legend_custom_order,
@@ -168,90 +165,73 @@ def create_layout():
             html.Div(
                 style={
                     "flex": "1",
-                    "overflow": "auto",
+                    "display": "flex",
+                    "overflow": "hidden",
                     "padding": "8px",
+                    "gap": "8px",
                 },
                 children=[
-            dmc.Grid([
-                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК (span=2, как и было) ----------
-                dmc.GridCol([
-                    dmc.Paper(
-                        id="columns-sidebar",
-                        children=[
-                            dmc.Text("Колонки датасета", size="xs", fw=600, c="dimmed"),
-                            dmc.Space(h=6),
-                            dmc.Divider(label="Исходный", labelPosition="center", size="xs"),
-                            dmc.Stack(id="columns-original-badges", children=[], gap="2px"),
-                            dmc.Space(h=8),
-                            dmc.Divider(
-                                id="columns-filtered-label",
-                                label="Фильтрованный датасет",
-                                labelPosition="center",
-                                size="xs",
-                            ),
-                            dmc.Stack(id="columns-filtered-badges", children=[], gap="2px"),
-                        ],
-                        shadow="sm",
-                        p="xs",
-                        withBorder=True,
-                        style={"overflowY": "auto", "maxHeight": "calc(100vh - 100px)", "padding": "8px"},
-                    ),
-                ], span=2),
+                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК ----------
+                html.Div(
+                    style={"flexShrink": "0", "width": "15.23%", "maxWidth": "15.23%", "minWidth": "15.23%"},
+                    children=[
+                        dmc.Text("Датасет", size="sm", fw=600, c="dimmed", ta="center", style={"marginBottom": "4px"}),
+                        dmc.Paper(
+                            id="columns-sidebar",
+                            children=[
+                                dmc.Stack(id="columns-badges", children=[], gap="2px", style={"maxWidth": "100%", "overflow": "hidden"}),
+                            ],
+                            shadow="sm",
+                            p="xs",
+                            withBorder=True,
+                            style={"overflowY": "auto", "overflowX": "hidden", "height": "calc(100% - 28px)", "padding": "8px", "fontSize": "10px"},
+                        ),
+                    ],
+                ),
 
-                # ---------- ПРАВАЯ ПАНЕЛЬ (span=10) — график + страницы ----------------
-                dmc.GridCol([
-                    dmc.Grid([
-                        dmc.GridCol([dmc.Group([
+                # ---------- ПРАВАЯ ПАНЕЛЬ — график + страницы ----------------
+                html.Div(
+                    style={"flex": "1", "overflow": "auto", "minWidth": "0"},
+                    children=[
+                    # Строка: Тип графика (фикс) + X Y Z dropdowns (оставшееся пространство)
+                    html.Div(
+                        style={"display": "flex", "alignItems": "center", "gap": "8px", "marginBottom": "8px"},
+                        children=[
+                            # Тип графика — фиксированная ширина
+                            dmc.Group([
                                 dmc.Text("Тип графика", size="sm", fw=500, c="dimmed"),
                                 dropdown_chart_type,
-                            ], gap="xs", align="center")
-                        ], span="content"),
-                        dmc.GridCol([update_graf], span="content"),
-                        dmc.GridCol([download_button, DownloadFile], span="content"),
-                        dmc.GridCol([excel_download_button, DownloadExcel], span="content"),
-                        dmc.GridCol([copy_button], span="content"),
-                        dmc.GridCol([
-                            dmc.Tooltip(label="Изменить цвета", withArrow=True,
-                                children=dmc.ActionIcon(id="shuffle-button", variant="light", size="xl", radius="xl",
-                                    children=DashIconify(icon="tabler:palette", width=18)))
-                        ], span="content"),
-                        dmc.GridCol([
-                            dmc.Tooltip(label="Настройка графика", withArrow=True,
-                                children=dmc.ActionIcon(id="drawer-demo-button", variant="light", size="xl", radius="xl",
-                                    children=DashIconify(icon="lucide:settings", width=18)))
-                        ], span="content"),
-                    ], align="center"),
-                    # Drop-зоны X-Y-Z над графиком (лейблы слева)
-                    dmc.Grid([
-                        dmc.GridCol([
+                            ], gap="xs", align="center", wrap="nowrap", style={"flexShrink": "0"}),
+                            # X dropdown
                             dmc.Group([
-                                dmc.Text("X", c="blue", fw=600, size="sm", style={"minWidth": "20px"}),
+                                dmc.Text("X", c="blue", fw=600, size="sm", style={"minWidth": "16px"}),
                                 html.Div(
                                     dropdown_x,
                                     id="drop-zone-x",
                                     **{"data-drop-target": "dropdown_x"},
-                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "40px", "flex": 1}
+                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "36px", "flex": "1"}
                                 ),
-                            ], gap="xs", align="center", style={"width": "100%"}),
-                        ], span=4, style={"minWidth": 0}),
-                        dmc.GridCol([
+                            ], gap="xs", align="center", style={"flex": "1", "minWidth": "0"}),
+                            # Y dropdown
                             dmc.Group([
-                                dmc.Text("Y", c="blue", fw=600, size="sm", style={"minWidth": "20px"}),
+                                dmc.Text("Y", c="blue", fw=600, size="sm", style={"minWidth": "16px"}),
                                 html.Div(
                                     dropdown_y,
                                     id="drop-zone-y",
                                     **{"data-drop-target": "dropdown_y"},
-                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "40px", "flex": 1}
+                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "36px", "flex": "1"}
                                 ),
-                            ], gap="xs", align="center", style={"width": "100%"}),
-                        ], span=4, style={"minWidth": 0}),
-                        dmc.GridCol([
+                            ], gap="xs", align="center", style={"flex": "1", "minWidth": "0"}),
+                            # Z dropdown
                             dmc.Group([
-                                dmc.Text("Z", c="blue", fw=600, size="sm", style={"minWidth": "20px"}),
-                                html.Div(dropdown_z, style={"flex": 1}),
-                            ], gap="xs", align="center", style={"width": "100%"}),
-                        ], span=4, style={"minWidth": 0}),
-                    ], style={"marginBottom": "8px"}),
+                                dmc.Text("Z", c="blue", fw=600, size="sm", style={"minWidth": "16px"}),
+                                html.Div(
+                                    dropdown_z,
+                                    style={"flex": "1"}
+                                ),
+                            ], gap="xs", align="center", style={"flex": "1", "minWidth": "0"}),
+                        ],
+                    ),
 
                     dmc.Paper([
                         html.Div(
@@ -436,9 +416,8 @@ def create_layout():
                             dmc.Text("Здесь будут: регрессия, классификация, подбор параметров, предсказания.", size="sm", c="dimmed"),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
-                ], span=10)
-            ], style={"margin": "0"}),
-                ]  # конец скроллируемого контейнера
+                ]),  # конец правой панели
+                ]  # конец flex-контейнера
             ),
 
             # ========================
@@ -521,7 +500,18 @@ def create_layout():
 
             dcc.Store(id="nav-active-store", data="/"),
 
-                ]  # конец flex-контейнера
-            ),
+            # --- Скрытые триггеры для контекстного меню графика ---
+            html.Div(style={"display": "none"}, children=[
+                html.Button("refresh", id="update-graf"),
+                html.Button("download-html", id="download-button"),
+                html.Button("download-excel", id="download-excel-button"),
+                html.Button("copy-png", id="copy-png-button"),
+                html.Button("shuffle", id="shuffle-button"),
+                dcc.Download(id="download-file"),
+                dcc.Download(id="download-excel"),
+            ]),
+
+                ]  # конец children внешнего html.Div
+            ),  # конец внешнего html.Div
         ]
     )

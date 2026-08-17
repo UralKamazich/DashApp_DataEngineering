@@ -3,7 +3,7 @@
 Callbacks: открытие/закрытие drawer и переключение страниц + подсветка навигации.
 """
 
-from dash import callback, Output, Input, State, no_update
+from dash import Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 from dash_app import app
 
@@ -50,13 +50,12 @@ app.clientside_callback(
 
 
 # ============ Диалог настройки (открыть дравер) ============
-@callback(
+@app.callback(
     Output("drawer-simple", "opened"),
-    Input("drawer-demo-button", "n_clicks"),
     Input("context-menu-btn", "n_clicks"),
     prevent_initial_call=True,
 )
-def drawer_demo(n1, n2):
+def drawer_demo(n_clicks):
     return True
 
 

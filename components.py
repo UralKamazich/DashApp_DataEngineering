@@ -31,11 +31,11 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
             variant="light",
             size="sm",
             fullWidth=True,
-            style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400},
+            style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"},
         ),
         draggable="true",
         **{"data-column-name": str(col_name)},
-        style={"cursor": "grab", "marginBottom": "2px"},
+        style={"cursor": "grab", "marginBottom": "2px", "maxWidth": "100%", "overflow": "hidden"},
     )
 
 
@@ -258,7 +258,7 @@ dropdown_chart_type = dmc.Select(
     value="Scatter",
     clearable=False,
     persistence=True,
-    style={"width": "220px", "fontSize": "13px"}
+    style={"width": "165px", "fontSize": "13px"}
 )
 
 SwitchBubble = dmc.Switch(id="SwitchBubble", size="xs", radius="sm", label="Bubble", checked=False)

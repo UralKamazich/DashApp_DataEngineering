@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -60,6 +60,9 @@ function startPythonServer() {
 
 // Создание главного окна
 function createWindow() {
+    // Очистка кэша для загрузки свежих assets
+    session.defaultSession.clearCache();
+
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
