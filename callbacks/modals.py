@@ -66,9 +66,52 @@ app.clientside_callback(
         if (window.__dndInstalled) return window.dash_clientside.no_update;
         window.__dndInstalled = true;
 
-        function getAllZones() { return document.querySelectorAll('[data-drop-target]'); }
-        function setZonesStyle(prop, value) { getAllZones().forEach(function(z) { z.style[prop] = value; }); }
+        var isDragging = false;
+        var isGraphHover = false;
 
+        function getGraphContainer() {
+            var graph = document.getElementById('graph');
+            if (!graph) return null;
+            var c = graph.parentElement;
+            if (c) c.classList.add('graph-container');
+            return c;
+        }
+
+        function getOverlay() { return document.querySelector('.graph-drop-overlay'); }
+        function getAllZones() { return document.querySelectorAll('[data-drop-target]'); }
+
+        function updateHoverVisuals() {
+            var container = getGraphContainer();
+            if (!container) return;
+            var overlay = getOverlay();
+            if (isGraphHover || isDragging) {
+                if (overlay) overlay.style.display = 'block';
+            } else {
+                if (overlay) overlay.style.display = 'none';
+            }
+            if (isDragging) {
+                container.classList.add('drag-active');
+            } else {
+                container.classList.remove('drag-active');
+            }
+        }
+
+        // --- Hover: показывать направляющие при наведении ---
+        var container = getGraphContainer();
+        if (container) {
+            container.addEventListener('mouseenter', function() {
+                isGraphHover = true;
+                container.classList.add('graph-hover');
+                updateHoverVisuals();
+            });
+            container.addEventListener('mouseleave', function(e) {
+                isGraphHover = false;
+                container.classList.remove('graph-hover');
+                updateHoverVisuals();
+            });
+        }
+
+        // --- Drag start ---
         document.addEventListener('dragstart', function(e) {
             var badge = e.target.closest('[data-column-name]');
             if (!badge) return;
@@ -77,45 +120,37 @@ app.clientside_callback(
             e.dataTransfer.setData('text/plain', colName);
             e.dataTransfer.effectAllowed = 'move';
             badge.style.opacity = '0.4';
-            setZonesStyle('borderColor', '#2196F3');
-            setZonesStyle('backgroundColor', 'rgba(33,150,243,0.08)');
-            var overlay = document.getElementById('graph-drop-overlay');
+            isDragging = true;
+            var overlay = getOverlay();
             if (overlay) overlay.style.display = 'block';
+            updateHoverVisuals();
         });
 
+        // --- Drag end ---
         document.addEventListener('dragend', function(e) {
             var badge = e.target.closest('[data-column-name]');
             if (badge) badge.style.opacity = '1';
-            setZonesStyle('borderColor', 'transparent');
-            setZonesStyle('backgroundColor', 'transparent');
-            var overlay = document.getElementById('graph-drop-overlay');
-            if (overlay) overlay.style.display = 'none';
+            isDragging = false;
+            updateHoverVisuals();
         });
 
+        // --- Drag over (подсветка зоны) ---
         document.addEventListener('dragover', function(e) {
             var zone = e.target.closest('[data-drop-target]');
             if (!zone) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            zone.style.backgroundColor = 'rgba(33,150,243,0.2)';
         });
 
-        document.addEventListener('dragleave', function(e) {
-            var zone = e.target.closest('[data-drop-target]');
-            if (!zone) return;
-            zone.style.backgroundColor = 'rgba(33,150,243,0.1)';
-        });
-
+        // --- Drop ---
         document.addEventListener('drop', function(e) {
             var zone = e.target.closest('[data-drop-target]');
             if (!zone) return;
             e.preventDefault(); e.stopPropagation();
             var colName = e.dataTransfer.getData('text/plain');
             var targetId = zone.getAttribute('data-drop-target');
-            setZonesStyle('borderColor', 'transparent');
-            setZonesStyle('backgroundColor', 'transparent');
-            var overlay = document.getElementById('graph-drop-overlay');
-            if (overlay) overlay.style.display = 'none';
+            isDragging = false;
+            updateHoverVisuals();
             if (colName && targetId) {
                 dash_clientside.set_props(targetId, {value: colName});
             }

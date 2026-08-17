@@ -89,3 +89,33 @@
     color: #fff;
     border-color: #555;
 }
+
+/* ===== Drop-зоны графика — hover-подсветка ===== */
+
+/* Базовое состояние дроп-зон */
+[data-drop-target] {
+    cursor: copy;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* При наведении на график — зоны не перехватывают мышь */
+.graph-hover [data-drop-target] {
+    pointer-events: none;
+}
+
+/* Оверлей тоже не перехватывает при наведении */
+.graph-hover > .graph-drop-overlay {
+    pointer-events: none;
+}
+
+/* При перетаскивании — зоны активны и подсвечены */
+.drag-active [data-drop-target] {
+    pointer-events: auto !important;
+    cursor: copy;
+}
+
+.drag-active [data-drop-target]:hover {
+    background-color: rgba(33, 150, 243, 0.15) !important;
+    border: 2px solid rgba(33, 150, 243, 0.7) !important;
+    border-color: rgba(33, 150, 243, 0.7) !important;
+}
