@@ -90,32 +90,36 @@
     border-color: #555;
 }
 
-/* ===== Drop-зоны графика — hover-подсветка ===== */
+/* ===== Drop-зоны графика ===== */
 
 /* Базовое состояние дроп-зон */
 [data-drop-target] {
     cursor: copy;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition: background-color 0.15s, border 0.15s, box-shadow 0.15s;
 }
 
-/* При наведении на график — зоны не перехватывают мышь */
-.graph-hover [data-drop-target] {
+/* Текст внутри зон — усечение */
+[data-drop-target] > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* При наведении на график — зоны видимы, но не перехватывают мышь */
+.graph-hover .graph-drop-zone {
     pointer-events: none;
 }
 
-/* Оверлей тоже не перехватывает при наведении */
-.graph-hover > .graph-drop-overlay {
-    pointer-events: none;
-}
-
-/* При перетаскивании — зоны активны и подсвечены */
-.drag-active [data-drop-target] {
+/* При перетаскивании — зоны активны */
+.drag-active .graph-drop-zone {
     pointer-events: auto !important;
     cursor: copy;
 }
 
-.drag-active [data-drop-target]:hover {
-    background-color: rgba(33, 150, 243, 0.15) !important;
-    border: 2px solid rgba(33, 150, 243, 0.7) !important;
-    border-color: rgba(33, 150, 243, 0.7) !important;
+/* Подсветка зоны при наведении бейджа */
+.drag-active .graph-drop-zone.zone-hover {
+    background-color: rgba(33, 150, 243, 0.25) !important;
+    border: 3px solid rgba(33, 150, 243, 0.85) !important;
+    box-shadow: 0 0 8px rgba(33, 150, 243, 0.3) !important;
 }

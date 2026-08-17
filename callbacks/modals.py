@@ -77,37 +77,38 @@ app.clientside_callback(
             return c;
         }
 
-        function getOverlay() { return document.querySelector('.graph-drop-overlay'); }
-        function getAllZones() { return document.querySelectorAll('[data-drop-target]'); }
+        function getAllZones() { return document.querySelectorAll('.graph-drop-zone'); }
 
-        function updateHoverVisuals() {
-            var container = getGraphContainer();
-            if (!container) return;
-            var overlay = getOverlay();
-            if (isGraphHover || isDragging) {
-                if (overlay) overlay.style.display = 'block';
-            } else {
-                if (overlay) overlay.style.display = 'none';
-            }
-            if (isDragging) {
-                container.classList.add('drag-active');
-            } else {
-                container.classList.remove('drag-active');
+        function updateZonesVisibility() {
+            var show = isGraphHover || isDragging;
+            getAllZones().forEach(function(z) {
+                z.style.display = show ? 'flex' : 'none';
+            });
+            var c = getGraphContainer();
+            if (c) {
+                if (isDragging) {
+                    c.classList.add('drag-active');
+                    c.classList.remove('graph-hover');
+                } else if (isGraphHover) {
+                    c.classList.remove('drag-active');
+                    c.classList.add('graph-hover');
+                } else {
+                    c.classList.remove('drag-active');
+                    c.classList.remove('graph-hover');
+                }
             }
         }
 
-        // --- Hover: показывать направляющие при наведении ---
+        // --- Hover: показывать зоны при наведении на график ---
         var container = getGraphContainer();
         if (container) {
             container.addEventListener('mouseenter', function() {
                 isGraphHover = true;
-                container.classList.add('graph-hover');
-                updateHoverVisuals();
+                updateZonesVisibility();
             });
-            container.addEventListener('mouseleave', function(e) {
+            container.addEventListener('mouseleave', function() {
                 isGraphHover = false;
-                container.classList.remove('graph-hover');
-                updateHoverVisuals();
+                updateZonesVisibility();
             });
         }
 
@@ -121,9 +122,7 @@ app.clientside_callback(
             e.dataTransfer.effectAllowed = 'move';
             badge.style.opacity = '0.4';
             isDragging = true;
-            var overlay = getOverlay();
-            if (overlay) overlay.style.display = 'block';
-            updateHoverVisuals();
+            updateZonesVisibility();
         });
 
         // --- Drag end ---
@@ -131,26 +130,54 @@ app.clientside_callback(
             var badge = e.target.closest('[data-column-name]');
             if (badge) badge.style.opacity = '1';
             isDragging = false;
-            updateHoverVisuals();
+            document.querySelectorAll('.zone-hover').forEach(function(z) { z.classList.remove('zone-hover'); });
+            updateZonesVisibility();
         });
 
-        // --- Drag over (подсветка зоны) ---
+        // --- Drag over (разрешить drop) ---
         document.addEventListener('dragover', function(e) {
-            var zone = e.target.closest('[data-drop-target]');
-            if (!zone) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            var zone = e.target.closest('.graph-drop-zone');
+            if (zone) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            }
+        });
+
+        // --- Подсветка зон: dragenter/dragleave напрямую на зонах ---
+        getAllZones().forEach(function(zone) {
+            zone.addEventListener('dragenter', function(e) {
+                e.preventDefault();
+                zone.classList.add('zone-hover');
+            });
+            zone.addEventListener('dragleave', function() {
+                zone.classList.remove('zone-hover');
+            });
+            zone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                zone.classList.add('zone-hover');
+            });
+            // ПКМ — очистить дроп-зону
+            zone.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var targetId = zone.getAttribute('data-drop-target');
+                if (targetId) {
+                    dash_clientside.set_props(targetId, {value: null});
+                }
+            });
         });
 
         // --- Drop ---
         document.addEventListener('drop', function(e) {
-            var zone = e.target.closest('[data-drop-target]');
+            var zone = e.target.closest('.graph-drop-zone');
             if (!zone) return;
             e.preventDefault(); e.stopPropagation();
             var colName = e.dataTransfer.getData('text/plain');
             var targetId = zone.getAttribute('data-drop-target');
             isDragging = false;
-            updateHoverVisuals();
+            zone.classList.remove('zone-hover');
+            updateZonesVisibility();
             if (colName && targetId) {
                 dash_clientside.set_props(targetId, {value: colName});
             }
@@ -161,5 +188,31 @@ app.clientside_callback(
     """,
     Output("nav-active-store", "data", allow_duplicate=True),
     Input("url", "pathname"),
+    prevent_initial_call='initial_duplicate',
+)
+
+
+# ============ Обновление подписей дроп-зон при изменении dropdown ============
+app.clientside_callback(
+    """
+    function(xVal, yVal, colorVal, sizeVal, textVal) {
+        function updateLabel(spanId, defaultText, value) {
+            var el = document.getElementById(spanId);
+            if (el) el.textContent = value || defaultText;
+        }
+        updateLabel('zone-label-x', 'X', xVal);
+        updateLabel('zone-label-y', 'Y', yVal);
+        updateLabel('zone-label-color', 'Color', colorVal);
+        updateLabel('zone-label-size', 'Size', sizeVal);
+        updateLabel('zone-label-text', 'Подпись', textVal);
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("nav-active-store", "data", allow_duplicate=True),
+    Input("dropdown_x", "value"),
+    Input("dropdown_y", "value"),
+    Input("dropdown_color", "value"),
+    Input("dropdown_size", "value"),
+    Input("dropdown_text", "value"),
     prevent_initial_call='initial_duplicate',
 )
