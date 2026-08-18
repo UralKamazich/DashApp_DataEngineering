@@ -256,7 +256,7 @@
     display: none;
 }
 
-/* Слой целей полностью прозрачен и не блокирует Plotly до начала drag. */
+/* Слой сам не блокирует Plotly; события получают только видимые зоны. */
 .graph-drop-layer {
     position: absolute;
     inset: 0;
@@ -267,8 +267,14 @@
     transition: opacity 0.14s ease;
 }
 
+.graph-workspace:hover .graph-drop-layer,
+.graph-workspace.field-picker-open .graph-drop-layer,
 .graph-workspace.dnd-active .graph-drop-layer {
     visibility: visible;
+    opacity: 0.86;
+}
+
+.graph-workspace.dnd-active .graph-drop-layer {
     opacity: 1;
 }
 
@@ -292,8 +298,14 @@
     transition: background-color 0.12s, box-shadow 0.12s, transform 0.12s;
 }
 
+.graph-workspace:hover .graph-drop-zone,
+.graph-workspace.field-picker-open .graph-drop-zone,
 .graph-workspace.dnd-active .graph-drop-zone {
     pointer-events: auto;
+    cursor: context-menu;
+}
+
+.graph-workspace.dnd-active .graph-drop-zone {
     cursor: copy;
 }
 
@@ -319,6 +331,38 @@
     color: #1864ab;
 }
 
+.graph-zone-clear {
+    display: none;
+    width: 20px;
+    height: 20px;
+    margin-left: auto;
+    padding: 0;
+    flex: 0 0 20px;
+    align-items: center;
+    justify-content: center;
+    color: #74808b;
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font: 600 17px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.graph-drop-zone.has-value .graph-zone-clear {
+    display: inline-flex;
+}
+
+.graph-zone-clear:hover,
+.graph-zone-clear:focus-visible {
+    color: #c92a2a;
+    background: #fff0f0;
+    outline: none;
+}
+
+.graph-workspace.dnd-active .graph-zone-clear {
+    display: none;
+}
+
 .graph-drop-zone.zone-hover {
     background: #e7f5ff;
     box-shadow: 0 0 0 2px #228be6, 0 8px 24px rgba(34, 139, 230, 0.22);
@@ -330,7 +374,24 @@
     right: 12%;
     bottom: 14px;
     left: 12%;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 0;
+}
+
+.graph-drop-zone--axis-x .graph-drop-zone-name {
+    justify-self: center;
+}
+
+.graph-drop-zone--axis-x .graph-drop-zone-value {
+    max-width: 100%;
+    justify-self: center;
+    text-align: center;
+}
+
+.graph-drop-zone--axis-x .graph-zone-clear {
+    margin-left: 0;
+    justify-self: center;
 }
 
 .graph-drop-zone--axis-y {
@@ -364,6 +425,256 @@
 
 .graph-drop-zone--secondary {
     max-width: 150px;
+}
+
+.graph-drop-zone--hover {
+    max-width: min(520px, calc(100vw - 190px));
+    flex: 0 1 auto;
+}
+
+/* ===== Выбор столбца для зоны ===== */
+
+#graph-field-picker {
+    display: none;
+    position: fixed;
+    z-index: 10030;
+    box-sizing: border-box;
+    width: 320px;
+    max-height: min(520px, calc(100vh - 16px));
+    overflow: hidden;
+    color: #25262b;
+    background: rgba(255, 255, 255, 0.985);
+    border: 1px solid rgba(134, 142, 150, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(14px);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    animation: graph-field-picker-in 100ms ease-out;
+}
+
+#graph-field-picker.is-open {
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes graph-field-picker-in {
+    from { opacity: 0; transform: translateX(-3px) scale(0.99); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.field-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 10px;
+}
+
+.field-picker-kicker {
+    margin-bottom: 2px;
+    color: #868e96;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.field-picker-title {
+    color: #212529;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.field-picker-close {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    color: #868e96;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    font: 500 22px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.field-picker-close:hover,
+.field-picker-close:focus-visible {
+    color: #343a40;
+    background: #f1f3f5;
+    outline: none;
+}
+
+.field-picker-tools {
+    padding: 0 12px 10px;
+}
+
+.field-picker-search-wrap {
+    display: flex;
+    height: 36px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.field-picker-search-wrap:focus-within {
+    background: #fff;
+    border-color: #74c0fc;
+    box-shadow: 0 0 0 2px rgba(34, 139, 230, 0.12);
+}
+
+.field-picker-search-wrap svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    fill: none;
+    stroke: #868e96;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+.field-picker-search {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    color: #343a40;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.field-picker-search::placeholder {
+    color: #adb5bd;
+}
+
+.field-picker-order {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.field-picker-order-label {
+    color: #adb5bd;
+    font-size: 10px;
+    font-weight: 650;
+    transition: color 0.1s;
+}
+
+.field-picker-order-label.is-active {
+    color: #1971c2;
+}
+
+.field-picker-switch {
+    position: relative;
+    width: 30px;
+    height: 17px;
+    padding: 0;
+    background: #ced4da;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.12s;
+}
+
+.field-picker-switch[aria-checked="true"] {
+    background: #339af0;
+}
+
+.field-picker-switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 13px;
+    height: 13px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+    transition: transform 0.12s;
+}
+
+.field-picker-switch[aria-checked="true"] .field-picker-switch-knob {
+    transform: translateX(13px);
+}
+
+.field-picker-list {
+    min-height: 54px;
+    overflow-y: auto;
+    padding: 4px 8px 8px;
+    border-top: 1px solid #f1f3f5;
+}
+
+.field-picker-option {
+    display: flex;
+    width: 100%;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    color: #495057;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    font: 500 12px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-align: left;
+}
+
+.field-picker-option:hover,
+.field-picker-option:focus-visible {
+    color: #1864ab;
+    background: #f1f3f5;
+    outline: none;
+}
+
+.field-picker-option[aria-selected="true"] {
+    color: #1864ab;
+    background: #e7f5ff;
+    font-weight: 650;
+}
+
+.field-picker-option-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.field-picker-option-check {
+    visibility: hidden;
+    flex: 0 0 auto;
+    color: #228be6;
+    font-size: 13px;
+}
+
+.field-picker-option[aria-selected="true"] .field-picker-option-check {
+    visibility: visible;
+}
+
+.field-picker-empty {
+    padding: 22px 10px;
+    color: #868e96;
+    font-size: 12px;
+    text-align: center;
+}
+
+.field-picker-footer {
+    padding: 8px 12px 10px;
+    color: #adb5bd;
+    background: #fafafa;
+    border-top: 1px solid #f1f3f5;
+    font-size: 9px;
+    text-align: center;
 }
 
 .column-badge--dragging {

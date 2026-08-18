@@ -22,6 +22,34 @@ from config import legend_config
 logger = logging.getLogger(__name__)
 
 
+Y_ONLY_CHART_TYPES = {
+    "Scatter",
+    "Box",
+    "Bar",
+    "Line",
+    "Hist",
+    "Pie",
+    "Violin",
+    "Ridge",
+}
+
+
+def _primary_axis_errors(chart_type, x_col, y_col, columns):
+    """Validate X/Y while allowing ordinary charts to use only Y."""
+    errors = []
+    x_valid = bool(x_col) and x_col in columns
+    y_valid = bool(y_col) and y_col in columns
+
+    if x_col and not x_valid:
+        errors.append(f"Не существует столбец X: {x_col}")
+    if y_col and not y_valid:
+        errors.append(f"Не существует столбец Y: {y_col}")
+    if not x_col and not (chart_type in Y_ONLY_CHART_TYPES and y_valid):
+        errors.append("Не выбран столбец X")
+
+    return errors
+
+
 @app.callback(
     Output("graph", "figure"),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
@@ -80,9 +108,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         if dff is None or dff.empty:
             return empty, []
 
-        errors = []
-        if not x_col or x_col not in dff.columns:
-            errors.append(f"Не выбран или не существует столбец X: {x_col}")
+        errors = _primary_axis_errors(chart_type, x_col, y_col, dff.columns)
         if chart_type == "3D_Scatter" and (not z_col or z_col not in dff.columns):
             errors.append("Для 3D требуется столбец Z")
         if errors:
@@ -168,7 +194,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         elif chart_type == "Hist":
             fig = px.histogram(
-                plot_df, x=x_col, color=carg,
+                plot_df, x=x_col, y=y_col if not x_col else None, color=carg,
                 height=height, width=width, facet_row=facet_row, facet_col=facet_col,
                 category_orders=category_orders, template=selected_style
             )
@@ -186,14 +212,15 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 fig.update_traces(textposition=dropdown_text_pozition, textfont=dict(size=font_size_ticks), selector=dict(mode='markers+text'))
 
         elif chart_type == "Pie":
-            if plot_df[x_col].dtypes != 'object':
-                dff1 = plot_df[x_col].value_counts(dropna=False, bins=10).sort_values(ascending=False)
+            pie_col = x_col or y_col
+            if plot_df[pie_col].dtypes != 'object':
+                dff1 = plot_df[pie_col].value_counts(dropna=False, bins=10).sort_values(ascending=False)
             else:
-                dff1 = plot_df[x_col].value_counts(dropna=False).sort_values(ascending=False)
+                dff1 = plot_df[pie_col].value_counts(dropna=False).sort_values(ascending=False)
             dff1 = pd.DataFrame(dff1).reset_index()
-            dff1.columns = [x_col, 'counts']
-            dff1[x_col] = dff1[x_col].astype(str)
-            fig = px.pie(dff1, values='counts', names=x_col, title=x_col, height=height, template=selected_style)
+            dff1.columns = [pie_col, 'counts']
+            dff1[pie_col] = dff1[pie_col].astype(str)
+            fig = px.pie(dff1, values='counts', names=pie_col, title=pie_col, height=height, template=selected_style)
             fig.update_traces(textposition='inside', textinfo='percent+label+value', overwrite=True)
 
         elif chart_type == "Correlation":
@@ -235,11 +262,12 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         elif chart_type == "Ridge":
             fig = go.Figure()
+            ridge_orientation = 'h' if x_col else 'v'
             if color_col == "Нет" or color_col not in plot_df.columns:
                 fig.add_trace(go.Violin(
                     x=plot_df[x_col] if x_col in plot_df.columns else None,
                     y=plot_df[y_col] if y_col in plot_df.columns else None,
-                    orientation='h', side='positive', width=3, points=False,
+                    orientation=ridge_orientation, side='positive', width=3, points=False,
                     line_color=px.colors.qualitative.Plotly[0], name=y_col
                 ))
             else:
@@ -250,7 +278,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                     fig.add_trace(go.Violin(
                         x=subset[x_col] if x_col in subset.columns else None,
                         y=subset[y_col] if y_col in subset.columns else None,
-                        orientation='h', side='positive', width=3, points=False,
+                        orientation=ridge_orientation, side='positive', width=3, points=False,
                         line_color=colors[i % len(colors)],
                         name=str(val)
                     ))

@@ -69,8 +69,18 @@ class GraphWorkspace:
             [
                 html.Span(field["label"], className="graph-drop-zone-name"),
                 html.Span("Не выбрано", className="graph-drop-zone-value"),
+                html.Button(
+                    "×",
+                    type="button",
+                    className="graph-zone-clear",
+                    title=f"Очистить поле {field['label']}",
+                    **{"aria-label": f"Очистить поле {field['label']}"},
+                ),
             ],
-            className=f"graph-drop-zone graph-drop-zone--{field['zone']}",
+            className=(
+                f"graph-drop-zone graph-drop-zone--{field['zone']} "
+                f"graph-drop-zone--{field['key']}"
+            ),
             **{
                 "data-drop-target": field["target"],
                 "data-drop-mode": field.get("mode", "replace"),

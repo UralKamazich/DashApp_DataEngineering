@@ -7,6 +7,7 @@ import pandas as pd
 from dash import dcc, html
 
 from app import app
+from callbacks.graph import Y_ONLY_CHART_TYPES, _primary_axis_errors
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace
 from utils import meta_from_df, read_df_from_store
 
@@ -57,6 +58,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
         assets = {
             "/assets/context_menu.css": "text/css",
             "/assets/graph_context_menu.js": "text/javascript",
+            "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
         }
         for path, content_type in assets.items():
@@ -90,6 +92,28 @@ class DataStoreRoundTripTests(unittest.TestCase):
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(restored["date"]))
 
 
+class GraphAxisValidationTests(unittest.TestCase):
+    def test_y_only_is_allowed_for_regular_charts(self):
+        for chart_type in Y_ONLY_CHART_TYPES:
+            with self.subTest(chart_type=chart_type):
+                self.assertEqual(
+                    _primary_axis_errors(chart_type, None, "value", ["value"]),
+                    [],
+                )
+
+    def test_chart_without_x_or_y_is_rejected(self):
+        self.assertEqual(
+            _primary_axis_errors("Line", None, None, ["value"]),
+            ["Не выбран столбец X"],
+        )
+
+    def test_density_chart_still_requires_x(self):
+        self.assertEqual(
+            _primary_axis_errors("DensityHeat", None, "value", ["value"]),
+            ["Не выбран столбец X"],
+        )
+
+
 class GraphWorkspaceTests(unittest.TestCase):
     def setUp(self):
         controls = {
@@ -111,6 +135,23 @@ class GraphWorkspaceTests(unittest.TestCase):
         }
         targets.discard(None)
         self.assertEqual(targets, {field["target"] for field in DEFAULT_FIELDS})
+
+    def test_each_drop_zone_has_a_clear_button(self):
+        clear_buttons = [
+            component
+            for component in self.components
+            if "graph-zone-clear" in (getattr(component, "className", "") or "")
+        ]
+        self.assertEqual(len(clear_buttons), len(DEFAULT_FIELDS))
+
+    def test_drop_zones_have_role_specific_classes(self):
+        classes = {
+            getattr(component, "className", "")
+            for component in self.components
+            if "graph-drop-zone" in (getattr(component, "className", "") or "")
+        }
+        self.assertTrue(any("graph-drop-zone--x" in value for value in classes))
+        self.assertTrue(any("graph-drop-zone--hover" in value for value in classes))
 
     def test_overlay_controls_are_outside_plotly_graph(self):
         graph = next(component for component in self.components if getattr(component, "id", None) == "test-graph")

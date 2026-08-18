@@ -199,17 +199,6 @@ app.clientside_callback(
             setDragging(false);
         });
 
-        // ПКМ по зоне во время drag очищает соответствующее поле.
-        document.addEventListener('contextmenu', function(e) {
-            var zone = e.target.closest('.graph-drop-zone');
-            if (!zone || !workspace.contains(zone)) return;
-            e.preventDefault();
-            e.stopPropagation();
-            var targetId = zone.getAttribute('data-drop-target');
-            var emptyValue = zone.getAttribute('data-drop-mode') === 'append' ? [] : null;
-            if (targetId) dash_clientside.set_props(targetId, {value: emptyValue});
-        });
-
         return window.dash_clientside.no_update;
     }
     """,
