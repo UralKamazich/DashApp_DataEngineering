@@ -34,6 +34,12 @@ Y_ONLY_CHART_TYPES = {
 }
 
 
+def _graph_uirevision(chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision=0):
+    """Keep user zoom while the chart keeps the same coordinate system."""
+    parts = (chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision or 0)
+    return "graph-view:" + "|".join("" if value is None else str(value) for value in parts)
+
+
 def _primary_axis_errors(chart_type, x_col, y_col, columns):
     """Validate X/Y while allowing ordinary charts to use only Y."""
     errors = []
@@ -69,6 +75,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
     Input("InputSizePlotW", "value"),
     Input("dropdown_style", "value"),
     Input("bar-text-auto", "checked"),
+    Input("graph-view-revision", "data"),
 
     State("filtered-data", "data"),
     State("dropdown_hover_data", "value"),
@@ -95,6 +102,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
 )
 def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_col, dropdown_text_pozition,
                       chart_type, bubble, MaxSizeBubble, height, width, selected_style, bar_text_auto,
+                      view_revision,
                       filtered_json, hover_cols, corr_cols, facet_row, facet_col, filters_state,
                       xaxis_font_size, yaxis_font_size, font_size_ticks, title_font_size,
                       dropdown_sort_column, axes_category, dropdown_overlay, legend, custom_colors,
@@ -106,6 +114,15 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             return empty, []
         dff = read_df_from_store(filtered_json, meta)
         if dff is None or dff.empty:
+            return empty, []
+
+        # A deliberately cleared workspace is a valid state. Keep the loaded
+        # dataframe in its stores and show a clean canvas without an error.
+        assigned_fields = (
+            x_col, y_col, z_col, color_col, size_col, text_col,
+            facet_row, facet_col,
+        )
+        if not any(assigned_fields) and not hover_cols:
             return empty, []
 
         errors = _primary_axis_errors(chart_type, x_col, y_col, dff.columns)
@@ -152,7 +169,11 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 plot_df, x=x_col, y=y_col, color=carg, size=sarg,
                 size_max=MaxSizeBubble, height=height, width=width, hover_data=hover_cols,
                 facet_row=facet_row, facet_col=facet_col, text=text_data,
-                category_orders=category_orders, template=selected_style
+                category_orders=category_orders, template=selected_style,
+                # Plotly Express switches large datasets to scattergl. Its
+                # WebGL layer does not render point labels, so keep SVG only
+                # while the user explicitly requests labels.
+                render_mode="svg" if text_data is not None else "auto",
             )
             if text_data is not None:
                 fig.update_traces(textposition=dropdown_text_pozition, textfont=dict(size=font_size_ticks), selector=dict(mode='markers+text'))
@@ -409,7 +430,14 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             xaxis_title_font=dict(size=font_size_ticks),
             yaxis_title_font=dict(size=font_size_ticks),
             title_font=dict(size=title_font_size),
-            template=selected_style
+            template=selected_style,
+            # Plotly preserves axis ranges, 3D camera and other direct user
+            # interactions while this key stays unchanged. Labels, colors and
+            # styling intentionally do not participate in the key.
+            uirevision=_graph_uirevision(
+                chart_type, x_col, y_col, z_col, facet_row, facet_col,
+                view_revision,
+            ),
         )
 
         try:

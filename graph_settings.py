@@ -1,0 +1,384 @@
+# -*- coding: utf-8 -*-
+"""Extensible property inspector for the main graph."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+
+from dash import dcc, html
+import dash_mantine_components as dmc
+
+
+REQUIRED_CONTROLS = {
+    "theme",
+    "bubble",
+    "bar_labels",
+    "text_position",
+    "category_axis",
+    "category_order",
+    "bar_mode",
+    "legend_position",
+    "legend_order",
+    "legend_custom_order",
+}
+
+
+class GraphSettingsPanel:
+    """Build a scalable, single-level graph settings inspector."""
+
+    def __init__(self, controls: Mapping[str, object]):
+        self.controls = controls
+        missing = REQUIRED_CONTROLS.difference(controls)
+        if missing:
+            raise ValueError(f"Missing graph settings controls: {sorted(missing)}")
+
+    @staticmethod
+    def _icon(name: str, size: int = 16):
+        # Offline-safe symbols: unlike remote icon packs, these also render when
+        # Electron has no network access.
+        symbols = {
+            "sliders-horizontal": "⌘",
+            "move-horizontal": "↔",
+            "type": "T",
+            "list": "≡",
+            "scatter-chart": "∴",
+            "zap": "⚡",
+            "circle-check": "✓",
+            "rotate-ccw": "↺",
+            "info": "i",
+        }
+        return html.Span(
+            symbols.get(name, "•"),
+            className=f"graph-settings-icon graph-settings-icon--{name}",
+            style={"width": f"{size}px", "height": f"{size}px", "fontSize": f"{size}px"},
+            **{"aria-hidden": "true"},
+        )
+
+    @staticmethod
+    def _number_input(component_id: str, label: str, value, **kwargs):
+        return dmc.NumberInput(
+            id=component_id,
+            label=label,
+            value=value,
+            debounce=True,
+            persistence=True,
+            persistence_type="local",
+            className="graph-settings-control",
+            **kwargs,
+        )
+
+    @classmethod
+    def _section_intro(cls, title: str, description: str, icon: str):
+        return dmc.Group(
+            [
+                html.Div(cls._icon(icon, 18), className="graph-settings-section-icon"),
+                html.Div(
+                    [
+                        dmc.Text(title, fw=650, size="sm"),
+                        dmc.Text(description, size="xs", c="dimmed"),
+                    ]
+                ),
+            ],
+            gap="sm",
+            align="flex-start",
+            wrap="nowrap",
+            className="graph-settings-section-intro",
+        )
+
+    @staticmethod
+    def _feature_card(control, description: str):
+        return html.Div(
+            [control, dmc.Text(description, size="xs", c="dimmed")],
+            className="graph-settings-feature-card",
+        )
+
+    def _quick_settings(self):
+        return dmc.Paper(
+            [
+                dmc.Group(
+                    [
+                        html.Div(
+                            [
+                                dmc.Text("Быстрый доступ", fw=650, size="sm"),
+                                dmc.Text(
+                                    "Самые частые параметры всегда под рукой",
+                                    size="xs",
+                                    c="dimmed",
+                                ),
+                            ]
+                        ),
+                        dmc.Badge(
+                            "Сразу",
+                            color="teal",
+                            variant="light",
+                            size="sm",
+                            leftSection=self._icon("zap", 12),
+                        ),
+                    ],
+                    justify="space-between",
+                    align="flex-start",
+                    gap="sm",
+                    wrap="nowrap",
+                ),
+                dmc.SimpleGrid(
+                    [
+                        html.Div(
+                            self.controls["theme"],
+                            className="graph-settings-control graph-settings-quick-theme",
+                        ),
+                        self._number_input(
+                            "InputSizePlot",
+                            "Высота",
+                            750,
+                            min=50,
+                            max=20000,
+                            step=50,
+                            suffix=" px",
+                        ),
+                        self._number_input(
+                            "InputSizePlotW",
+                            "Ширина",
+                            None,
+                            min=50,
+                            max=20000,
+                            step=50,
+                            suffix=" px",
+                            placeholder="Авто",
+                        ),
+                    ],
+                    cols=3,
+                    spacing="sm",
+                    verticalSpacing="sm",
+                    mt="md",
+                    className="graph-settings-quick-grid",
+                ),
+            ],
+            p="md",
+            radius="md",
+            withBorder=True,
+            className="graph-settings-quick",
+        )
+
+    def _axes_panel(self):
+        return dmc.TabsPanel(
+            [
+                self._section_intro(
+                    "Оси и категории",
+                    "Размеры шрифта, интервалы тиков и порядок категорий",
+                    "move-horizontal",
+                ),
+                dmc.SimpleGrid(
+                    [
+                        self._number_input("font-size-xaxis", "Подпись оси X", 14, min=6, max=48, step=1),
+                        self._number_input("font-size-yaxis", "Подпись оси Y", 14, min=6, max=48, step=1),
+                        self._number_input(
+                            "tick-step-xaxis", "Шаг тиков X", 0, min=0, step=0.1, decimalScale=2
+                        ),
+                        self._number_input(
+                            "tick-step-yaxis", "Шаг тиков Y", 0, min=0, step=0.1, decimalScale=2
+                        ),
+                    ],
+                    cols=2,
+                    spacing="md",
+                    verticalSpacing="md",
+                    className="graph-settings-grid",
+                ),
+                dmc.Divider(my="lg", label="Категориальные оси", labelPosition="left"),
+                dmc.SimpleGrid(
+                    [
+                        html.Div(self.controls["category_axis"], className="graph-settings-control"),
+                        html.Div(self.controls["category_order"], className="graph-settings-control"),
+                    ],
+                    cols=2,
+                    spacing="md",
+                    className="graph-settings-grid",
+                ),
+            ],
+            value="axes",
+            className="graph-settings-tab-panel",
+        )
+
+    def _labels_panel(self):
+        return dmc.TabsPanel(
+            [
+                self._section_intro(
+                    "Текст и подписи",
+                    "Размер заголовка, подписи данных и их положение",
+                    "type",
+                ),
+                dmc.SimpleGrid(
+                    [
+                        self._number_input("font-size-title", "Заголовок", 16, min=6, max=48, step=1),
+                        self._number_input("font-size-ticks", "Подписи данных", 12, min=6, max=48, step=1),
+                        html.Div(self.controls["text_position"], className="graph-settings-control graph-settings-span-2"),
+                    ],
+                    cols=2,
+                    spacing="md",
+                    verticalSpacing="md",
+                    className="graph-settings-grid",
+                ),
+                dmc.Divider(my="lg"),
+                self._feature_card(
+                    self.controls["bar_labels"],
+                    "Показывает числовые значения непосредственно на столбцах Bar.",
+                ),
+            ],
+            value="labels",
+            className="graph-settings-tab-panel",
+        )
+
+    def _legend_panel(self):
+        return dmc.TabsPanel(
+            [
+                self._section_intro(
+                    "Легенда",
+                    "Положение и порядок серий без изменения данных",
+                    "list",
+                ),
+                dmc.SimpleGrid(
+                    [
+                        html.Div(self.controls["legend_position"], className="graph-settings-control"),
+                        html.Div(self.controls["legend_order"], className="graph-settings-control"),
+                        html.Div(
+                            self.controls["legend_custom_order"],
+                            className="graph-settings-control graph-settings-span-2",
+                        ),
+                    ],
+                    cols=2,
+                    spacing="md",
+                    verticalSpacing="md",
+                    className="graph-settings-grid",
+                ),
+                dmc.Alert(
+                    "Свой порядок применяется, когда в поле выше выбран режим «Пользовательский».",
+                    color="gray",
+                    variant="light",
+                    icon=self._icon("info", 16),
+                    mt="lg",
+                    className="graph-settings-note",
+                ),
+            ],
+            value="legend",
+            className="graph-settings-tab-panel",
+        )
+
+    def _series_panel(self):
+        return dmc.TabsPanel(
+            [
+                self._section_intro(
+                    "Серии и маркеры",
+                    "Отображение точек, столбцов и пузырьковых диаграмм",
+                    "scatter-chart",
+                ),
+                dmc.SimpleGrid(
+                    [
+                        self._feature_card(
+                            self.controls["bubble"],
+                            "Использует выбранный столбец Size для масштаба маркеров.",
+                        ),
+                        self._number_input(
+                            "InputMaxSizeBubble",
+                            "Максимальный размер маркера",
+                            30,
+                            min=1,
+                            max=100,
+                            step=5,
+                        ),
+                    ],
+                    cols=2,
+                    spacing="md",
+                    verticalSpacing="md",
+                    className="graph-settings-grid",
+                ),
+                dmc.Divider(my="lg", label="Столбцы и гистограммы", labelPosition="left"),
+                html.Div(self.controls["bar_mode"], className="graph-settings-control"),
+            ],
+            value="series",
+            className="graph-settings-tab-panel",
+        )
+
+    def render(self):
+        title = dmc.Group(
+            [
+                html.Div(self._icon("sliders-horizontal", 19), className="graph-settings-title-icon"),
+                html.Div(
+                    [
+                        dmc.Text("Настройки графика", fw=700, size="md"),
+                        dmc.Text("Инспектор оформления", size="xs", c="dimmed"),
+                    ]
+                ),
+            ],
+            gap="sm",
+            wrap="nowrap",
+        )
+
+        tabs = dmc.Tabs(
+            [
+                dmc.TabsList(
+                    [
+                        dmc.TabsTab("Оси", value="axes", leftSection=self._icon("move-horizontal", 15)),
+                        dmc.TabsTab("Подписи", value="labels", leftSection=self._icon("type", 15)),
+                        dmc.TabsTab("Легенда", value="legend", leftSection=self._icon("list", 15)),
+                        dmc.TabsTab("Серии", value="series", leftSection=self._icon("scatter-chart", 15)),
+                    ],
+                    grow=True,
+                    className="graph-settings-tabs-list",
+                ),
+                self._axes_panel(),
+                self._labels_panel(),
+                self._legend_panel(),
+                self._series_panel(),
+            ],
+            id="graph-settings-tabs",
+            value="axes",
+            keepMounted=True,
+            persistence=True,
+            persistence_type="local",
+            className="graph-settings-tabs",
+        )
+
+        return dmc.Drawer(
+            id="drawer-simple",
+            title=title,
+            opened=False,
+            position="right",
+            size="476px",
+            padding=0,
+            withOverlay=True,
+            overlayProps={"opacity": 0.18, "blur": 1},
+            closeOnClickOutside=True,
+            closeOnEscape=True,
+            withCloseButton=True,
+            classNames={
+                "content": "graph-settings-content",
+                "header": "graph-settings-header",
+                "body": "graph-settings-body",
+            },
+            children=html.Div(
+                id="graph-settings-panel",
+                children=[
+                    dcc.Store(id="graph-settings-reset-state"),
+                    html.Div([self._quick_settings(), tabs], className="graph-settings-scroll"),
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    self._icon("circle-check", 15),
+                                    dmc.Text("Изменения применяются автоматически", size="xs", c="dimmed"),
+                                ],
+                                className="graph-settings-auto-status",
+                            ),
+                            dmc.Button(
+                                "Сбросить",
+                                id="graph-settings-reset",
+                                variant="subtle",
+                                color="gray",
+                                size="xs",
+                                leftSection=self._icon("rotate-ccw", 14),
+                            ),
+                        ],
+                        className="graph-settings-footer",
+                    ),
+                ],
+            ),
+        )

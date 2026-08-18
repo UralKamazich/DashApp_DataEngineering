@@ -59,6 +59,76 @@ def drawer_demo(n_clicks):
     return True
 
 
+# ============ Очистка рабочей области графика без выгрузки датасета ============
+app.clientside_callback(
+    """
+    function(nClicks, currentRevision) {
+        if (!nClicks) {
+            return Array(10).fill(window.dash_clientside.no_update);
+        }
+
+        return [
+            null, null, null, null, null, null, null, null, [],
+            (Number(currentRevision) || 0) + 1
+        ];
+    }
+    """,
+    Output("dropdown_x", "value"),
+    Output("dropdown_y", "value"),
+    Output("dropdown_z", "value"),
+    Output("dropdown_color", "value"),
+    Output("dropdown_size", "value"),
+    Output("dropdown_text", "value"),
+    Output("dropdown_facet_row", "value"),
+    Output("dropdown_facet_col", "value"),
+    Output("dropdown_hover_data", "value"),
+    Output("graph-view-revision", "data"),
+    Input("clear-graph-button", "n_clicks"),
+    State("graph-view-revision", "data"),
+    prevent_initial_call=True,
+)
+
+
+# ============ Сброс настроек графика к исходным значениям ============
+app.clientside_callback(
+    """
+    function(nClicks) {
+        if (!nClicks) return window.dash_clientside.no_update;
+
+        var defaults = {
+            "dropdown_style": {value: "plotly"},
+            "InputSizePlot": {value: 750},
+            "InputSizePlotW": {value: null},
+            "font-size-xaxis": {value: 14},
+            "font-size-yaxis": {value: 14},
+            "font-size-title": {value: 16},
+            "font-size-ticks": {value: 12},
+            "tick-step-xaxis": {value: 0},
+            "tick-step-yaxis": {value: 0},
+            "dropdown_text_pozition": {value: "middle center"},
+            "dropdown_axes_category": {value: "auto"},
+            "dropdown_category_ascending": {value: "total ascending"},
+            "dropdown_overlay": {value: "overlay"},
+            "dropdown_legend": {value: "top-right-outside"},
+            "dropdown_legend_order": {value: "alphabetical"},
+            "input_legend_custom_order": {value: ""},
+            "SwitchBubble": {checked: false},
+            "InputMaxSizeBubble": {value: 30},
+            "bar-text-auto": {checked: true}
+        };
+
+        Object.keys(defaults).forEach(function(componentId) {
+            window.dash_clientside.set_props(componentId, defaults[componentId]);
+        });
+        return {clicks: nClicks, resetAt: Date.now()};
+    }
+    """,
+    Output("graph-settings-reset-state", "data"),
+    Input("graph-settings-reset", "n_clicks"),
+    prevent_initial_call=True,
+)
+
+
 # ============ Размер Paper синхронизирован с настройками размера графика ============
 app.clientside_callback(
     """

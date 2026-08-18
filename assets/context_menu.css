@@ -129,14 +129,40 @@
 
 /* ===== Сайдбар колонок — обрезка длинных названий ===== */
 
-#columns-sidebar .mantine-Badge-root {
+#columns-badges {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+}
+
+#columns-badges .column-badge {
+    box-sizing: border-box;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
+}
+
+/* dmc.Tooltip adds a fit-content wrapper around its child. It must follow the
+   sidebar width, otherwise the right edge of the pill gets clipped. */
+#columns-badges .column-badge > div {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
+}
+
+#columns-sidebar .column-badge-pill {
+    box-sizing: border-box;
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 #columns-sidebar .mantine-Badge-label {
+    width: 100%;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

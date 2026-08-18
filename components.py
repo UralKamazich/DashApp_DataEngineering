@@ -32,15 +32,17 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
                 variant="light",
                 size="sm",
                 fullWidth=True,
-                style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"},
+                className="column-badge-pill",
+                style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400},
             ),
             label=str(col_name),
             openDelay=200,
             withArrow=True,
         ),
+        className="column-badge",
         draggable="true",
         **{"data-column-name": str(col_name)},
-        style={"cursor": "grab", "marginBottom": "2px", "maxWidth": "100%", "overflow": "hidden"},
+        style={"cursor": "grab", "marginBottom": "2px"},
     )
 
 
@@ -99,7 +101,7 @@ def create_multiselect(id, options, value=None, searchable=True, clearable=True,
 # =========================
 dropdown_style = dmc.Select(
     id="dropdown_style",
-    label="Стиль графика",
+    label="Тема",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     data=[{"label": style.capitalize(), "value": style} for style in PLOTLY_STYLES],
@@ -266,7 +268,13 @@ dropdown_chart_type = dmc.Select(
     style={"width": "165px", "fontSize": "13px"}
 )
 
-SwitchBubble = dmc.Switch(id="SwitchBubble", size="xs", radius="sm", label="Bubble", checked=False)
+SwitchBubble = dmc.Switch(
+    id="SwitchBubble",
+    size="sm",
+    radius="sm",
+    label="Пузырьковый режим",
+    checked=False,
+)
 
 update_graf = dmc.Tooltip(
     label="Обновить / Отобразить график",
@@ -327,7 +335,7 @@ copy_trigger = dcc.Clipboard(id="clipboard", style={"display": "none"})
 # =========================
 dropdown_text_pozition = dmc.Select(
     id="dropdown_text_pozition",
-    label="Положение подписи",
+    label="Положение подписей",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="middle center",
@@ -337,7 +345,7 @@ dropdown_text_pozition = dmc.Select(
 )
 dropdown_category_ascending = dmc.Select(
     id="dropdown_category_ascending",
-    label="Сортировка категорий (оси)",
+    label="Порядок категорий",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="total ascending",
@@ -351,7 +359,7 @@ dropdown_category_ascending = dmc.Select(
 )
 dropdown_axes_category = dmc.Select(
     id="dropdown_axes_category",
-    label="Ось сортировки (катег.)",
+    label="Сортировать по оси",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="auto",               # было "y"
@@ -360,7 +368,7 @@ dropdown_axes_category = dmc.Select(
 )
 dropdown_overlay = dmc.Select(
     id="dropdown_overlay",
-    label="Наложение в гистограмме",
+    label="Режим столбцов",
     value="overlay",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
@@ -369,7 +377,7 @@ dropdown_overlay = dmc.Select(
 )
 dropdown_legend = dmc.Select(
     id="dropdown_legend",
-    label="Расположение легенды",
+    label="Положение",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     data=[
@@ -385,7 +393,7 @@ dropdown_legend = dmc.Select(
 # Порядок легенды + пользовательский список
 dropdown_legend_order = dmc.Select(
     id="dropdown_legend_order",
-    label="Сортировка легенды",
+    label="Порядок",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="alphabetical",
@@ -399,7 +407,7 @@ dropdown_legend_order = dmc.Select(
 )
 input_legend_custom_order = dmc.TextInput(
     id="input_legend_custom_order",
-    label="Порядок легенды (через запятую)",
+    label="Свой порядок (через запятую)",
     placeholder="Пример: A, C, B",
     persistence=True,
 )
@@ -425,7 +433,7 @@ bin_label_style = dmc.SegmentedControl(
 # Переключатель подписей на графиках Bar
 bar_text_auto_switch = dmc.Switch(
     id="bar-text-auto",
-    label="Подписи значений на столбцах (Bar)",
+    label="Значения на столбцах",
     checked=True,
     onLabel="Вкл",
     offLabel="Выкл",

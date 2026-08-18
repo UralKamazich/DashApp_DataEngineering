@@ -7,7 +7,14 @@ import pandas as pd
 from dash import dcc, html
 
 from app import app
-from callbacks.graph import Y_ONLY_CHART_TYPES, _primary_axis_errors
+from callbacks.graph import (
+    Y_ONLY_CHART_TYPES,
+    _graph_uirevision,
+    _primary_axis_errors,
+    update_main_graph,
+)
+from components import make_column_badge
+from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace
 from utils import meta_from_df, read_df_from_store
 
@@ -57,6 +64,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
     def test_custom_assets_are_available(self):
         assets = {
             "/assets/context_menu.css": "text/css",
+            "/assets/graph_settings.css": "text/css",
             "/assets/graph_context_menu.js": "text/javascript",
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
@@ -92,7 +100,41 @@ class DataStoreRoundTripTests(unittest.TestCase):
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(restored["date"]))
 
 
+class ColumnBadgeTests(unittest.TestCase):
+    def test_badge_uses_width_constrained_shell(self):
+        badge_shell = make_column_badge("Очень длинное название столбца", "numeric")
+        self.assertEqual(badge_shell.className, "column-badge")
+
+        badge = next(
+            component
+            for component in walk_components(badge_shell)
+            if component.__class__.__name__ == "Badge"
+        )
+        self.assertEqual(badge.className, "column-badge-pill")
+        self.assertTrue(badge.fullWidth)
+
+
 class GraphAxisValidationTests(unittest.TestCase):
+    def test_view_revision_ignores_labels_and_styling_but_changes_with_axes(self):
+        original = _graph_uirevision("Scatter", "x", "y", None, None, None, 0)
+
+        self.assertEqual(
+            original,
+            _graph_uirevision("Scatter", "x", "y", None, None, None, 0),
+        )
+        self.assertNotEqual(
+            original,
+            _graph_uirevision("Scatter", "other_x", "y", None, None, None, 0),
+        )
+        self.assertNotEqual(
+            original,
+            _graph_uirevision("Line", "x", "y", None, None, None, 0),
+        )
+        self.assertNotEqual(
+            original,
+            _graph_uirevision("Scatter", "x", "y", None, None, None, 1),
+        )
+
     def test_y_only_is_allowed_for_regular_charts(self):
         for chart_type in Y_ONLY_CHART_TYPES:
             with self.subTest(chart_type=chart_type):
@@ -112,6 +154,107 @@ class GraphAxisValidationTests(unittest.TestCase):
             _primary_axis_errors("DensityHeat", None, "value", ["value"]),
             ["Не выбран столбец X"],
         )
+
+    def test_large_scatter_with_labels_uses_svg_trace(self):
+        row_count = 1200
+        source = pd.DataFrame(
+            {
+                "x": range(row_count),
+                "y": range(row_count),
+                "label": [f"Точка {index}" for index in range(row_count)],
+            }
+        )
+        figure, notifications = update_main_graph(
+            n_clicks=1,
+            x_col="x",
+            y_col="y",
+            z_col=None,
+            color_col=None,
+            size_col=None,
+            text_col="label",
+            dropdown_text_pozition="top right",
+            chart_type="Scatter",
+            bubble=False,
+            MaxSizeBubble=30,
+            height=550,
+            width=None,
+            selected_style="plotly",
+            bar_text_auto=True,
+            view_revision=0,
+            filtered_json=source.to_json(date_format="iso", orient="split"),
+            hover_cols=None,
+            corr_cols=None,
+            facet_row=None,
+            facet_col=None,
+            filters_state={},
+            xaxis_font_size=14,
+            yaxis_font_size=14,
+            font_size_ticks=12,
+            title_font_size=16,
+            dropdown_sort_column="trace",
+            axes_category="auto",
+            dropdown_overlay="overlay",
+            legend="top-right-outside",
+            custom_colors={},
+            tick_step_x=0,
+            tick_step_y=0,
+            legend_order="original",
+            legend_custom_order=None,
+            meta=meta_from_df(source),
+        )
+
+        self.assertEqual(notifications, [])
+        self.assertEqual(figure.data[0].type, "scatter")
+        self.assertEqual(figure.data[0].mode, "markers+text")
+        self.assertEqual(len(figure.data[0].text), row_count)
+        self.assertEqual(
+            figure.layout.uirevision,
+            _graph_uirevision("Scatter", "x", "y", None, None, None, 0),
+        )
+
+    def test_fully_cleared_graph_is_empty_without_notification(self):
+        source = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+        figure, notifications = update_main_graph(
+            n_clicks=1,
+            x_col=None,
+            y_col=None,
+            z_col=None,
+            color_col=None,
+            size_col=None,
+            text_col=None,
+            dropdown_text_pozition="middle center",
+            chart_type="Scatter",
+            bubble=False,
+            MaxSizeBubble=30,
+            height=550,
+            width=None,
+            selected_style="plotly",
+            bar_text_auto=True,
+            view_revision=1,
+            filtered_json=source.to_json(date_format="iso", orient="split"),
+            hover_cols=[],
+            corr_cols=None,
+            facet_row=None,
+            facet_col=None,
+            filters_state={},
+            xaxis_font_size=14,
+            yaxis_font_size=14,
+            font_size_ticks=12,
+            title_font_size=16,
+            dropdown_sort_column="trace",
+            axes_category="auto",
+            dropdown_overlay="overlay",
+            legend="top-right-outside",
+            custom_colors={},
+            tick_step_x=0,
+            tick_step_y=0,
+            legend_order="original",
+            legend_custom_order=None,
+            meta=meta_from_df(source),
+        )
+
+        self.assertEqual(len(figure.data), 0)
+        self.assertEqual(notifications, [])
 
 
 class GraphWorkspaceTests(unittest.TestCase):
@@ -182,6 +325,57 @@ class GraphWorkspaceTests(unittest.TestCase):
                 chart_type_control=html.Div(),
                 field_controls={},
             )
+
+
+class GraphSettingsPanelTests(unittest.TestCase):
+    def setUp(self):
+        controls = {
+            key: html.Div(id=f"test-setting-{key}")
+            for key in REQUIRED_CONTROLS
+        }
+        self.panel = GraphSettingsPanel(controls).render()
+        self.components = list(walk_components(self.panel))
+
+    def test_settings_are_grouped_in_single_level_tabs(self):
+        tabs = next(
+            component
+            for component in self.components
+            if getattr(component, "id", None) == "graph-settings-tabs"
+        )
+        self.assertEqual(tabs.value, "axes")
+
+        panel_values = {
+            getattr(component, "value", None)
+            for component in self.components
+            if component.__class__.__name__ == "TabsPanel"
+        }
+        self.assertEqual(panel_values, {"axes", "labels", "legend", "series"})
+
+    def test_settings_drawer_uses_compact_width(self):
+        self.assertEqual(self.panel.size, "476px")
+
+    def test_settings_panel_keeps_existing_callback_ids(self):
+        component_ids = {
+            getattr(component, "id", None)
+            for component in self.components
+        }
+        expected_ids = {
+            "InputSizePlot",
+            "InputSizePlotW",
+            "InputMaxSizeBubble",
+            "font-size-xaxis",
+            "font-size-yaxis",
+            "font-size-title",
+            "font-size-ticks",
+            "tick-step-xaxis",
+            "tick-step-yaxis",
+            "graph-settings-reset",
+        }
+        self.assertTrue(expected_ids.issubset(component_ids))
+
+    def test_missing_settings_control_is_rejected(self):
+        with self.assertRaises(ValueError):
+            GraphSettingsPanel({})
 
 
 if __name__ == "__main__":
