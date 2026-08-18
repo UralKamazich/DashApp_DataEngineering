@@ -7,6 +7,10 @@ let mainWindow;
 let pythonProcess;
 
 const DASH_URL = 'http://127.0.0.1:8090';
+const APP_ROOT = app.isPackaged
+    ? path.join(process.resourcesPath, 'app')
+    : path.join(__dirname, '..');
+const APP_ICON = path.join(APP_ROOT, 'assets', 'icon.png');
 
 // Проверка готовности сервера
 function waitForServer(url, callback, retries = 30) {
@@ -68,7 +72,8 @@ function createWindow() {
         height: 900,
         minWidth: 800,
         minHeight: 600,
-        title: 'DataAnalize v1.0.27',
+        title: `DataAnalize v${app.getVersion()}`,
+        icon: APP_ICON,
         backgroundColor: '#1a1b1e',
         webPreferences: {
             nodeIntegration: false,
@@ -84,6 +89,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    if (process.platform === 'darwin') {
+        app.dock.setIcon(APP_ICON);
+    }
+
     startPythonServer();
     
     waitForServer(DASH_URL, (ready) => {

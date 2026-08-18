@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from pathlib import Path
 
 import pandas as pd
 from dash import Dash, Input, dcc, html
@@ -15,6 +16,7 @@ from callbacks.graph import (
     update_main_graph,
 )
 from components import make_column_badge
+from config import APP_NAME, APP_TITLE, APP_VERSION
 from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace
 from utils import meta_from_df, read_df_from_store
@@ -75,6 +77,25 @@ class DashApplicationSmokeTests(unittest.TestCase):
                 with self.client.get(path) as response:
                     self.assertEqual(response.status_code, 200)
                     self.assertIn(content_type, response.content_type)
+
+    def test_application_branding_uses_current_version_only_in_window_title(self):
+        self.assertEqual(APP_VERSION, "2.0.0")
+        self.assertEqual(app.title, APP_TITLE)
+        self.assertNotIn("collapsed panel", app.title)
+
+        header_labels = [
+            component.children
+            for component in walk_components(app.layout)
+            if component.__class__.__name__ == "Text"
+            and getattr(component, "children", None) == APP_NAME
+        ]
+        self.assertEqual(header_labels, [APP_NAME])
+
+    def test_application_icon_sources_exist(self):
+        assets = Path(__file__).resolve().parents[1] / "assets"
+        for filename in ("icon.svg", "icon.png", "icon.icns", "favicon.ico"):
+            with self.subTest(filename=filename):
+                self.assertTrue((assets / filename).is_file())
 
 
 class DataStoreRoundTripTests(unittest.TestCase):

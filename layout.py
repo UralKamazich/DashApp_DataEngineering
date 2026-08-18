@@ -9,7 +9,7 @@ import dash
 from dash import dcc, html
 import dash_mantine_components as dmc
 
-from config import STYLE_CARD, PAPER_BASE, initial_fig
+from config import APP_NAME, STYLE_CARD, PAPER_BASE, initial_fig
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
@@ -135,7 +135,7 @@ def create_layout():
             dmc.Paper(
                 children=[
                     dmc.Group([
-                        dmc.Text("DataAnalize v1.0.27", fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
+                        dmc.Text(APP_NAME, fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         dmc.Button(
                             "Выбрать файл (.xlsx, .pkl)",
