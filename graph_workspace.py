@@ -73,6 +73,27 @@ def _component_id(component) -> str:
     return component_id
 
 
+def _plotly_recovery_script(graph_id: str) -> str:
+    """Return client-side statements that reset a failed Plotly.react cycle."""
+    return """
+                var graphRoot = document.getElementById(%s);
+                var plot = graphRoot && graphRoot.querySelector('.js-plotly-plot');
+                if (plot && window.Plotly && typeof window.Plotly.purge === 'function') {
+                    try {
+                        window.Plotly.purge(plot);
+                    } catch (error) {
+                        console.warn('Plotly hard reset failed:', error);
+                    }
+                }
+                if (graphRoot) {
+                    graphRoot.classList.remove('dash-graph--pending');
+                    graphRoot.querySelectorAll('.dash-graph--pending').forEach(function(element) {
+                        element.classList.remove('dash-graph--pending');
+                    });
+                }
+    """ % json.dumps(graph_id)
+
+
 class GraphWorkspace:
     """Build and register a complete graph workspace.
 
@@ -355,6 +376,7 @@ class GraphWorkspace:
             [] if field.get("mode") == "append" else None
             for field in self.fields
         ]
+        recovery_script = _plotly_recovery_script(self.graph_id)
 
         app.clientside_callback(
             f"""
@@ -362,6 +384,7 @@ class GraphWorkspace:
                 if (!nClicks) {{
                     return Array({len(outputs)}).fill(window.dash_clientside.no_update);
                 }}
+{recovery_script}
                 var values = {json.dumps(empty_values, ensure_ascii=False)};
                 values.push((Number(currentRevision) || 0) + 1);
                 return values;

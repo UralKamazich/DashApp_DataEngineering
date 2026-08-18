@@ -143,8 +143,11 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         meta = meta or {"numeric": [], "categorical": [], "datetime": []}
         x_as_text = needs_text_axis(x_col, meta)
+        y_as_text = needs_text_axis(y_col, meta)
         if x_as_text:
             plot_df[x_col] = plot_df[x_col].astype(str)
+        if y_as_text:
+            plot_df[y_col] = plot_df[y_col].astype(str)
 
         fig = go.Figure()
         category_orders = {}
@@ -169,10 +172,15 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 size_max=MaxSizeBubble, height=height, width=width, hover_data=hover_cols,
                 facet_row=facet_row, facet_col=facet_col, text=text_data,
                 category_orders=category_orders, template=selected_style,
-                # Plotly Express switches large datasets to scattergl. Its
-                # WebGL layer does not render point labels, so keep SVG only
-                # while the user explicitly requests labels.
-                render_mode="svg" if text_data is not None else "auto",
+                # Plotly's WebGL trace can remain in a broken pending state
+                # when an existing numeric axis is replaced by a categorical
+                # one. SVG is stable for categorical axes and data labels;
+                # fully numeric point clouds can still use WebGL automatically.
+                render_mode=(
+                    "svg"
+                    if text_data is not None or x_as_text or y_as_text
+                    else "auto"
+                ),
             )
             if text_data is not None:
                 fig.update_traces(textposition=dropdown_text_pozition, textfont=dict(size=font_size_ticks), selector=dict(mode='markers+text'))
@@ -406,12 +414,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             fig.update_xaxes(tickfont=dict(size=xaxis_font_size),
                              dtick=tick_step_x if tick_step_x and tick_step_x > 0 else None)
 
-        def is_categorical_by_name(col):
-            if col and col in plot_df.columns:
-                return any(keyword.lower() in str(col).lower() for keyword in ['скважина', 'well', 'куст'])
-            return False
-
-        if is_categorical_by_name(y_col):
+        if y_as_text:
             fig.update_yaxes(type='category', categoryorder=dropdown_sort_column,
                              tickfont=dict(size=yaxis_font_size))
         else:
@@ -420,7 +423,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         if axes_category == "x" and x_as_text:
             fig.update_xaxes(categoryorder=dropdown_sort_column)
-        elif axes_category == "y" and not is_categorical_by_name(y_col):
+        elif axes_category == "y" and y_as_text:
             fig.update_yaxes(categoryorder=dropdown_sort_column)
 
         fig.update_layout(

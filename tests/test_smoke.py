@@ -18,7 +18,7 @@ from callbacks.graph import (
 from components import make_column_badge
 from config import APP_NAME, APP_TITLE, APP_VERSION
 from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
-from graph_workspace import DEFAULT_FIELDS, GraphWorkspace
+from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
 from utils import meta_from_df, read_df_from_store
 
 
@@ -245,6 +245,67 @@ class GraphAxisValidationTests(unittest.TestCase):
             _graph_uirevision("Scatter", "x", "y", None, None, None, 0),
         )
 
+    def test_categorical_scatter_axis_uses_svg_and_explicit_axis_type(self):
+        row_count = 1200
+        source = pd.DataFrame(
+            {
+                "category": [f"Группа {index % 5}" for index in range(row_count)],
+                "x": range(row_count),
+                "y": range(row_count, row_count * 2),
+            }
+        )
+        meta = meta_from_df(source)
+
+        def build(x_col, y_col):
+            return update_main_graph(
+                n_clicks=1,
+                x_col=x_col,
+                y_col=y_col,
+                z_col=None,
+                color_col=None,
+                size_col=None,
+                text_col=None,
+                dropdown_text_pozition="middle center",
+                chart_type="Scatter",
+                bubble=False,
+                MaxSizeBubble=30,
+                height=550,
+                width=None,
+                selected_style="plotly",
+                bar_text_auto=True,
+                view_revision=0,
+                filtered_json=source.to_json(date_format="iso", orient="split"),
+                hover_cols=[],
+                corr_cols=None,
+                facet_row=None,
+                facet_col=None,
+                filters_state={},
+                xaxis_font_size=14,
+                yaxis_font_size=14,
+                font_size_ticks=12,
+                title_font_size=16,
+                dropdown_sort_column="trace",
+                axes_category="auto",
+                dropdown_overlay="overlay",
+                legend="top-right-outside",
+                custom_colors={},
+                tick_step_x=0,
+                tick_step_y=0,
+                legend_order="original",
+                legend_custom_order=None,
+                meta=meta,
+            )
+
+        x_figure, x_notifications = build("category", "y")
+        y_figure, y_notifications = build("x", "category")
+
+        self.assertEqual(x_notifications, [])
+        self.assertEqual(y_notifications, [])
+        self.assertEqual(x_figure.data[0].type, "scatter")
+        self.assertEqual(y_figure.data[0].type, "scatter")
+        self.assertEqual(x_figure.layout.xaxis.type, "category")
+        self.assertEqual(y_figure.layout.yaxis.type, "category")
+
     def test_fully_cleared_graph_is_empty_without_notification(self):
         source = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
         figure, notifications = update_main_graph(
@@ -374,6 +435,13 @@ class GraphWorkspaceTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(descendant_ids))
         self.assertEqual(self.component.ids["update"], "test-graph-update")
+
+    def test_clear_action_contains_hard_plotly_recovery(self):
+        script = _plotly_recovery_script("test-graph")
+
+        self.assertIn('document.getElementById("test-graph")', script)
+        self.assertIn("window.Plotly.purge(plot)", script)
+        self.assertIn("classList.remove('dash-graph--pending')", script)
 
     def test_figure_builder_api_owns_graph_output(self):
         test_app = Dash("graph-workspace-figure-test")
