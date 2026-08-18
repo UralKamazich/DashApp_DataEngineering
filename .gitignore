@@ -9,3 +9,4 @@ venv/
 dash_app.log
 node_modules/
 dist/
+*.code-workspace
