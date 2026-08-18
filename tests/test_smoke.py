@@ -11,6 +11,7 @@ from app import app
 from callbacks.dropdowns import _select_options
 from callbacks.graph import (
     Y_ONLY_CHART_TYPES,
+    _build_ridge_figure,
     _graph_uirevision,
     _primary_axis_errors,
     update_main_graph,
@@ -148,6 +149,67 @@ class DropdownOptionTests(unittest.TestCase):
 
 
 class GraphAxisValidationTests(unittest.TestCase):
+    def test_ridge_builds_one_svg_density_per_category(self):
+        source = pd.DataFrame({
+            "depth": [100, 110, 120, 200, 210, 220],
+            "layer": ["A", "A", "A", "B", "B", "B"],
+        })
+
+        figure, error = _build_ridge_figure(
+            source, "depth", "layer", None, 550, None, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(len(figure.data), 2)
+        self.assertTrue(all(trace.type == "scatter" for trace in figure.data))
+        self.assertTrue(all(trace.fill == "toself" for trace in figure.data))
+        self.assertEqual(list(figure.layout.yaxis.ticktext), ["A", "B"])
+        self.assertEqual(figure.layout.xaxis.title.text, "depth")
+        self.assertEqual(figure.layout.yaxis.title.text, "layer")
+
+    def test_ridge_supports_numeric_y_without_x(self):
+        source = pd.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
+
+        figure, error = _build_ridge_figure(
+            source, None, "value", None, 550, None, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(len(figure.data), 1)
+        self.assertEqual(figure.layout.yaxis.title.text, "value")
+        self.assertEqual(list(figure.layout.xaxis.ticktext), ["value"])
+
+    def test_ridge_rejects_ambiguous_axis_types(self):
+        source = pd.DataFrame({
+            "first": [1, 2, 3],
+            "second": [4, 5, 6],
+        })
+
+        figure, error = _build_ridge_figure(
+            source, "first", "second", None, 550, None, "plotly"
+        )
+
+        self.assertIsNone(figure)
+        self.assertIn("ровно один числовой столбец", error)
+
+    def test_ridge_color_creates_a_stable_legend(self):
+        source = pd.DataFrame({
+            "value": [1, 2, 3, 4, 5, 6, 7, 8],
+            "layer": ["A", "A", "A", "A", "B", "B", "B", "B"],
+            "kind": ["one", "one", "two", "two", "one", "one", "two", "two"],
+        })
+
+        figure, error = _build_ridge_figure(
+            source, "value", "layer", "kind", 550, None, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(len(figure.data), 4)
+        self.assertEqual(
+            [trace.name for trace in figure.data if trace.showlegend],
+            ["one", "two"],
+        )
+
     def test_view_revision_ignores_labels_and_styling_but_changes_with_axes(self):
         original = _graph_uirevision("Scatter", "x", "y", None, None, None, 0)
 

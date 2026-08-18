@@ -34,6 +34,217 @@ Y_ONLY_CHART_TYPES = {
     "Ridge",
 }
 
+RIDGE_GRID_SIZE = 180
+MAX_RIDGE_GROUPS = 60
+
+
+def _color_with_alpha(color, alpha=0.34):
+    """Return a Plotly/CSS color with alpha when its format is known."""
+    if not isinstance(color, str):
+        return color
+    value = color.strip()
+    if value.startswith("#") and len(value) in (4, 7):
+        if len(value) == 4:
+            value = "#" + "".join(channel * 2 for channel in value[1:])
+        red, green, blue = (int(value[index:index + 2], 16) for index in (1, 3, 5))
+        return f"rgba({red},{green},{blue},{alpha})"
+    if value.startswith("rgb("):
+        return value.replace("rgb(", "rgba(").replace(")", f",{alpha})")
+    return value
+
+
+def _ridge_density(values, grid, fallback_bandwidth):
+    """Calculate a small Gaussian KDE without a scipy runtime dependency."""
+    values = np.asarray(values, dtype=float)
+    sample_size = values.size
+    if sample_size > 2500:
+        indices = np.linspace(0, sample_size - 1, 2500, dtype=int)
+        values = np.sort(values)[indices]
+        sample_size = values.size
+
+    if sample_size > 1:
+        std = float(np.std(values, ddof=1))
+        q25, q75 = np.percentile(values, [25, 75])
+        robust_std = float(q75 - q25) / 1.34
+        scales = [scale for scale in (std, robust_std) if np.isfinite(scale) and scale > 0]
+        scale = min(scales) if scales else fallback_bandwidth
+        bandwidth = 0.9 * scale * sample_size ** (-0.2)
+    else:
+        bandwidth = fallback_bandwidth
+
+    if not np.isfinite(bandwidth) or bandwidth <= 0:
+        bandwidth = fallback_bandwidth
+    bandwidth = max(bandwidth, fallback_bandwidth * 0.08)
+
+    distances = (grid[:, None] - values[None, :]) / bandwidth
+    return np.exp(-0.5 * distances ** 2).mean(axis=1) / (
+        bandwidth * np.sqrt(2 * np.pi)
+    )
+
+
+def _build_ridge_figure(plot_df, x_col, y_col, color_col, height, width,
+                        template, category_order="trace"):
+    """Build a stable ridgeline from SVG scatter polygons.
+
+    One of X/Y is the numeric value axis. The other axis, when supplied, is
+    the ridge category. Color can add a second categorical split.
+    """
+    axis_columns = [column for column in (x_col, y_col) if column in plot_df.columns]
+    numeric_columns = [
+        column for column in axis_columns
+        if pd.api.types.is_numeric_dtype(plot_df[column])
+    ]
+
+    if len(numeric_columns) != 1:
+        return None, (
+            "Для Ridge Plot выберите ровно один числовой столбец на X или Y. "
+            "Вторая ось может содержать категории."
+        )
+
+    value_col = numeric_columns[0]
+    group_col = next((column for column in axis_columns if column != value_col), None)
+    orientation = "h" if value_col == x_col else "v"
+    color_col = color_col if color_col in plot_df.columns else None
+
+    working_columns = list(dict.fromkeys(
+        column for column in (value_col, group_col, color_col) if column
+    ))
+    ridge_df = plot_df[working_columns].copy()
+    ridge_df[value_col] = pd.to_numeric(ridge_df[value_col], errors="coerce")
+    ridge_df = ridge_df[np.isfinite(ridge_df[value_col])]
+    if ridge_df.empty:
+        return None, f"В столбце «{value_col}» нет числовых значений для Ridge Plot."
+
+    split_columns = list(dict.fromkeys(
+        column for column in (group_col, color_col) if column
+    ))
+    if split_columns:
+        grouped = list(ridge_df.groupby(split_columns, sort=False, dropna=False))
+    else:
+        grouped = [((), ridge_df)]
+
+    if len(grouped) > MAX_RIDGE_GROUPS:
+        return None, (
+            f"Ridge Plot получил {len(grouped)} групп. Оставьте не более "
+            f"{MAX_RIDGE_GROUPS} с помощью фильтра или выберите столбец с меньшим числом категорий."
+        )
+
+    def display_value(value):
+        return "(пусто)" if pd.isna(value) else str(value)
+
+    records = []
+    for key, subset in grouped:
+        if not isinstance(key, tuple):
+            key = (key,)
+        key_by_column = dict(zip(split_columns, key))
+        group_value = key_by_column.get(group_col) if group_col else None
+        color_value = key_by_column.get(color_col) if color_col else None
+        if group_col and color_col and group_col != color_col:
+            label = f"{display_value(group_value)} · {display_value(color_value)}"
+        elif group_col:
+            label = display_value(group_value)
+        elif color_col:
+            label = display_value(color_value)
+        else:
+            label = str(value_col)
+        records.append({
+            "label": label,
+            "color_value": display_value(color_value) if color_col else None,
+            "values": subset[value_col].to_numpy(dtype=float),
+        })
+
+    if category_order in ("category ascending", "category descending"):
+        records.sort(
+            key=lambda item: item["label"].casefold(),
+            reverse=category_order.endswith("descending"),
+        )
+    elif category_order in ("total ascending", "total descending"):
+        records.sort(
+            key=lambda item: len(item["values"]),
+            reverse=category_order.endswith("descending"),
+        )
+
+    all_values = ridge_df[value_col].to_numpy(dtype=float)
+    value_min = float(np.min(all_values))
+    value_max = float(np.max(all_values))
+    value_span = value_max - value_min
+    fallback_bandwidth = max(value_span * 0.03, abs(value_min) * 0.01, 1e-9)
+    padding = max(value_span * 0.04, fallback_bandwidth * 2)
+    grid = np.linspace(value_min - padding, value_max + padding, RIDGE_GRID_SIZE)
+
+    palette = px.colors.qualitative.Plotly
+    color_values = list(dict.fromkeys(
+        record["color_value"] for record in records if record["color_value"] is not None
+    ))
+    color_map = {
+        value: palette[index % len(palette)]
+        for index, value in enumerate(color_values)
+    }
+    shown_legend_values = set()
+    fig = go.Figure()
+
+    for baseline, record in enumerate(records):
+        density = _ridge_density(record["values"], grid, fallback_bandwidth)
+        density_peak = float(np.max(density))
+        ridge_height = density / density_peak * 0.82 if density_peak > 0 else density
+        color_value = record["color_value"]
+        color = color_map.get(color_value, palette[0])
+        show_legend = color_value is not None and color_value not in shown_legend_values
+        if show_legend:
+            shown_legend_values.add(color_value)
+
+        baseline_values = np.full(grid.shape, baseline, dtype=float)
+        if orientation == "h":
+            trace_x = np.concatenate(([grid[0]], grid, [grid[-1]]))
+            trace_y = np.concatenate(([baseline], baseline_values + ridge_height, [baseline]))
+            hover_template = (
+                f"<b>{record['label']}</b><br>{value_col}: %{{x:.4g}}"
+                "<br>Плотность: %{customdata:.4g}<extra></extra>"
+            )
+        else:
+            trace_x = np.concatenate(([baseline], baseline_values + ridge_height, [baseline]))
+            trace_y = np.concatenate(([grid[0]], grid, [grid[-1]]))
+            hover_template = (
+                f"<b>{record['label']}</b><br>{value_col}: %{{y:.4g}}"
+                "<br>Плотность: %{customdata:.4g}<extra></extra>"
+            )
+
+        fig.add_trace(go.Scatter(
+            x=trace_x,
+            y=trace_y,
+            customdata=np.concatenate(([0.0], density, [0.0])),
+            mode="lines",
+            fill="toself",
+            fillcolor=_color_with_alpha(color),
+            line=dict(color=color, width=1.5),
+            name=color_value or record["label"],
+            legendgroup=color_value or record["label"],
+            showlegend=show_legend,
+            hovertemplate=hover_template,
+        ))
+
+    tick_values = list(range(len(records)))
+    tick_labels = [record["label"] for record in records]
+    category_axis = dict(
+        tickmode="array",
+        tickvals=tick_values,
+        ticktext=tick_labels,
+        range=[-0.12, max(len(records) - 1 + 0.95, 0.95)],
+        showgrid=False,
+        zeroline=False,
+        title=group_col or color_col or "",
+    )
+    value_axis = dict(title=value_col, zeroline=False)
+    fig.update_layout(
+        height=height,
+        width=width,
+        template=template,
+        hovermode="closest",
+        xaxis=value_axis if orientation == "h" else category_axis,
+        yaxis=category_axis if orientation == "h" else value_axis,
+    )
+    return fig, None
+
 
 def _graph_uirevision(chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision=0):
     """Keep user zoom while the chart keeps the same coordinate system."""
@@ -289,28 +500,12 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             )
 
         elif chart_type == "Ridge":
-            fig = go.Figure()
-            ridge_orientation = 'h' if x_col else 'v'
-            if color_col == "Нет" or color_col not in plot_df.columns:
-                fig.add_trace(go.Violin(
-                    x=plot_df[x_col] if x_col in plot_df.columns else None,
-                    y=plot_df[y_col] if y_col in plot_df.columns else None,
-                    orientation=ridge_orientation, side='positive', width=3, points=False,
-                    line_color=px.colors.qualitative.Plotly[0], name=y_col
-                ))
-            else:
-                unique_values = plot_df[color_col].dropna().unique()
-                colors = px.colors.qualitative.Plotly
-                for i, val in enumerate(unique_values):
-                    subset = plot_df[plot_df[color_col] == val]
-                    fig.add_trace(go.Violin(
-                        x=subset[x_col] if x_col in subset.columns else None,
-                        y=subset[y_col] if y_col in subset.columns else None,
-                        orientation=ridge_orientation, side='positive', width=3, points=False,
-                        line_color=colors[i % len(colors)],
-                        name=str(val)
-                    ))
-            fig.update_layout(height=height, width=width, template=selected_style)
+            fig, ridge_error = _build_ridge_figure(
+                plot_df, x_col, y_col, carg, height, width, selected_style,
+                dropdown_sort_column,
+            )
+            if ridge_error:
+                return empty, _make_error_notif(ridge_error)
 
         elif chart_type == "ScatterMatrix":
             use_dims = []
@@ -400,21 +595,31 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 for i, trace in enumerate(fig.data or []):
                     idx = str(i)
                     if idx in custom_colors:
-                        trace.setdefault("marker", {})
-                        if isinstance(trace["marker"], dict):
-                            trace["marker"]["color"] = custom_colors[idx]
+                        selected_color = custom_colors[idx]
+                        if chart_type == "Ridge" and isinstance(trace, go.Scatter):
+                            trace.line.color = selected_color
+                            trace.fillcolor = _color_with_alpha(selected_color)
+                        else:
+                            trace.setdefault("marker", {})
+                            if isinstance(trace["marker"], dict):
+                                trace["marker"]["color"] = selected_color
             except Exception as _e:
                 logger.warning(f"custom_colors apply skipped: {_e}")
 
         # Применяем шрифт тиков через полный объект tickfont (семейство + размер)
-        if x_as_text:
+        if chart_type == "Ridge":
+            fig.update_xaxes(tickfont=dict(size=xaxis_font_size))
+            fig.update_yaxes(tickfont=dict(size=yaxis_font_size))
+        elif x_as_text:
             fig.update_xaxes(type='category', categoryorder=dropdown_sort_column,
                              tickfont=dict(size=xaxis_font_size))
         else:
             fig.update_xaxes(tickfont=dict(size=xaxis_font_size),
                              dtick=tick_step_x if tick_step_x and tick_step_x > 0 else None)
 
-        if y_as_text:
+        if chart_type == "Ridge":
+            pass
+        elif y_as_text:
             fig.update_yaxes(type='category', categoryorder=dropdown_sort_column,
                              tickfont=dict(size=yaxis_font_size))
         else:
