@@ -4,7 +4,7 @@ import json
 import unittest
 
 import pandas as pd
-from dash import dcc, html
+from dash import Dash, Input, dcc, html
 
 from app import app
 from callbacks.graph import (
@@ -263,11 +263,12 @@ class GraphWorkspaceTests(unittest.TestCase):
             field["target"]: dcc.Store(id=f"test-{field['target']}")
             for field in DEFAULT_FIELDS
         }
-        self.workspace = GraphWorkspace(
+        self.component = GraphWorkspace(
             graph_id="test-graph",
             chart_type_control=html.Div(id="test-chart-type"),
             field_controls=controls,
-        ).render()
+        )
+        self.workspace = self.component.render()
         self.components = list(walk_components(self.workspace))
 
     def test_all_drop_targets_are_rendered(self):
@@ -277,7 +278,7 @@ class GraphWorkspaceTests(unittest.TestCase):
             if hasattr(component, "to_plotly_json")
         }
         targets.discard(None)
-        self.assertEqual(targets, {field["target"] for field in DEFAULT_FIELDS})
+        self.assertEqual(targets, set(self.component.field_ids.values()))
 
     def test_each_drop_zone_has_a_clear_button(self):
         clear_buttons = [
@@ -302,14 +303,18 @@ class GraphWorkspaceTests(unittest.TestCase):
             getattr(component, "id", None)
             for component in walk_components(graph)
         }
-        self.assertNotIn("update-graf", graph_descendants)
-        self.assertNotIn("copy-png-button", graph_descendants)
-        self.assertNotIn("context-menu-btn", graph_descendants)
+        self.assertNotIn(self.component.ids["update"], graph_descendants)
+        self.assertNotIn(self.component.ids["copy_png"], graph_descendants)
+        self.assertNotIn(self.component.ids["open_settings"], graph_descendants)
 
     def test_paper_is_owned_and_sized_by_workspace(self):
-        self.assertEqual(self.workspace.id, "test-graph-paper")
-        self.assertEqual(self.workspace.style["height"], "750px")
-        self.assertEqual(self.workspace.style["width"], "100%")
+        paper = next(
+            component
+            for component in self.components
+            if getattr(component, "id", None) == "test-graph-paper"
+        )
+        self.assertEqual(paper.style["height"], "750px")
+        self.assertEqual(paper.style["width"], "100%")
 
         descendant_ids = {
             getattr(component, "id", None)
@@ -317,6 +322,36 @@ class GraphWorkspaceTests(unittest.TestCase):
         }
         self.assertIn("test-graph", descendant_ids)
         self.assertIn("test-graph-workspace", descendant_ids)
+
+    def test_component_owns_namespaced_actions_and_state(self):
+        descendant_ids = {
+            getattr(component, "id", None)
+            for component in self.components
+        }
+        expected = {
+            self.component.ids["update"],
+            self.component.ids["copy_png"],
+            self.component.ids["open_settings"],
+            self.component.ids["download_html"],
+            self.component.ids["download_component"],
+            self.component.ids["save_png"],
+            self.component.ids["clear"],
+            self.component.ids["view_revision"],
+            self.component.ids["custom_colors"],
+        }
+        self.assertTrue(expected.issubset(descendant_ids))
+        self.assertEqual(self.component.ids["update"], "test-graph-update")
+
+    def test_figure_builder_api_owns_graph_output(self):
+        test_app = Dash("graph-workspace-figure-test")
+
+        @self.component.figure_callback(test_app, Input("test-signal", "data"))
+        def build_figure(_signal):
+            return {}, []
+
+        self.assertTrue(
+            any("test-graph.figure" in key for key in test_app.callback_map)
+        )
 
     def test_missing_field_control_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -329,11 +364,11 @@ class GraphWorkspaceTests(unittest.TestCase):
 
 class GraphSettingsPanelTests(unittest.TestCase):
     def setUp(self):
-        controls = {
+        self.controls = {
             key: html.Div(id=f"test-setting-{key}")
             for key in REQUIRED_CONTROLS
         }
-        self.panel = GraphSettingsPanel(controls).render()
+        self.panel = GraphSettingsPanel(self.controls).render()
         self.components = list(walk_components(self.panel))
 
     def test_settings_are_grouped_in_single_level_tabs(self):
@@ -372,6 +407,22 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "graph-settings-reset",
         }
         self.assertTrue(expected_ids.issubset(component_ids))
+
+    def test_internal_settings_ids_can_be_namespaced(self):
+        panel = GraphSettingsPanel(
+            self.controls,
+            ids={
+                "drawer-simple": "sales-settings-drawer",
+                "InputSizePlot": "sales-graph-height",
+            },
+        ).render()
+        component_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(panel)
+        }
+        self.assertIn("sales-settings-drawer", component_ids)
+        self.assertIn("sales-graph-height", component_ids)
+        self.assertNotIn("drawer-simple", component_ids)
 
     def test_missing_settings_control_is_rejected(self):
         with self.assertRaises(ValueError):

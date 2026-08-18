@@ -11,7 +11,7 @@ import dash_mantine_components as dmc
 
 from config import STYLE_CARD, PAPER_BASE, initial_fig
 from graph_settings import GraphSettingsPanel
-from graph_workspace import GraphWorkspace
+from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
     dropdown_style,
     dropdown_x, dropdown_y, dropdown_z,
@@ -25,7 +25,6 @@ from components import (
     add_filter_button,
     dropdown_chart_type,
     SwitchBubble,
-    copy_trigger,
     dropdown_text_pozition, dropdown_category_ascending,
     dropdown_axes_category, dropdown_overlay,
     dropdown_legend, dropdown_legend_order, input_legend_custom_order,
@@ -62,37 +61,42 @@ def make_nav_link(label, href):
     )
 
 
-def create_layout():
-    graph_workspace = GraphWorkspace(
-        graph_id="graph",
-        chart_type_control=dropdown_chart_type,
-        field_controls={
-            "dropdown_x": dropdown_x,
-            "dropdown_y": dropdown_y,
-            "dropdown_z": dropdown_z,
-            "dropdown_color": dropdown_color,
-            "dropdown_size": dropdown_size,
-            "dropdown_text": dropdown_text,
-            "dropdown_facet_row": dropdown_facet_row,
-            "dropdown_facet_col": dropdown_facet_col,
-            "dropdown_hover_data": dropdown_hover_data,
-        },
-    ).render()
+GRAPH_SETTINGS_PANEL = GraphSettingsPanel(
+    controls={
+        "theme": dropdown_style,
+        "bubble": SwitchBubble,
+        "bar_labels": bar_text_auto_switch,
+        "text_position": dropdown_text_pozition,
+        "category_axis": dropdown_axes_category,
+        "category_order": dropdown_category_ascending,
+        "bar_mode": dropdown_overlay,
+        "legend_position": dropdown_legend,
+        "legend_order": dropdown_legend_order,
+        "legend_custom_order": input_legend_custom_order,
+    }
+)
 
-    graph_settings = GraphSettingsPanel(
-        controls={
-            "theme": dropdown_style,
-            "bubble": SwitchBubble,
-            "bar_labels": bar_text_auto_switch,
-            "text_position": dropdown_text_pozition,
-            "category_axis": dropdown_axes_category,
-            "category_order": dropdown_category_ascending,
-            "bar_mode": dropdown_overlay,
-            "legend_position": dropdown_legend,
-            "legend_order": dropdown_legend_order,
-            "legend_custom_order": input_legend_custom_order,
-        }
-    ).render()
+GRAPH_WORKSPACE = GraphWorkspace(
+    graph_id="graph",
+    chart_type_control=dropdown_chart_type,
+    field_controls={
+        "dropdown_x": dropdown_x,
+        "dropdown_y": dropdown_y,
+        "dropdown_z": dropdown_z,
+        "dropdown_color": dropdown_color,
+        "dropdown_size": dropdown_size,
+        "dropdown_text": dropdown_text,
+        "dropdown_facet_row": dropdown_facet_row,
+        "dropdown_facet_col": dropdown_facet_col,
+        "dropdown_hover_data": dropdown_hover_data,
+    },
+    settings_panel=GRAPH_SETTINGS_PANEL,
+    action_ids=LEGACY_GRAPH_ACTION_IDS,
+)
+
+
+def create_layout():
+    graph_workspace = GRAPH_WORKSPACE.render()
 
     return dmc.MantineProvider(
         children=[
@@ -117,37 +121,13 @@ def create_layout():
             dcc.Store(id='stored-sheet-names'),
             dcc.Store(id='selected-sheet'),
             dcc.Store(id='sheet-modal-toggle', data=True),
-            dcc.Store(id='custom-colors', data={}),
             dcc.Store(id='meta-columns'),
             dcc.Store(id='cluster-metrics'),
             dcc.Store(id='source-file-path'),
             dcc.Store(id='source-file-name'),
             dcc.Store(id='filters-initialized', data=False),
-            dcc.Store(id='graph-view-revision', data=0),
-
-            # --- Color modal ---
-            dmc.Modal(
-                id="color-modal",
-                title="Выберите цвета для классов",
-                children=[
-                    dmc.Group([
-                        dmc.Text("Режим выбора цвета:"),
-                        dmc.Switch(
-                            id="color-mode-toggle",
-                            onLabel="Ручной",
-                            offLabel="Авто",
-                            checked=False,
-                            size="md"
-                        ),
-                    ]),
-                    dmc.Stack(id="color-inputs"),
-                    dmc.Button("Применить", id="apply-colors")
-                ],
-                opened=False, size="auto"
-            ),
 
             dmc.NotificationContainer(id="notifications-container"),
-            copy_trigger,
 
             # ========================
             # HEADER (фиксированный сверху)
@@ -334,11 +314,6 @@ def create_layout():
             ),
 
             # ========================
-            # DRAWER НАСТРОЙКИ ГРАФИКА (общий)
-            # ========================
-            graph_settings,
-
-            # ========================
             # FOOTER (фиксированный внизу)
             # ========================
             dmc.Paper(
@@ -364,12 +339,7 @@ def create_layout():
 
             # --- Скрытые триггеры для контекстного меню графика ---
             html.Div(style={"display": "none"}, children=[
-                html.Button("download-html", id="download-button"),
                 html.Button("download-excel", id="download-excel-button"),
-                html.Button("save-png", id="save-png-button"),
-                html.Button("shuffle", id="shuffle-button"),
-                html.Button("clear-graph", id="clear-graph-button"),
-                dcc.Download(id="download-file"),
                 dcc.Download(id="download-excel"),
             ]),
 

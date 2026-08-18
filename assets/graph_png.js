@@ -2,8 +2,8 @@
 (function () {
   "use strict";
 
-  function getPlot() {
-    const host = document.getElementById("graph");
+  function getPlot(graphId) {
+    const host = document.getElementById(graphId || "graph");
     const plot = host && host.querySelector(".js-plotly-plot");
     if (!plot || !window.Plotly) {
       throw new Error("График не найден в DOM.");
@@ -31,8 +31,8 @@
     return new Blob([bytes], { type: mime });
   }
 
-  function render() {
-    const plot = getPlot();
+  function render(graphId) {
+    const plot = getPlot(graphId);
     const size = getVisibleSize(plot);
     return window.Plotly.toImage(plot, {
       format: "png",
@@ -42,7 +42,7 @@
     });
   }
 
-  async function copyToClipboard() {
+  async function copyToClipboard(graphId) {
     if (
       !window.isSecureContext ||
       !window.ClipboardItem ||
@@ -52,15 +52,15 @@
       throw new Error("Копирование изображений в буфер недоступно.");
     }
 
-    const dataUrl = await render();
+    const dataUrl = await render(graphId);
     const blob = dataUrlToBlob(dataUrl);
     await navigator.clipboard.write([
       new window.ClipboardItem({ [blob.type]: blob }),
     ]);
   }
 
-  async function saveToFile() {
-    const dataUrl = await render();
+  async function saveToFile(graphId) {
+    const dataUrl = await render(graphId);
     const link = document.createElement("a");
     const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
     link.href = dataUrl;

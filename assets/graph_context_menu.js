@@ -6,6 +6,7 @@
   "use strict";
 
   let _menuVisible = false;
+  let _activeWorkspace = null;
 
   /* ---- Создание меню (один раз) ---- */
   function createMenu() {
@@ -96,8 +97,10 @@
     executeAction(action);
   }
 
-  /* ---- Клик по скрытой кнопке Dash ---- */
-  function clickButton(id) {
+  /* ---- Клик по действию активного GraphWorkspace ---- */
+  function clickAction(action) {
+    if (!_activeWorkspace) return;
+    const id = _activeWorkspace.getAttribute("data-action-" + action);
     const btn = document.getElementById(id);
     if (btn) btn.click();
   }
@@ -106,23 +109,23 @@
   function executeAction(action) {
     switch (action) {
       case "refresh":
-        clickButton("update-graf");
+        clickAction("refresh");
         break;
 
       case "download-html":
-        clickButton("download-button");
+        clickAction("download-html");
         break;
 
       case "copy-png":
-        clickButton("copy-png-button");
+        clickAction("copy-png");
         break;
 
       case "save-png":
-        clickButton("save-png-button");
+        clickAction("save-png");
         break;
 
       case "change-colors":
-        clickButton("shuffle-button");
+        clickAction("change-colors");
         break;
 
       case "reset-view":
@@ -130,18 +133,19 @@
         break;
 
       case "clear-graph":
-        clickButton("clear-graph-button");
+        clickAction("clear-graph");
         break;
 
       case "open-settings":
-        clickButton("context-menu-btn");
+        clickAction("open-settings");
         break;
     }
   }
 
   /* ---- Сброс масштаба графика ---- */
   function resetGraphView() {
-    const host = document.getElementById("graph");
+    const graphId = _activeWorkspace && _activeWorkspace.getAttribute("data-graph-id");
+    const host = graphId && document.getElementById(graphId);
     if (!host) return;
     const gd = host.querySelector(".js-plotly-plot");
     if (!gd || !window.Plotly) return;
@@ -186,26 +190,21 @@
     }
   }
 
-  /* ---- Привязка contextmenu к графику ---- */
-  function bindGraphContextMenu() {
-    const graphHost = document.getElementById("graph");
-    if (!graphHost || graphHost.dataset.ctxBound === "1") return;
-
-    graphHost.addEventListener(
-      "contextmenu",
-      function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        showMenu(e.clientX, e.clientY);
-      },
-      true
-    );
-
-    graphHost.dataset.ctxBound = "1";
-  }
-
   /* ---- Глобальные обработчики ---- */
   function setupGlobalListeners() {
+    document.addEventListener("contextmenu", function (e) {
+      // Drop zones own their right-click field picker.
+      if (e.target.closest(".graph-drop-zone")) return;
+      const graphHost = e.target.closest(".graph-workspace-plot");
+      const workspace = graphHost && graphHost.closest(".graph-workspace");
+      if (!workspace) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      _activeWorkspace = workspace;
+      showMenu(e.clientX, e.clientY);
+    }, true);
+
     document.addEventListener("mousedown", function (e) {
       if (_menuVisible && !e.target.closest("#graph-ctx-menu")) {
         hideMenu();
@@ -226,15 +225,7 @@
   /* ---- Инициализация ---- */
   function init() {
     createMenu();
-    bindGraphContextMenu();
     setupGlobalListeners();
-
-    new MutationObserver(function () {
-      const graphHost = document.getElementById("graph");
-      if (graphHost && graphHost.dataset.ctxBound !== "1") {
-        bindGraphContextMenu();
-      }
-    }).observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === "loading") {

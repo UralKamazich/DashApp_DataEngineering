@@ -22,15 +22,38 @@ REQUIRED_CONTROLS = {
     "legend_custom_order",
 }
 
+SETTINGS_COMPONENT_IDS = (
+    "drawer-simple",
+    "graph-settings-tabs",
+    "graph-settings-panel",
+    "graph-settings-reset-state",
+    "graph-settings-reset",
+    "InputSizePlot",
+    "InputSizePlotW",
+    "font-size-xaxis",
+    "font-size-yaxis",
+    "tick-step-xaxis",
+    "tick-step-yaxis",
+    "font-size-title",
+    "font-size-ticks",
+    "InputMaxSizeBubble",
+)
+
 
 class GraphSettingsPanel:
     """Build a scalable, single-level graph settings inspector."""
 
-    def __init__(self, controls: Mapping[str, object]):
+    def __init__(self, controls: Mapping[str, object], ids: Mapping[str, str] | None = None):
         self.controls = controls
+        self.ids = {component_id: component_id for component_id in SETTINGS_COMPONENT_IDS}
+        self.ids.update(ids or {})
         missing = REQUIRED_CONTROLS.difference(controls)
         if missing:
             raise ValueError(f"Missing graph settings controls: {sorted(missing)}")
+
+    def component_id(self, legacy_id: str) -> str:
+        """Return the instance-specific id for an internal settings control."""
+        return self.ids.get(legacy_id, legacy_id)
 
     @staticmethod
     def _icon(name: str, size: int = 16):
@@ -54,10 +77,9 @@ class GraphSettingsPanel:
             **{"aria-hidden": "true"},
         )
 
-    @staticmethod
-    def _number_input(component_id: str, label: str, value, **kwargs):
+    def _number_input(self, component_id: str, label: str, value, **kwargs):
         return dmc.NumberInput(
-            id=component_id,
+            id=self.component_id(component_id),
             label=label,
             value=value,
             debounce=True,
@@ -329,7 +351,7 @@ class GraphSettingsPanel:
                 self._legend_panel(),
                 self._series_panel(),
             ],
-            id="graph-settings-tabs",
+            id=self.component_id("graph-settings-tabs"),
             value="axes",
             keepMounted=True,
             persistence=True,
@@ -338,7 +360,7 @@ class GraphSettingsPanel:
         )
 
         return dmc.Drawer(
-            id="drawer-simple",
+            id=self.component_id("drawer-simple"),
             title=title,
             opened=False,
             position="right",
@@ -355,9 +377,9 @@ class GraphSettingsPanel:
                 "body": "graph-settings-body",
             },
             children=html.Div(
-                id="graph-settings-panel",
+                id=self.component_id("graph-settings-panel"),
                 children=[
-                    dcc.Store(id="graph-settings-reset-state"),
+                    dcc.Store(id=self.component_id("graph-settings-reset-state")),
                     html.Div([self._quick_settings(), tabs], className="graph-settings-scroll"),
                     html.Div(
                         [
@@ -370,7 +392,7 @@ class GraphSettingsPanel:
                             ),
                             dmc.Button(
                                 "Сбросить",
-                                id="graph-settings-reset",
+                                id=self.component_id("graph-settings-reset"),
                                 variant="subtle",
                                 color="gray",
                                 size="xs",

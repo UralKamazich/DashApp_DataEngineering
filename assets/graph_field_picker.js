@@ -3,6 +3,7 @@
   "use strict";
 
   let activeZone = null;
+  let draggedBadge = null;
   let datasetColumns = [];
   let sortColumns = false;
 
@@ -21,10 +22,13 @@
     window.dash_clientside.set_props(targetId, { value });
   }
 
-  function getDatasetColumns() {
+  function getDatasetColumns(zone) {
+    const workspace = zone && zone.closest(".graph-workspace");
+    const containerId = workspace && workspace.getAttribute("data-columns-container-id");
+    const container = (containerId && document.getElementById(containerId)) || document;
     const seen = new Set();
     return Array.from(
-      document.querySelectorAll("#columns-badges [data-column-name]")
+      container.querySelectorAll("[data-column-name]")
     ).reduce(function (columns, badge) {
       const name = badge.getAttribute("data-column-name");
       if (name && !seen.has(name)) {
@@ -182,14 +186,14 @@
   function openPicker(zone, x, y) {
     createPicker();
     activeZone = zone;
-    datasetColumns = getDatasetColumns();
+    datasetColumns = getDatasetColumns(zone);
 
     const picker = document.getElementById("graph-field-picker");
     picker.querySelector(".field-picker-title").textContent =
       zone.getAttribute("data-default-label") || "Столбец";
     picker.querySelector(".field-picker-search").value = "";
     picker.classList.add("is-open");
-    document.getElementById("graph-workspace")?.classList.add("field-picker-open");
+    zone.closest(".graph-workspace")?.classList.add("field-picker-open");
     updateSortControl();
     renderColumns();
     positionPicker(x, y);
@@ -199,7 +203,7 @@
   function closePicker() {
     const picker = document.getElementById("graph-field-picker");
     if (picker) picker.classList.remove("is-open");
-    document.getElementById("graph-workspace")?.classList.remove("field-picker-open");
+    activeZone?.closest(".graph-workspace")?.classList.remove("field-picker-open");
     activeZone = null;
   }
 
@@ -209,7 +213,95 @@
     if (zone === activeZone) renderColumns();
   }
 
+  function setDragging(active) {
+    document.querySelectorAll(".graph-workspace").forEach(function (workspace) {
+      workspace.classList.toggle("dnd-active", active);
+      if (!active) {
+        workspace.querySelectorAll(".zone-hover").forEach(function (zone) {
+          zone.classList.remove("zone-hover");
+        });
+      }
+    });
+  }
+
+  function setDroppedField(zone, columnName) {
+    if (!columnName) return;
+    const mode = zone.getAttribute("data-drop-mode") || "replace";
+    const current = readZoneValue(zone);
+    if (mode === "append") {
+      const values = Array.isArray(current) ? current.slice() : [];
+      const index = values.indexOf(columnName);
+      if (index === -1) values.push(columnName);
+      else values.splice(index, 1);
+      writeZoneValue(zone, values);
+      return;
+    }
+    writeZoneValue(zone, current === columnName ? null : columnName);
+  }
+
+  function makeDragPreview(columnName) {
+    const preview = document.createElement("div");
+    preview.className = "column-drag-preview";
+    preview.textContent = columnName;
+    document.body.appendChild(preview);
+    return preview;
+  }
+
   function installListeners() {
+    document.addEventListener("dragstart", function (event) {
+      const badge = event.target.closest("[data-column-name]");
+      if (!badge) return;
+      const columnName = badge.getAttribute("data-column-name");
+      if (!columnName) return;
+
+      closePicker();
+      draggedBadge = badge;
+      event.dataTransfer.setData("text/plain", columnName);
+      event.dataTransfer.effectAllowed = "copy";
+      const preview = makeDragPreview(columnName);
+      event.dataTransfer.setDragImage(preview, 16, 16);
+      window.setTimeout(function () { preview.remove(); }, 0);
+      badge.classList.add("column-badge--dragging");
+      setDragging(true);
+    });
+
+    document.addEventListener("dragend", function () {
+      if (draggedBadge) draggedBadge.classList.remove("column-badge--dragging");
+      draggedBadge = null;
+      setDragging(false);
+    });
+
+    document.addEventListener("dragover", function (event) {
+      const zone = event.target.closest(".graph-drop-zone");
+      if (!zone) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      const workspace = zone.closest(".graph-workspace");
+      workspace.querySelectorAll(".zone-hover").forEach(function (item) {
+        if (item !== zone) item.classList.remove("zone-hover");
+      });
+      zone.classList.add("zone-hover");
+    });
+
+    document.addEventListener("dragleave", function (event) {
+      const zone = event.target.closest(".graph-drop-zone");
+      if (!zone) return;
+      if (!event.relatedTarget || !zone.contains(event.relatedTarget)) {
+        zone.classList.remove("zone-hover");
+      }
+    });
+
+    document.addEventListener("drop", function (event) {
+      const zone = event.target.closest(".graph-drop-zone");
+      if (!zone) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDroppedField(zone, event.dataTransfer.getData("text/plain"));
+      if (draggedBadge) draggedBadge.classList.remove("column-badge--dragging");
+      draggedBadge = null;
+      setDragging(false);
+    });
+
     document.addEventListener("contextmenu", function (event) {
       const zone = event.target.closest(".graph-drop-zone");
       if (!zone) return;
@@ -238,7 +330,6 @@
       if (event.key === "Escape") closePicker();
     });
 
-    document.addEventListener("dragstart", closePicker);
     window.addEventListener("resize", closePicker);
   }
 

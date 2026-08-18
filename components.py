@@ -276,60 +276,6 @@ SwitchBubble = dmc.Switch(
     checked=False,
 )
 
-update_graf = dmc.Tooltip(
-    label="Обновить / Отобразить график",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="update-graf",                 # тот же ID — логика не меняется
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="lucide:refresh-ccw", width=18)
-    )
-)
-
-download_button = dmc.Tooltip(
-    label="Сохранить в HTML",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="download-button",            # тот же ID
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="tabler:file-type-html", width=18)
-    )
-)
-
-DownloadFile = dcc.Download(id="download-file")
-
-excel_download_button = dmc.Tooltip(
-    label="Сохранить датасет в Excel",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="download-excel-button",
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="vscode-icons:file-type-excel2", width=18)
-    )
-)
-
-DownloadExcel = dcc.Download(id="download-excel")
-
-copy_button = dmc.Tooltip(
-    label="Копировать как PNG",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="copy-png-button",            # тот же ID
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="lucide:image-down", width=18)
-    )
-)
-
-copy_trigger = dcc.Clipboard(id="clipboard", style={"display": "none"})
-
 # =========================
 # Вспомогательные дропдауны настроек
 # =========================

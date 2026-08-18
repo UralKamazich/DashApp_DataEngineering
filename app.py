@@ -27,10 +27,11 @@ from dash_app import app
 # =========================
 # Layout
 # =========================
-from layout import create_layout
+from layout import GRAPH_WORKSPACE, create_layout
 app.layout = create_layout()
+GRAPH_WORKSPACE.register_callbacks(app)
 
 # =========================
 # Регистрация callbacks
 # =========================
-from callbacks import modals, file_handling, filters, pipeline, data_engineering, dropdowns, graph, colors, download, columns_sidebar
+from callbacks import modals, file_handling, filters, pipeline, data_engineering, dropdowns, graph, download, columns_sidebar

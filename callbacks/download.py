@@ -1,46 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks: скачивание HTML, Excel, clientside PNG.
+Callbacks: сохранение текущего датасета в Excel.
 """
 
 import re
-import os
 import uuid
 from pathlib import Path
 import pandas as pd
-import plotly.graph_objects as go
 from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
 from utils import _make_error_notif, read_df_from_store
-
-
-# Скачивание HTML
-@app.callback(
-    Output("download-file", "data"),
-    Output('notifications-container', 'sendNotifications', allow_duplicate=True),
-    Input("download-button", "n_clicks"),
-    State("graph", "figure"),
-    State("dropdown_x", "value"),
-    State("dropdown_y", "value"),
-    State("segmented", "value"),
-    prevent_initial_call=True
-)
-def download_html(n_clicks, figure, dropdown_x, dropdown_y, segmentedcontrol_value):
-    if not n_clicks or not figure:
-        raise PreventUpdate
-    try:
-        fig = go.Figure(figure)
-        filename = (
-            f'{dropdown_x} vs {dropdown_y} {segmentedcontrol_value}.html'
-            if all([dropdown_x, dropdown_y, segmentedcontrol_value]) else "graph.html"
-        )
-        html_content = fig.to_html(include_plotlyjs='cdn')
-        return {"content": html_content, "filename": filename, "type": "text/html"}, []
-    except Exception as e:
-        notif = _make_error_notif(f"Ошибка скачивания: {str(e)}")
-        return no_update, notif
 
 
 # Сохранить текущий датасет в Excel
@@ -100,81 +71,3 @@ def download_excel_dataset(n_clicks, filtered_json, source_path, source_name, sh
         return no_update, ok
     except Exception as e:
         return no_update, _make_error_notif(f"Ошибка сохранения Excel: {e}")
-
-
-# Кнопка на графике: только копирование PNG в буфер, без скачивания файла.
-app.clientside_callback(
-    """
-    function(n_clicks, figure) {
-        if (!n_clicks || !figure) {
-            throw window.dash_clientside.PreventUpdate;
-        }
-
-        function notification(title, message, color) {
-            return [{
-                id: crypto.randomUUID(),
-                title: title,
-                message: message,
-                color: color,
-                action: 'show',
-                autoClose: 4500
-            }];
-        }
-
-        if (!window.graphPng) {
-            return notification('PNG не скопирован', 'Модуль экспорта не загружен.', 'red');
-        }
-
-        return window.graphPng.copyToClipboard().then(
-            () => notification('PNG скопирован', 'Изображение помещено в буфер обмена.', 'green'),
-            (error) => {
-                console.error('Clipboard PNG error:', error);
-                return notification('PNG не скопирован', error.message || 'Ошибка буфера обмена.', 'red');
-            }
-        );
-    }
-    """,
-    Output("notifications-container", "sendNotifications", allow_duplicate=True),
-    Input("copy-png-button", "n_clicks"),
-    State("graph", "figure"),
-    prevent_initial_call=True
-)
-
-
-# Пункт контекстного меню: только сохранение PNG в файл, без буфера обмена.
-app.clientside_callback(
-    """
-    function(n_clicks, figure) {
-        if (!n_clicks || !figure) {
-            throw window.dash_clientside.PreventUpdate;
-        }
-
-        function notification(title, message, color) {
-            return [{
-                id: crypto.randomUUID(),
-                title: title,
-                message: message,
-                color: color,
-                action: 'show',
-                autoClose: 4500
-            }];
-        }
-
-        if (!window.graphPng) {
-            return notification('PNG не сохранён', 'Модуль экспорта не загружен.', 'red');
-        }
-
-        return window.graphPng.saveToFile().then(
-            () => notification('PNG сохранён', 'Файл с графиком передан в загрузки.', 'green'),
-            (error) => {
-                console.error('Save PNG error:', error);
-                return notification('PNG не сохранён', error.message || 'Ошибка сохранения файла.', 'red');
-            }
-        );
-    }
-    """,
-    Output("notifications-container", "sendNotifications", allow_duplicate=True),
-    Input("save-png-button", "n_clicks"),
-    State("graph", "figure"),
-    prevent_initial_call=True
-)

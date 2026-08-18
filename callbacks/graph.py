@@ -18,6 +18,7 @@ from utils import (
     needs_text_axis,
 )
 from config import legend_config
+from layout import GRAPH_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
@@ -56,32 +57,30 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
     return errors
 
 
-@app.callback(
-    Output("graph", "figure"),
-    Output('notifications-container', 'sendNotifications', allow_duplicate=True),
-
-    Input("update-graf", "n_clicks"),
-    Input("dropdown_x", "value"),
-    Input("dropdown_y", "value"),
-    Input("dropdown_z", "value"),
-    Input("dropdown_color", "value"),
-    Input("dropdown_size", "value"),
-    Input("dropdown_text", "value"),
+@GRAPH_WORKSPACE.figure_callback(
+    app,
+    Input(GRAPH_WORKSPACE.ids["update"], "n_clicks"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_x"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_y"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_z"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_color"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_size"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_text"], "value"),
     Input("dropdown_text_pozition", "value"),
-    Input("segmented", "value"),
+    Input(GRAPH_WORKSPACE.chart_type_id, "value"),
     Input("SwitchBubble", "checked"),
     Input("InputMaxSizeBubble", "value"),
     Input("InputSizePlot", "value"),
     Input("InputSizePlotW", "value"),
     Input("dropdown_style", "value"),
     Input("bar-text-auto", "checked"),
-    Input("graph-view-revision", "data"),
+    Input(GRAPH_WORKSPACE.ids["view_revision"], "data"),
 
     State("filtered-data", "data"),
-    State("dropdown_hover_data", "value"),
+    State(GRAPH_WORKSPACE.field_ids["dropdown_hover_data"], "value"),
     State("dropdown_corr_columns", "value"),
-    Input("dropdown_facet_row", "value"),
-    Input("dropdown_facet_col", "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_row"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_col"], "value"),
     State("filters-state", "data"),
     Input("font-size-xaxis", "value"),
     Input("font-size-yaxis", "value"),
@@ -91,14 +90,14 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
     Input("dropdown_axes_category", "value"),
     Input("dropdown_overlay", "value"),
     Input("dropdown_legend", "value"),
-    State("custom-colors", "data"),
+    State(GRAPH_WORKSPACE.ids["custom_colors"], "data"),
     Input("tick-step-xaxis", "value"),
     Input("tick-step-yaxis", "value"),
     Input("dropdown_legend_order", "value"),
     State("input_legend_custom_order", "value"),
     State("meta-columns", "data"),
 
-    prevent_initial_call=True
+    prevent_initial_call=True,
 )
 def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_col, dropdown_text_pozition,
                       chart_type, bubble, MaxSizeBubble, height, width, selected_style, bar_text_auto,
@@ -465,11 +464,11 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
     Output("corr-bars-section", "style"),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
 
-    Input("update-graf", "n_clicks"),
-    Input("segmented", "value"),
+    Input(GRAPH_WORKSPACE.ids["update"], "n_clicks"),
+    Input(GRAPH_WORKSPACE.chart_type_id, "value"),
     State("dropdown_corr_columns", "value"),
-    Input("dropdown_x", "value"),
-    Input("dropdown_y", "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_x"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_y"], "value"),
     Input("cluster-metrics", "data"),
 
     State("filtered-data", "data"),
