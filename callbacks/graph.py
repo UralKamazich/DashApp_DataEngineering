@@ -36,6 +36,7 @@ Y_ONLY_CHART_TYPES = {
 
 RIDGE_GRID_SIZE = 180
 MAX_RIDGE_GROUPS = 60
+MAX_PIE_SLICES = 30
 
 
 def _color_with_alpha(color, alpha=0.34):
@@ -246,6 +247,185 @@ def _build_ridge_figure(plot_df, x_col, y_col, color_col, height, width,
     return fig, None
 
 
+def _pie_hover_summary(series):
+    """Produce a compact group summary for an extra Pie hover column."""
+    values = series.dropna()
+    if values.empty:
+        return "—"
+    if pd.api.types.is_numeric_dtype(values):
+        minimum = float(values.min())
+        maximum = float(values.max())
+        return f"{minimum:.4g}" if minimum == maximum else f"{minimum:.4g} … {maximum:.4g}"
+    unique_values = list(dict.fromkeys(str(value) for value in values))
+    summary = ", ".join(unique_values[:3])
+    return summary + (" …" if len(unique_values) > 3 else "")
+
+
+def _build_pie_figure(plot_df, x_col, y_col, color_col, aggregation,
+                      height, width, template, hover_cols=None):
+    """Build a Pie using counts or an explicit category/value aggregation."""
+    axis_columns = list(dict.fromkeys(
+        column for column in (x_col, y_col) if column in plot_df.columns
+    ))
+    numeric_columns = [
+        column for column in axis_columns
+        if pd.api.types.is_numeric_dtype(plot_df[column])
+    ]
+    if len(numeric_columns) > 1:
+        return None, (
+            "Для круговой диаграммы выберите не более одного числового столбца "
+            "на осях X/Y. Второй столбец должен содержать категории."
+        )
+
+    value_col = numeric_columns[0] if numeric_columns else None
+    category_cols = [column for column in axis_columns if column != value_col]
+    color_col = color_col if color_col in plot_df.columns else None
+    if color_col and color_col != value_col and color_col not in category_cols:
+        category_cols.append(color_col)
+
+    aggregation = aggregation if aggregation in {"sum", "mean", "count"} else "sum"
+    aggregation_labels = {
+        "sum": "Сумма",
+        "mean": "Среднее",
+        "count": "Количество",
+    }
+    hover_cols = [hover_cols] if isinstance(hover_cols, str) else (hover_cols or [])
+    requested_hover = [
+        column for column in (hover_cols or [])
+        if column in plot_df.columns and column not in category_cols and column != value_col
+    ]
+    requested_hover = list(dict.fromkeys(requested_hover))
+
+    working_columns = list(dict.fromkeys(
+        column for column in [*category_cols, value_col, *requested_hover] if column
+    ))
+    pie_df = plot_df[working_columns].copy()
+    for column in category_cols:
+        pie_df[column] = pie_df[column].astype(object).where(
+            pie_df[column].notna(), "(пусто)"
+        ).astype(str)
+
+    numeric_only = value_col is not None and not category_cols
+    if numeric_only:
+        pie_df[value_col] = pd.to_numeric(pie_df[value_col], errors="coerce")
+        pie_df = pie_df[np.isfinite(pie_df[value_col])]
+        if pie_df.empty:
+            return None, f"В столбце «{value_col}» нет числовых значений."
+        bin_count = min(10, max(int(pie_df[value_col].nunique()), 1))
+        pie_df["__pie_bin__"] = pd.cut(
+            pie_df[value_col], bins=bin_count, include_lowest=True, duplicates="drop"
+        ).astype(str)
+        category_cols = ["__pie_bin__"]
+        grouped = pie_df.groupby(category_cols, sort=False, dropna=False)
+        metric = grouped.size().astype(float)
+        records = grouped.size()
+        metric_weights = records
+        metric_label = "Количество значений"
+        title = f"Распределение «{value_col}»"
+    else:
+        if not category_cols:
+            return None, "Для круговой диаграммы нужен категориальный столбец."
+        grouped = pie_df.groupby(category_cols, sort=False, dropna=False)
+        records = grouped.size()
+        if value_col:
+            pie_df[value_col] = pd.to_numeric(pie_df[value_col], errors="coerce")
+            grouped = pie_df.groupby(category_cols, sort=False, dropna=False)
+            if aggregation == "mean":
+                metric = grouped[value_col].mean()
+                metric_weights = grouped[value_col].count()
+            elif aggregation == "count":
+                metric = grouped[value_col].count().astype(float)
+                metric_weights = metric
+            else:
+                metric = grouped[value_col].sum(min_count=1)
+                metric_weights = grouped[value_col].count()
+            metric_label = f"{aggregation_labels[aggregation]} «{value_col}»"
+            title = f"{metric_label} по «{' · '.join(category_cols)}»"
+        else:
+            metric = records.astype(float)
+            metric_weights = records
+            metric_label = "Количество записей"
+            title = f"Количество записей по «{' · '.join(category_cols)}»"
+
+    aggregated = pd.DataFrame({
+        "__value__": metric,
+        "__records__": records,
+        "__metric_weight__": metric_weights,
+    })
+    hover_aliases = []
+    for index, column in enumerate(requested_hover):
+        alias = f"__hover_{index}__"
+        aggregated[alias] = grouped[column].agg(_pie_hover_summary)
+        hover_aliases.append((alias, column))
+    aggregated = aggregated.reset_index()
+    aggregated = aggregated[np.isfinite(aggregated["__value__"])]
+    if aggregated.empty:
+        return None, "После агрегации не осталось значений для круговой диаграммы."
+    if (aggregated["__value__"] < 0).any():
+        return None, "Круговая диаграмма не поддерживает отрицательные итоговые значения."
+    aggregated = aggregated[aggregated["__value__"] > 0]
+    if aggregated.empty:
+        return None, "Сумма значений круговой диаграммы должна быть больше нуля."
+
+    def make_label(row):
+        return " · ".join(str(row[column]) for column in category_cols)
+
+    aggregated["__label__"] = aggregated.apply(make_label, axis=1)
+    aggregated = aggregated.sort_values("__value__", ascending=False, kind="stable")
+    if len(aggregated) > MAX_PIE_SLICES:
+        visible = aggregated.iloc[:MAX_PIE_SLICES - 1].copy()
+        remainder = aggregated.iloc[MAX_PIE_SLICES - 1:]
+        remainder_records = int(remainder["__records__"].sum())
+        if value_col and aggregation == "mean":
+            remainder_weight = int(remainder["__metric_weight__"].sum())
+            remainder_value = float(np.average(
+                remainder["__value__"], weights=remainder["__metric_weight__"]
+            )) if remainder_weight else 0.0
+        else:
+            remainder_weight = int(remainder["__metric_weight__"].sum())
+            remainder_value = float(remainder["__value__"].sum())
+        other = {
+            "__label__": "Остальные",
+            "__value__": remainder_value,
+            "__records__": remainder_records,
+            "__metric_weight__": remainder_weight,
+        }
+        for column in category_cols:
+            other[column] = "Остальные" if column == category_cols[0] else ""
+        for alias, _column in hover_aliases:
+            other[alias] = "—"
+        aggregated = pd.concat([visible, pd.DataFrame([other])], ignore_index=True)
+
+    custom_columns = ["__records__", *(alias for alias, _column in hover_aliases)]
+    color_argument = color_col if color_col in aggregated.columns else None
+    fig = px.pie(
+        aggregated,
+        values="__value__",
+        names="__label__",
+        color=color_argument,
+        custom_data=custom_columns,
+        title=title,
+        height=height,
+        width=width,
+        template=template,
+    )
+    hover_template = (
+        f"<b>%{{label}}</b><br>{metric_label}: %{{value:,.4g}}"
+        "<br>Доля: %{percent}<br>Строк: %{customdata[0]}"
+    )
+    for index, (_alias, column) in enumerate(hover_aliases, start=1):
+        hover_template += f"<br>{column}: %{{customdata[{index}]}}"
+    hover_template += "<extra></extra>"
+    fig.update_traces(
+        textposition="inside",
+        textinfo="percent+label+value",
+        insidetextorientation="auto",
+        hovertemplate=hover_template,
+    )
+    fig.update_layout(uniformtext_minsize=10, uniformtext_mode="hide")
+    return fig, None
+
+
 def _graph_uirevision(chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision=0):
     """Keep user zoom while the chart keeps the same coordinate system."""
     parts = (chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision or 0)
@@ -288,7 +468,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
     Input(GRAPH_WORKSPACE.ids["view_revision"], "data"),
 
     State("filtered-data", "data"),
-    State(GRAPH_WORKSPACE.field_ids["dropdown_hover_data"], "value"),
+    Input(GRAPH_WORKSPACE.field_ids["dropdown_hover_data"], "value"),
     State("dropdown_corr_columns", "value"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_row"], "value"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_col"], "value"),
@@ -307,6 +487,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
     Input("dropdown_legend_order", "value"),
     State("input_legend_custom_order", "value"),
     State("meta-columns", "data"),
+    Input("dropdown_pie_aggregation", "value"),
 
     prevent_initial_call=True,
 )
@@ -316,7 +497,8 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       filtered_json, hover_cols, corr_cols, facet_row, facet_col, filters_state,
                       xaxis_font_size, yaxis_font_size, font_size_ticks, title_font_size,
                       dropdown_sort_column, axes_category, dropdown_overlay, legend, custom_colors,
-                      tick_step_x, tick_step_y, legend_order, legend_custom_order, meta):
+                      tick_step_x, tick_step_y, legend_order, legend_custom_order, meta,
+                      pie_aggregation="sum"):
 
     empty = _empty_fig()
     try:
@@ -451,16 +633,12 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 fig.update_traces(textposition=dropdown_text_pozition, textfont=dict(size=font_size_ticks), selector=dict(mode='markers+text'))
 
         elif chart_type == "Pie":
-            pie_col = x_col or y_col
-            if plot_df[pie_col].dtypes != 'object':
-                dff1 = plot_df[pie_col].value_counts(dropna=False, bins=10).sort_values(ascending=False)
-            else:
-                dff1 = plot_df[pie_col].value_counts(dropna=False).sort_values(ascending=False)
-            dff1 = pd.DataFrame(dff1).reset_index()
-            dff1.columns = [pie_col, 'counts']
-            dff1[pie_col] = dff1[pie_col].astype(str)
-            fig = px.pie(dff1, values='counts', names=pie_col, title=pie_col, height=height, template=selected_style)
-            fig.update_traces(textposition='inside', textinfo='percent+label+value', overwrite=True)
+            fig, pie_error = _build_pie_figure(
+                plot_df, x_col, y_col, carg, pie_aggregation,
+                height, width, selected_style, hover_cols,
+            )
+            if pie_error:
+                return empty, _make_error_notif(pie_error)
 
         elif chart_type == "Correlation":
             numeric_cols_all = (meta.get("numeric") or [])

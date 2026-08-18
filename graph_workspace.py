@@ -451,6 +451,7 @@ class GraphWorkspace:
             self._settings_control_id("category_axis"): {"value": "auto"},
             self._settings_control_id("category_order"): {"value": "total ascending"},
             self._settings_control_id("bar_mode"): {"value": "overlay"},
+            self._settings_control_id("pie_aggregation"): {"value": "sum"},
             self._settings_control_id("legend_position"): {"value": "top-right-outside"},
             self._settings_control_id("legend_order"): {"value": "alphabetical"},
             self._settings_control_id("legend_custom_order"): {"value": ""},

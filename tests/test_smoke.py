@@ -11,6 +11,7 @@ from app import app
 from callbacks.dropdowns import _select_options
 from callbacks.graph import (
     Y_ONLY_CHART_TYPES,
+    _build_pie_figure,
     _build_ridge_figure,
     _graph_uirevision,
     _primary_axis_errors,
@@ -149,6 +150,84 @@ class DropdownOptionTests(unittest.TestCase):
 
 
 class GraphAxisValidationTests(unittest.TestCase):
+    def test_pie_counts_a_single_categorical_column(self):
+        source = pd.DataFrame({"layer": ["A", "A", "B", None]})
+
+        figure, error = _build_pie_figure(
+            source, "layer", None, None, "sum", 550, 900, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(list(figure.data[0].labels), ["A", "B", "(пусто)"])
+        self.assertEqual(list(figure.data[0].values), [2.0, 1.0, 1.0])
+        self.assertEqual(figure.layout.width, 900)
+
+    def test_pie_aggregates_a_numeric_value_by_category(self):
+        source = pd.DataFrame({
+            "layer": ["A", "A", "B"],
+            "production": [10.0, 15.0, 7.0],
+        })
+
+        figure, error = _build_pie_figure(
+            source, "layer", "production", None, "sum", 550, None, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(list(figure.data[0].labels), ["A", "B"])
+        self.assertEqual(list(figure.data[0].values), [25.0, 7.0])
+        self.assertIn("Сумма «production»", figure.layout.title.text)
+
+    def test_pie_supports_mean_and_extra_hover_columns(self):
+        source = pd.DataFrame({
+            "layer": ["A", "A", "B"],
+            "production": [10.0, 20.0, 9.0],
+            "well": ["W-1", "W-2", "W-3"],
+        })
+
+        figure, error = _build_pie_figure(
+            source, "production", "layer", None, "mean", 550, None,
+            "plotly", ["well"],
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(list(figure.data[0].values), [15.0, 9.0])
+        self.assertIn("well: %{customdata[1]}", figure.data[0].hovertemplate)
+
+    def test_pie_count_omits_categories_without_numeric_values(self):
+        source = pd.DataFrame({
+            "layer": ["A", "A", "B"],
+            "production": [10.0, None, None],
+        })
+
+        figure, error = _build_pie_figure(
+            source, "layer", "production", None, "count", 550, None, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(list(figure.data[0].labels), ["A"])
+        self.assertEqual(list(figure.data[0].values), [1.0])
+
+    def test_pie_bins_a_single_numeric_column(self):
+        source = pd.DataFrame({"value": range(20)})
+
+        figure, error = _build_pie_figure(
+            source, "value", None, None, "sum", 550, None, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(len(figure.data[0].labels), 10)
+        self.assertEqual(sum(figure.data[0].values), 20)
+
+    def test_pie_rejects_two_numeric_axes(self):
+        source = pd.DataFrame({"first": [1, 2], "second": [3, 4]})
+
+        figure, error = _build_pie_figure(
+            source, "first", "second", None, "sum", 550, None, "plotly"
+        )
+
+        self.assertIsNone(figure)
+        self.assertIn("не более одного числового столбца", error)
+
     def test_ridge_builds_one_svg_density_per_category(self):
         source = pd.DataFrame({
             "depth": [100, 110, 120, 200, 210, 220],
@@ -568,6 +647,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "tick-step-xaxis",
             "tick-step-yaxis",
             "graph-settings-reset",
+            "test-setting-pie_aggregation",
         }
         self.assertTrue(expected_ids.issubset(component_ids))
 

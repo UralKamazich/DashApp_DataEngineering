@@ -321,6 +321,21 @@ dropdown_overlay = dmc.Select(
     data=["overlay", "stack", "relative", "group"],
     clearable=False, persistence=True
 )
+dropdown_pie_aggregation = dmc.Select(
+    id="dropdown_pie_aggregation",
+    label="Круговая: агрегация",
+    description="Для пары категория + число",
+    value="sum",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
+    data=[
+        {"value": "sum", "label": "Сумма"},
+        {"value": "mean", "label": "Среднее"},
+        {"value": "count", "label": "Количество"},
+    ],
+    clearable=False,
+    persistence=True,
+)
 dropdown_legend = dmc.Select(
     id="dropdown_legend",
     label="Положение",
