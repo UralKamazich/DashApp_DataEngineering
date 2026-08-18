@@ -3,8 +3,26 @@
 Callbacks: переключение страниц и подсветка навигации.
 """
 
-from dash import Output, Input
+from dash import Output, Input, State, no_update
 from dash_app import app
+from components import dropdown_chart_type
+
+
+MAIN_CHART_TYPES = {item["value"] for item in dropdown_chart_type.data}
+
+
+def _normalize_main_chart_type(value):
+    return value if value in MAIN_CHART_TYPES else "Scatter"
+
+
+@app.callback(
+    Output("segmented", "value"),
+    Input("url", "pathname"),
+    State("segmented", "value"),
+)
+def normalize_main_chart_type(_pathname, current_value):
+    normalized = _normalize_main_chart_type(current_value)
+    return no_update if normalized == current_value else normalized
 
 
 # ============ Переключение страниц + подсветка активной ссылки (клиентский колбэк) ============

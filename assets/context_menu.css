@@ -395,6 +395,58 @@
     transform: scale(1.02);
 }
 
+/* Компактный выбор каналов на странице корреляций. */
+.correlation-channel-drop {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 4px 6px 5px;
+    border: 1px dashed transparent;
+    border-radius: 8px;
+    transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.correlation-channel-drop.dnd-active {
+    background: rgba(231, 245, 255, 0.72);
+    border-color: rgba(34, 139, 230, 0.65);
+}
+
+.correlation-channel-drop.zone-hover {
+    background: #e7f5ff;
+    border-color: #228be6;
+    box-shadow: 0 0 0 2px rgba(34, 139, 230, 0.22);
+}
+
+.correlation-channel-drop.zone-rejected {
+    background: #fff5f5;
+    border-color: #fa5252;
+    cursor: not-allowed;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-input {
+    box-sizing: border-box;
+    min-height: 34px !important;
+    height: 34px;
+    overflow: hidden;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-pillsList {
+    height: 32px;
+    flex-wrap: nowrap;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-pillsList::-webkit-scrollbar {
+    display: none;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-inputField {
+    min-width: 76px;
+    flex: 0 0 76px;
+}
+
 .graph-drop-zone--axis-x {
     position: absolute;
     right: 12%;

@@ -41,7 +41,10 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
         ),
         className="column-badge",
         draggable="true",
-        **{"data-column-name": str(col_name)},
+        **{
+            "data-column-name": str(col_name),
+            "data-column-type": col_type,
+        },
         style={"cursor": "grab", "marginBottom": "2px"},
     )
 
@@ -124,6 +127,12 @@ dropdown_facet_col = create_dropdown("dropdown_facet_col", [], None, clearable=T
 
 dropdown_hover_data = create_multiselect("dropdown_hover_data", [], value=[], clearable=True)
 dropdown_corr_columns = create_multiselect("dropdown_corr_columns", [], value=[], clearable=True)
+dropdown_corr_columns.className = "correlation-channels-select"
+dropdown_corr_columns.style = {
+    **dropdown_corr_columns.style,
+    "width": "100%",
+    "maxWidth": "100%",
+}
 
 # =========================
 # Cluster / Data Engineering колонки
@@ -252,7 +261,6 @@ dropdown_chart_type = dmc.Select(
         {"value": "Polar", "label": "Треугольный график"},
         {"value": "Hist", "label": "Гистограмма"},
         {"value": "Pie", "label": "Круговая диаграмма"},
-        {"value": "Correlation", "label": "Коррелограмма"},
         {"value": "Violin", "label": "Violin"},
         {"value": "Ridge", "label": "Ridge Plot"},
         {"value": "ScatterMatrix",   "label": "Scatter Matrix"},

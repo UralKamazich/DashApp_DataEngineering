@@ -9,6 +9,7 @@ from dash import Dash, Input, dcc, html
 
 from app import app
 from callbacks.dropdowns import _select_options
+from callbacks.modals import _normalize_main_chart_type
 from callbacks.graph import (
     Y_ONLY_CHART_TYPES,
     _build_pie_figure,
@@ -17,8 +18,9 @@ from callbacks.graph import (
     _primary_axis_errors,
     update_main_graph,
 )
-from components import make_column_badge
+from components import dropdown_chart_type, make_column_badge
 from config import APP_NAME, APP_TITLE, APP_VERSION
+from correlation_workspace import _build_correlation_figures
 from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
 from utils import meta_from_df, read_df_from_store
@@ -99,6 +101,35 @@ class DashApplicationSmokeTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertTrue((assets / filename).is_file())
 
+    def test_correlation_is_a_separate_analysis_page(self):
+        chart_values = {item["value"] for item in dropdown_chart_type.data}
+        self.assertNotIn("Correlation", chart_values)
+
+        components = list(walk_components(app.layout))
+        correlation_page = next(
+            component for component in components
+            if getattr(component, "id", None) == "page-correlation"
+        )
+        correlation_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(correlation_page)
+        }
+        self.assertIn("correlation-matrix", correlation_ids)
+        self.assertIn("correlation-bar-primary", correlation_ids)
+        self.assertIn("correlation-bar-secondary", correlation_ids)
+        self.assertIn("correlation-columns-drop", correlation_ids)
+        self.assertNotIn("graph", correlation_ids)
+        drop_target = next(
+            component for component in walk_components(correlation_page)
+            if getattr(component, "id", None) == "correlation-columns-drop"
+        )
+        drop_props = drop_target.to_plotly_json()["props"]
+        self.assertEqual(drop_props["data-drop-target"], "dropdown_corr_columns")
+        self.assertEqual(drop_props["data-drop-mode"], "append")
+        self.assertEqual(drop_props["data-accept-type"], "numeric")
+        self.assertEqual(_normalize_main_chart_type("Correlation"), "Scatter")
+        self.assertEqual(_normalize_main_chart_type("Pie"), "Pie")
+
 
 class DataStoreRoundTripTests(unittest.TestCase):
     def test_dataframe_metadata_and_datetime_round_trip(self):
@@ -128,6 +159,10 @@ class ColumnBadgeTests(unittest.TestCase):
     def test_badge_uses_width_constrained_shell(self):
         badge_shell = make_column_badge("Очень длинное название столбца", "numeric")
         self.assertEqual(badge_shell.className, "column-badge")
+        self.assertEqual(
+            badge_shell.to_plotly_json()["props"]["data-column-type"],
+            "numeric",
+        )
 
         badge = next(
             component
@@ -147,6 +182,56 @@ class DropdownOptionTests(unittest.TestCase):
                 {"label": "1", "value": "1"},
             ],
         )
+
+
+class CorrelationAnalysisTests(unittest.TestCase):
+    def test_spearman_detects_monotonic_relationship(self):
+        source = pd.DataFrame({
+            "x": [1, 2, 3, 4, 5, 6],
+            "curved": [1, 4, 9, 16, 25, 36],
+        })
+
+        pearson, *_ = _build_correlation_figures(
+            source, ["x", "curved"], "pearson", 2, "plotly"
+        )
+        spearman, first_bar, second_bar, status, error = _build_correlation_figures(
+            source, ["x", "curved"], "spearman", 2, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertLess(pearson.data[0].z[0][1], 1.0)
+        self.assertAlmostEqual(spearman.data[0].z[0][1], 1.0)
+        self.assertIn("Спирмен", status)
+        self.assertEqual(list(first_bar.layout.xaxis.range), [-1.05, 1.05])
+        self.assertEqual(list(second_bar.layout.xaxis.range), [-1.05, 1.05])
+
+    def test_matrix_hover_contains_pairwise_observation_counts(self):
+        source = pd.DataFrame({
+            "x": [1.0, 2.0, 3.0, None],
+            "y": [1.0, None, 3.0, 4.0],
+        })
+
+        matrix, *_ = _build_correlation_figures(
+            source, ["x", "y"], "pearson", 2, "plotly"
+        )
+
+        self.assertEqual(matrix.data[0].customdata[0][1], 2)
+        self.assertIn("Совместных наблюдений", matrix.data[0].hovertemplate)
+
+    def test_constant_columns_are_excluded_from_analysis(self):
+        source = pd.DataFrame({
+            "x": [1, 2, 3, 4],
+            "y": [4, 3, 2, 1],
+            "constant": [7, 7, 7, 7],
+        })
+
+        matrix, _first, _second, status, error = _build_correlation_figures(
+            source, ["x", "constant", "y"], "pearson", 2, "plotly"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(list(matrix.data[0].x), ["x", "y"])
+        self.assertIn("Исключено столбцов: 1", status)
 
 
 class GraphAxisValidationTests(unittest.TestCase):
@@ -357,7 +442,6 @@ class GraphAxisValidationTests(unittest.TestCase):
             view_revision=0,
             filtered_json=source.to_json(date_format="iso", orient="split"),
             hover_cols=None,
-            corr_cols=None,
             facet_row=None,
             facet_col=None,
             filters_state={},
@@ -417,7 +501,6 @@ class GraphAxisValidationTests(unittest.TestCase):
                 view_revision=0,
                 filtered_json=source.to_json(date_format="iso", orient="split"),
                 hover_cols=[],
-                corr_cols=None,
                 facet_row=None,
                 facet_col=None,
                 filters_state={},
@@ -468,7 +551,6 @@ class GraphAxisValidationTests(unittest.TestCase):
             view_revision=1,
             filtered_json=source.to_json(date_format="iso", orient="split"),
             hover_cols=[],
-            corr_cols=None,
             facet_row=None,
             facet_col=None,
             filters_state={},

@@ -6,6 +6,7 @@
   let draggedBadge = null;
   let datasetColumns = [];
   let sortColumns = false;
+  const dropTargetSelector = ".graph-drop-zone, .correlation-channel-drop";
 
   function readZoneValue(zone) {
     try {
@@ -222,6 +223,18 @@
         });
       }
     });
+    document.querySelectorAll(".correlation-channel-drop").forEach(function (target) {
+      target.classList.toggle("dnd-active", active);
+      if (!active) {
+        target.classList.remove("zone-hover", "zone-rejected");
+      }
+    });
+  }
+
+  function acceptsDraggedColumn(zone) {
+    const acceptedType = zone.getAttribute("data-accept-type");
+    if (!acceptedType) return true;
+    return draggedBadge?.getAttribute("data-column-type") === acceptedType;
   }
 
   function setDroppedField(zone, columnName) {
@@ -272,31 +285,36 @@
     });
 
     document.addEventListener("dragover", function (event) {
-      const zone = event.target.closest(".graph-drop-zone");
+      const zone = event.target.closest(dropTargetSelector);
       if (!zone) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = "copy";
+      const accepted = acceptsDraggedColumn(zone);
+      event.dataTransfer.dropEffect = accepted ? "copy" : "none";
       const workspace = zone.closest(".graph-workspace");
-      workspace.querySelectorAll(".zone-hover").forEach(function (item) {
-        if (item !== zone) item.classList.remove("zone-hover");
+      const scope = workspace || zone.parentElement || document;
+      scope.querySelectorAll(".zone-hover, .zone-rejected").forEach(function (item) {
+        if (item !== zone) item.classList.remove("zone-hover", "zone-rejected");
       });
-      zone.classList.add("zone-hover");
+      zone.classList.toggle("zone-hover", accepted);
+      zone.classList.toggle("zone-rejected", !accepted);
     });
 
     document.addEventListener("dragleave", function (event) {
-      const zone = event.target.closest(".graph-drop-zone");
+      const zone = event.target.closest(dropTargetSelector);
       if (!zone) return;
       if (!event.relatedTarget || !zone.contains(event.relatedTarget)) {
-        zone.classList.remove("zone-hover");
+        zone.classList.remove("zone-hover", "zone-rejected");
       }
     });
 
     document.addEventListener("drop", function (event) {
-      const zone = event.target.closest(".graph-drop-zone");
+      const zone = event.target.closest(dropTargetSelector);
       if (!zone) return;
       event.preventDefault();
       event.stopPropagation();
-      setDroppedField(zone, event.dataTransfer.getData("text/plain"));
+      if (acceptsDraggedColumn(zone)) {
+        setDroppedField(zone, event.dataTransfer.getData("text/plain"));
+      }
       if (draggedBadge) draggedBadge.classList.remove("column-badge--dragging");
       draggedBadge = null;
       setDragging(false);

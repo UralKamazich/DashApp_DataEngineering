@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks: основной график (update_main_graph) и нижние графики (update_lower_graphs).
+Callbacks: основной график и диагностические графики кластеризации.
 """
 
 import logging
@@ -469,7 +469,6 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
 
     State("filtered-data", "data"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_hover_data"], "value"),
-    State("dropdown_corr_columns", "value"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_row"], "value"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_col"], "value"),
     State("filters-state", "data"),
@@ -494,7 +493,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
 def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_col, dropdown_text_pozition,
                       chart_type, bubble, MaxSizeBubble, height, width, selected_style, bar_text_auto,
                       view_revision,
-                      filtered_json, hover_cols, corr_cols, facet_row, facet_col, filters_state,
+                      filtered_json, hover_cols, facet_row, facet_col, filters_state,
                       xaxis_font_size, yaxis_font_size, font_size_ticks, title_font_size,
                       dropdown_sort_column, axes_category, dropdown_overlay, legend, custom_colors,
                       tick_step_x, tick_step_y, legend_order, legend_custom_order, meta,
@@ -639,36 +638,6 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             )
             if pie_error:
                 return empty, _make_error_notif(pie_error)
-
-        elif chart_type == "Correlation":
-            numeric_cols_all = (meta.get("numeric") or [])
-            use_cols = [c for c in (corr_cols or numeric_cols_all) if c in numeric_cols_all]
-            if use_cols:
-                MAX_CORR_COLS = 50
-                use_cols = use_cols[:MAX_CORR_COLS]
-                corr_df = plot_df[use_cols].select_dtypes(include=[np.number]).dropna(how="all")
-                if not corr_df.empty and corr_df.shape[1] >= 2:
-                    corr_matrix = corr_df.corr().round(2)
-                    fig = go.Figure(go.Heatmap(
-                        z=corr_matrix.values, x=corr_matrix.columns, y=corr_matrix.columns,
-                        colorscale='RdBu', zmin=-1, zmax=1,
-                        text=corr_matrix.values, texttemplate="%{text}"
-                    ))
-                    fig.update_layout(
-                        title='Корреляционная матрица',
-                        xaxis=dict(tickangle=-45),
-                        height=height, width=width, template=selected_style
-                    )
-                    fig.update_xaxes(automargin=True)
-                    fig.update_yaxes(automargin=True)
-                    try:
-                        _sort_legend_traces(fig, legend_order, legend_custom_order)
-                    except Exception as _e:
-                        logger.warning(f"Сортировка легенды пропущена: {_e}")
-                else:
-                    fig = _empty_fig()
-            else:
-                fig = _empty_fig()
 
         elif chart_type == "Violin":
             fig = px.violin(
@@ -843,113 +812,23 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         return empty, notif
 
 
-# ============ Нижние графики ============
+# ============ Метрики кластеризации ============
 @app.callback(
-    Output("corr-bar-x", "figure"),
-    Output("corr-bar-y", "figure"),
-    Output("corr-bars-section", "style"),
+    Output("cluster-elbow-graph", "figure"),
+    Output("cluster-silhouette-graph", "figure"),
+    Output("cluster-metrics-section", "style"),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
-
-    Input(GRAPH_WORKSPACE.ids["update"], "n_clicks"),
-    Input(GRAPH_WORKSPACE.chart_type_id, "value"),
-    State("dropdown_corr_columns", "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_x"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_y"], "value"),
     Input("cluster-metrics", "data"),
-
-    State("filtered-data", "data"),
     State("dropdown_style", "value"),
-    State("meta-columns", "data"),
-
     prevent_initial_call=True
 )
-def update_lower_graphs(n_clicks_graf, chart_type, corr_cols, x_col, y_col, cluster_metrics,
-                        filtered_json, selected_style, meta):
+def update_cluster_metric_graphs(cluster_metrics, selected_style):
 
     empty = _empty_fig()
-    SHOW  = {"opacity": 1, "pointerEvents": "auto", "height": "auto", "overflow": "visible", "transition": "opacity 150ms ease"}
-    HIDE  = {"opacity": 0, "pointerEvents": "none", "height": "auto", "overflow": "visible"}
+    SHOW = {"display": "block"}
+    HIDE = {"display": "none"}
 
     try:
-        if not filtered_json:
-            return empty, empty, HIDE, []
-
-        dff = read_df_from_store(filtered_json, meta)
-        if dff is None or dff.empty:
-            return empty, empty, HIDE, []
-
-        def build_corr_bar(corr_matrix: pd.DataFrame, target: str, title_text: str) -> go.Figure:
-            if not target or target not in corr_matrix.columns:
-                return empty
-            s = corr_matrix[target].drop(labels=[target], errors="ignore").sort_values(ascending=False)
-            if s.empty:
-                return empty
-            df_bar = s.reset_index().rename(columns={"index": "Параметр", target: "Корреляция"})
-            n = len(df_bar); per_row = 26; padding = 140
-            dyn_height = max(220, min(1400, per_row * max(1, n) + padding))
-            bar = px.bar(
-                df_bar, x="Корреляция", y="Параметр", orientation="h",
-                title=title_text, template=selected_style, text="Корреляция",
-                height=dyn_height
-            )
-            xmin = float(s.min()); xmax = float(s.max())
-            if xmin == xmax:
-                pad = max(0.1, abs(xmin) * 0.1)
-                xmin -= pad; xmax += pad
-            span = xmax - xmin
-            pad = max(0.05 * span, 0.02)
-            bar.update_xaxes(
-                range=[xmin - pad, xmax + pad],
-                showticklabels=True, ticks="outside",
-                tickformat=".1f", automargin=True,
-                zeroline=(xmin - pad < 0 < xmax + pad), zerolinewidth=1
-            )
-            bar.update_layout(yaxis_title=None)
-            bar.update_yaxes(automargin=True)
-            bar.update_traces(texttemplate="%{x:.2f}", textposition="auto", cliponaxis=False)
-            return bar
-
-        if chart_type == "Correlation":
-            numeric_cols_all = (meta.get("numeric") or [])
-            if corr_cols and len(corr_cols) > 0:
-                cand = list(dict.fromkeys(list(corr_cols) + ([x_col] if x_col else []) + ([y_col] if y_col else [])))
-            else:
-                cand = list(dict.fromkeys(([x_col] if x_col else []) + ([y_col] if y_col else []) + list(numeric_cols_all)))
-
-            cand = [c for c in cand if c and c in dff.columns]
-            use_cols = [c for c in cand if c in numeric_cols_all]
-
-            if len(use_cols) < 2:
-                for c in numeric_cols_all:
-                    if c in dff.columns and c not in use_cols:
-                        use_cols.append(c)
-                        if len(use_cols) >= 2:
-                            break
-
-            MAX_CORR_COLS = 50
-            use_cols = use_cols[:MAX_CORR_COLS]
-
-            if len(use_cols) >= 2:
-                corr_df = dff[use_cols].select_dtypes(include=[np.number]).dropna(how="all")
-                if not corr_df.empty and corr_df.shape[1] >= 2:
-                    corr_matrix = corr_df.corr().round(2)
-
-                    targets_order = []
-                    for cand_t in [x_col, y_col] + use_cols:
-                        if cand_t and cand_t not in targets_order and cand_t in corr_matrix.columns:
-                            targets_order.append(cand_t)
-
-                    t0 = targets_order[0] if len(targets_order) >= 1 else None
-                    t1 = targets_order[1] if len(targets_order) >= 2 else None
-
-                    corr_bar_x_fig = build_corr_bar(corr_matrix, t0, f"Корреляции с {t0}" if t0 else "")
-                    corr_bar_y_fig = build_corr_bar(corr_matrix, t1, f"Корреляции с {t1}" if t1 else "")
-
-                    has_any = (len(corr_bar_x_fig.data or []) > 0) or (len(corr_bar_y_fig.data or []) > 0)
-                    return corr_bar_x_fig if has_any else empty, corr_bar_y_fig if has_any else empty, (SHOW if has_any else HIDE), []
-
-            return empty, empty, HIDE, []
-
         aux1, aux2 = empty, empty
         if isinstance(cluster_metrics, dict):
             try:
@@ -971,6 +850,6 @@ def update_lower_graphs(n_clicks_graf, chart_type, corr_cols, x_col, y_col, clus
         return aux1 if has_any else empty, aux2 if has_any else empty, (SHOW if has_any else HIDE), []
 
     except Exception as e:
-        logger.error(f"Ошибка при построении нижних графиков: {e}", exc_info=True)
-        notif = _make_error_notif(f"Ошибка в нижних графиках: {str(e)}")
+        logger.error(f"Ошибка при построении метрик кластеризации: {e}", exc_info=True)
+        notif = _make_error_notif(f"Ошибка в метриках кластеризации: {str(e)}")
         return empty, empty, HIDE, notif

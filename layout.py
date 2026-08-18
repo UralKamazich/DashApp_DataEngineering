@@ -9,7 +9,8 @@ import dash
 from dash import dcc, html
 import dash_mantine_components as dmc
 
-from config import APP_NAME, STYLE_CARD, PAPER_BASE, initial_fig
+from config import APP_NAME, STYLE_CARD
+from correlation_workspace import CorrelationWorkspace
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
@@ -35,7 +36,7 @@ from components import (
 # Навигационные ссылки
 NAV_LINKS = [
     {"label": "График", "href": "/"},
-    {"label": "Коррелограмма", "href": "/correlation"},
+    {"label": "Корреляционный анализ", "href": "/correlation"},
     {"label": "Data Engineering", "href": "/data-engineering"},
     {"label": "Кластеризация", "href": "/clustering"},
     {"label": "ML", "href": "/ml"},
@@ -95,9 +96,12 @@ GRAPH_WORKSPACE = GraphWorkspace(
     action_ids=LEGACY_GRAPH_ACTION_IDS,
 )
 
+CORRELATION_WORKSPACE = CorrelationWorkspace(dropdown_corr_columns)
+
 
 def create_layout():
     graph_workspace = GRAPH_WORKSPACE.render()
+    correlation_workspace = CORRELATION_WORKSPACE.render()
 
     return dmc.MantineProvider(
         children=[
@@ -205,38 +209,18 @@ def create_layout():
                 html.Div(
                     style={"flex": "1", "overflow": "auto", "minWidth": "0"},
                     children=[
-                    graph_workspace,
-
-                    # Фильтры под графиком
-                    dmc.Paper([
-                        html.Center(dmc.Text("Фильтры", c="black", size="sm")),
-                        html.Div(id="filters-container", children=[]),
-                        dmc.Space(h=10),
-                        add_filter_button
-                    ], style={**STYLE_CARD, "marginTop": "8px"}, shadow="sm", p="md", withBorder=True),
-
-                    # Графики корреляций / метрик кластеризации
-                    html.Div(id="corr-bars-section", children=[
+                    html.Div(id="page-graph", children=[
+                        graph_workspace,
                         dmc.Paper([
-                            dmc.Grid([
-                                dmc.GridCol([dcc.Graph(id="corr-bar-x", config={'displaylogo': False, 'responsive': True})], span=6),
-                                dmc.GridCol([dcc.Graph(id="corr-bar-y", config={'displaylogo': False, 'responsive': True})], span=6),
-                            ])
-                        ], style={**STYLE_CARD, "overflow": "visible"}, shadow="md", p="md", withBorder=True),
-                    ], style={**PAPER_BASE, "visibility": "hidden"}),
-
-                    # --- Остальные страницы (перенесены из средней панели) ---
-                    html.Div(id="page-graph"),
+                            html.Center(dmc.Text("Фильтры", c="black", size="sm")),
+                            html.Div(id="filters-container", children=[]),
+                            dmc.Space(h=10),
+                            add_filter_button
+                        ], style={**STYLE_CARD, "marginTop": "8px"}, shadow="sm", p="md", withBorder=True),
+                    ]),
 
                     html.Div(id="page-correlation", style={"display": "none"}, children=[
-                        dmc.Paper([
-                            dmc.Text("Корреляционный анализ", fw=600, size="md"),
-                            dmc.Space(h=8),
-                            dmc.Text("Корреляц. столбцы", c="blue", fw=500, size="sm"),
-                            dropdown_corr_columns,
-                            dmc.Space(h=10),
-                            dmc.Text("Выберите столбцы для расчёта корреляционной матрицы.", size="xs", c="dimmed"),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
+                        correlation_workspace,
                     ]),
 
                     html.Div(id="page-data-engineering", style={"display": "none"}, children=[
@@ -299,6 +283,14 @@ def create_layout():
                                 dmc.GridCol([dmc.Button("Кластеризация", id="btn-cluster", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
                             ]),
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
+                        html.Div(id="cluster-metrics-section", children=[
+                            dmc.Paper([
+                                dmc.Grid([
+                                    dmc.GridCol([dcc.Graph(id="cluster-elbow-graph", config={'displaylogo': False, 'responsive': True})], span=6),
+                                    dmc.GridCol([dcc.Graph(id="cluster-silhouette-graph", config={'displaylogo': False, 'responsive': True})], span=6),
+                                ])
+                            ], style={**STYLE_CARD, "overflow": "visible", "marginTop": "8px"}, shadow="md", p="md", withBorder=True),
+                        ], style={"display": "none"}),
                     ]),
 
                     html.Div(id="page-ml", style={"display": "none"}, children=[
