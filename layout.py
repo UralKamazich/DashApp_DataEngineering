@@ -10,6 +10,7 @@ from dash import dcc, html
 import dash_mantine_components as dmc
 
 from config import STYLE_CARD, PAPER_BASE, initial_fig
+from graph_workspace import GraphWorkspace
 from components import (
     dropdown_style,
     dropdown_x, dropdown_y, dropdown_z,
@@ -61,6 +62,22 @@ def make_nav_link(label, href):
 
 
 def create_layout():
+    graph_workspace = GraphWorkspace(
+        graph_id="graph",
+        chart_type_control=dropdown_chart_type,
+        field_controls={
+            "dropdown_x": dropdown_x,
+            "dropdown_y": dropdown_y,
+            "dropdown_z": dropdown_z,
+            "dropdown_color": dropdown_color,
+            "dropdown_size": dropdown_size,
+            "dropdown_text": dropdown_text,
+            "dropdown_facet_row": dropdown_facet_row,
+            "dropdown_facet_col": dropdown_facet_col,
+            "dropdown_hover_data": dropdown_hover_data,
+        },
+    ).render()
+
     return dmc.MantineProvider(
         children=[
             html.Div(
@@ -114,9 +131,6 @@ def create_layout():
 
             dmc.NotificationContainer(id="notifications-container"),
             copy_trigger,
-
-            # Скрытая кнопка для контекстного меню (правый клик на графике)
-            html.Button("ctx", id="context-menu-btn", style={"display": "none"}),
 
             # ========================
             # HEADER (фиксированный сверху)
@@ -193,156 +207,7 @@ def create_layout():
                 html.Div(
                     style={"flex": "1", "overflow": "auto", "minWidth": "0"},
                     children=[
-                    # Строка: Тип графика (фикс) + X Y Z dropdowns (оставшееся пространство)
-                    html.Div(
-                        style={"display": "flex", "alignItems": "center", "gap": "8px", "marginBottom": "8px"},
-                        children=[
-                            # Тип графика — фиксированная ширина
-                            dmc.Group([
-                                dmc.Text("Тип графика", size="sm", fw=500, c="dimmed"),
-                                dropdown_chart_type,
-                            ], gap="xs", align="center", wrap="nowrap", style={"flexShrink": "0"}),
-                            # X dropdown
-                            dmc.Group([
-                                dmc.Text("X", c="blue", fw=600, size="sm", style={"minWidth": "16px"}),
-                                html.Div(
-                                    dropdown_x,
-                                    id="drop-zone-x",
-                                    **{"data-drop-target": "dropdown_x"},
-                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "36px", "flex": "1"}
-                                ),
-                            ], gap="xs", align="center", style={"flex": "1", "minWidth": "0"}),
-                            # Y dropdown
-                            dmc.Group([
-                                dmc.Text("Y", c="blue", fw=600, size="sm", style={"minWidth": "16px"}),
-                                html.Div(
-                                    dropdown_y,
-                                    id="drop-zone-y",
-                                    **{"data-drop-target": "dropdown_y"},
-                                    style={"border": "2px dashed transparent", "borderRadius": "6px", "padding": "4px", "transition": "border-color 0.2s", "minHeight": "36px", "flex": "1"}
-                                ),
-                            ], gap="xs", align="center", style={"flex": "1", "minWidth": "0"}),
-                            # Z dropdown
-                            dmc.Group([
-                                dmc.Text("Z", c="blue", fw=600, size="sm", style={"minWidth": "16px"}),
-                                html.Div(
-                                    dropdown_z,
-                                    style={"flex": "1"}
-                                ),
-                            ], gap="xs", align="center", style={"flex": "1", "minWidth": "0"}),
-                        ],
-                    ),
-
-                    dmc.Paper([
-                        html.Div(
-                            style={"position": "relative"},
-                            children=[
-                                dcc.Loading(
-                                    dcc.Graph(figure={}, id="graph", config={
-                                        'displaylogo': False,
-                                        'modeBarButtonsToRemove': [],
-                                        'modeBarButtonsToAdd': ['fullscreen'],
-                                        'displayModeBar': True,
-                                        'scrollZoom': True
-                                    }),
-                                    type="default"
-                                ),
-                                # Drop-зоны (скрыты, появляются только при drag)
-                                html.Div(
-                                    html.Span("X", id="zone-label-x"),
-                                    **{"data-drop-target": "dropdown_x", "className": "graph-drop-zone"}, style={
-                                    "display": "none",
-                                    "position": "absolute", "bottom": "0", "left": "110px", "right": "60px",
-                                    "height": "24px", "zIndex": "5",
-                                    "background": "rgba(33,150,243,0.06)",
-                                    "border": "1px solid rgba(33,150,243,0.35)",
-                                    "color": "rgba(33,150,243,0.5)",
-                                    "alignItems": "center", "justifyContent": "center",
-                                    "fontWeight": "bold", "fontSize": "11px",
-                                    "borderRadius": "4px",
-                                    "overflow": "hidden", "textOverflow": "ellipsis",
-                                }),
-                                html.Div(
-                                    html.Span("Y", id="zone-label-y"),
-                                    **{"data-drop-target": "dropdown_y", "className": "graph-drop-zone"}, style={
-                                    "display": "none",
-                                    "position": "absolute", "top": "60px", "left": "0", "bottom": "70px",
-                                    "width": "28px", "zIndex": "5",
-                                    "background": "rgba(33,150,243,0.06)",
-                                    "border": "1px solid rgba(33,150,243,0.35)",
-                                    "color": "rgba(33,150,243,0.5)",
-                                    "alignItems": "center", "justifyContent": "center",
-                                    "fontWeight": "bold", "fontSize": "11px",
-                                    "writingMode": "vertical-rl", "textOrientation": "mixed",
-                                    "borderRadius": "4px",
-                                    "overflow": "hidden", "textOverflow": "ellipsis",
-                                }),
-                                html.Div(
-                                    html.Span("Color", id="zone-label-color"),
-                                    **{"data-drop-target": "dropdown_color", "className": "graph-drop-zone"}, style={
-                                    "display": "none",
-                                    "position": "absolute", "right": "4px",
-                                    "top": "25%", "height": "50%",
-                                    "width": "28px", "zIndex": "5",
-                                    "background": "rgba(33,150,243,0.06)",
-                                    "border": "1px solid rgba(33,150,243,0.35)",
-                                    "color": "rgba(33,150,243,0.5)",
-                                    "alignItems": "center", "justifyContent": "center",
-                                    "fontWeight": "bold", "fontSize": "11px",
-                                    "writingMode": "vertical-rl", "textOrientation": "mixed",
-                                    "borderRadius": "4px",
-                                    "overflow": "hidden", "textOverflow": "ellipsis",
-                                }),
-                                html.Div(
-                                    html.Span("Size", id="zone-label-size"),
-                                    **{"data-drop-target": "dropdown_size", "className": "graph-drop-zone"}, style={
-                                    "display": "none",
-                                    "position": "absolute", "top": "8px", "left": "38px",
-                                    "padding": "6px 14px", "zIndex": "5",
-                                    "background": "rgba(33,150,243,0.06)",
-                                    "border": "1px solid rgba(33,150,243,0.35)",
-                                    "color": "rgba(33,150,243,0.5)",
-                                    "fontWeight": "bold", "fontSize": "12px",
-                                    "borderRadius": "4px",
-                                    "overflow": "hidden", "textOverflow": "ellipsis",
-                                    "whiteSpace": "nowrap",
-                                }),
-                                html.Div(
-                                    html.Span("Подпись", id="zone-label-text"),
-                                    **{"data-drop-target": "dropdown_text", "className": "graph-drop-zone"}, style={
-                                    "display": "none",
-                                    "position": "absolute", "top": "8px", "left": "110px",
-                                    "padding": "6px 14px", "zIndex": "5",
-                                    "background": "rgba(33,150,243,0.06)",
-                                    "border": "1px solid rgba(33,150,243,0.35)",
-                                    "color": "rgba(33,150,243,0.5)",
-                                    "fontWeight": "bold", "fontSize": "12px",
-                                    "borderRadius": "4px",
-                                    "overflow": "hidden", "textOverflow": "ellipsis",
-                                    "whiteSpace": "nowrap",
-                                }),
-                            ]
-                        ),
-                    ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-
-                    # Drop-зоны Color / Size / Text / Facet + Hover под графиком
-                    dmc.Paper([
-                        dmc.Grid([
-                            dmc.GridCol([html.Center(dmc.Text("Группировка", c="blue", fw=500, size="sm")), dropdown_color], span=4, style={"minWidth": 0}),
-                            dmc.GridCol([html.Center(dmc.Text("Размер пузыpя", c="blue", fw=500, size="sm")), dropdown_size], span=4, style={"minWidth": 0}),
-                            dmc.GridCol([html.Center(dmc.Text("Подпись", c="blue", fw=500, size="sm")), dropdown_text], span=4, style={"minWidth": 0}),
-                        ]),
-                        dmc.Grid([
-                            dmc.GridCol([html.Center(dmc.Text("Facet Row", c="blue", fw=500, size="sm")), dropdown_facet_row], span=6, style={"minWidth": 0}),
-                            dmc.GridCol([html.Center(dmc.Text("Facet Col", c="blue", fw=500, size="sm")), dropdown_facet_col], span=6, style={"minWidth": 0}),
-                        ]),
-                        dmc.Grid([
-                            dmc.GridCol([html.Center(dmc.Text("Hover Data", c="blue", fw=500, size="sm")), dropdown_hover_data], span=12, style={"minWidth": 0}),
-                        ]),
-                        dmc.Space(h=6),
-                        dmc.Divider(label="Настройки графика"),
-                        dmc.Text("Bubble, подписи, шрифты — в панели настроек (⚙).", size="xs", c="dimmed"),
-                    ], style={**STYLE_CARD, "marginTop": "8px"}, shadow="sm", p="md", withBorder=True),
+                    graph_workspace,
 
                     # Фильтры под графиком
                     dmc.Paper([
@@ -533,10 +398,8 @@ def create_layout():
 
             # --- Скрытые триггеры для контекстного меню графика ---
             html.Div(style={"display": "none"}, children=[
-                html.Button("refresh", id="update-graf"),
                 html.Button("download-html", id="download-button"),
                 html.Button("download-excel", id="download-excel-button"),
-                html.Button("copy-png", id="copy-png-button"),
                 html.Button("shuffle", id="shuffle-button"),
                 dcc.Download(id="download-file"),
                 dcc.Download(id="download-excel"),

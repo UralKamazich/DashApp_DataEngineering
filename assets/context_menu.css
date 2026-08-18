@@ -90,36 +90,231 @@
     border-color: #555;
 }
 
-/* ===== Drop-зоны графика ===== */
+/* ===== GraphWorkspace ===== */
 
-/* Базовое состояние дроп-зон */
-[data-drop-target] {
-    cursor: copy;
-    transition: background-color 0.15s, border 0.15s, box-shadow 0.15s;
+.graph-workspace-shell {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 
-/* Текст внутри зон — усечение */
-[data-drop-target] > span {
+.graph-workspace {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
+    background: var(--mantine-color-body, #fff);
+}
+
+.graph-workspace-loading,
+.graph-workspace-loading > div,
+.graph-workspace-plot,
+.graph-workspace-plot .js-plotly-plot,
+.graph-workspace-plot .plot-container {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Панель является sibling графика и не входит в Plotly export. */
+.graph-workspace-toolbar {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 5px;
+    border: 1px solid rgba(134, 142, 150, 0.3);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(8px);
+    opacity: 0.72;
+    transition: opacity 0.15s, box-shadow 0.15s;
+}
+
+.graph-workspace-toolbar:hover,
+.graph-workspace-toolbar:focus-within {
+    opacity: 1;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.13);
+}
+
+.graph-type-control {
+    width: 154px;
+}
+
+.graph-type-control .mantine-Select-input {
+    min-height: 30px;
+    height: 30px;
+    border: 0;
+    background: transparent;
+    font-size: 12px;
+}
+
+.graph-workspace-toolbar-separator {
+    width: 1px;
+    height: 22px;
+    margin: 0 3px;
+    background: rgba(134, 142, 150, 0.3);
+}
+
+.graph-toolbar-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    line-height: 1;
+}
+
+/* Настоящие dropdown остаются состоянием Dash, но не занимают место. */
+.graph-field-state {
+    display: none;
+}
+
+/* Слой целей полностью прозрачен и не блокирует Plotly до начала drag. */
+.graph-drop-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.14s ease;
+}
+
+.graph-workspace.dnd-active .graph-drop-layer {
+    visibility: visible;
+    opacity: 1;
+}
+
+.graph-drop-zone {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 96px;
+    min-height: 42px;
+    padding: 7px 10px;
+    overflow: hidden;
+    color: #1971c2;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px dashed rgba(34, 139, 230, 0.7);
+    border-radius: 9px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    pointer-events: none;
+    user-select: none;
+    transform: translateZ(0);
+    transition: background-color 0.12s, box-shadow 0.12s, transform 0.12s;
+}
+
+.graph-workspace.dnd-active .graph-drop-zone {
+    pointer-events: auto;
+    cursor: copy;
+}
+
+.graph-drop-zone-name {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.graph-drop-zone-value {
+    min-width: 0;
+    overflow: hidden;
+    color: #5c6770;
+    font-size: 11px;
+    font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 100%;
 }
 
-/* При наведении на график — зоны видимы, но не перехватывают мышь */
-.graph-hover .graph-drop-zone {
+.graph-drop-zone.has-value .graph-drop-zone-value {
+    color: #1864ab;
+}
+
+.graph-drop-zone.zone-hover {
+    background: #e7f5ff;
+    box-shadow: 0 0 0 2px #228be6, 0 8px 24px rgba(34, 139, 230, 0.22);
+    transform: scale(1.02);
+}
+
+.graph-drop-zone--axis-x {
+    position: absolute;
+    right: 12%;
+    bottom: 14px;
+    left: 12%;
+    justify-content: center;
+}
+
+.graph-drop-zone--axis-y {
+    position: absolute;
+    top: 25%;
+    bottom: 25%;
+    left: 12px;
+    width: 54px;
+    min-width: 54px;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.graph-drop-zone--axis-y .graph-drop-zone-value {
+    max-height: 150px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+}
+
+.graph-drop-secondary {
+    position: absolute;
+    top: 62px;
+    left: 50%;
+    display: flex;
+    width: min(880px, calc(100% - 150px));
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 7px;
+    transform: translateX(-50%);
+}
+
+.graph-drop-zone--secondary {
+    max-width: 150px;
+}
+
+.column-badge--dragging {
+    opacity: 0.42;
+}
+
+.column-drag-preview {
+    position: fixed;
+    top: -1000px;
+    left: -1000px;
+    z-index: 100000;
+    max-width: 220px;
+    padding: 7px 11px;
+    overflow: hidden;
+    color: #1864ab;
+    background: #e7f5ff;
+    border: 1px solid #74c0fc;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     pointer-events: none;
 }
 
-/* При перетаскивании — зоны активны */
-.drag-active .graph-drop-zone {
-    pointer-events: auto !important;
-    cursor: copy;
-}
+@media (max-width: 1000px) {
+    .graph-drop-secondary {
+        width: calc(100% - 90px);
+    }
 
-/* Подсветка зоны при наведении бейджа */
-.drag-active .graph-drop-zone.zone-hover {
-    background-color: rgba(33, 150, 243, 0.25) !important;
-    border: 3px solid rgba(33, 150, 243, 0.85) !important;
-    box-shadow: 0 0 8px rgba(33, 150, 243, 0.3) !important;
+    .graph-drop-zone--secondary {
+        min-width: 82px;
+        padding: 6px 8px;
+    }
 }
