@@ -1,0 +1,196 @@
+.filter-header-drop-target {
+    display: flex;
+    align-items: center;
+    border-radius: 7px;
+    transition: background-color 0.12s, box-shadow 0.12s;
+}
+
+.filter-panel-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding-inline: 9px;
+    color: #c1c2c5;
+    background: transparent;
+}
+
+.filter-panel-trigger:hover,
+.filter-panel-trigger.has-active-filters {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.filter-trigger-count {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    color: #adb5bd;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9px;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.has-active-filters .filter-trigger-count {
+    color: #ffffff;
+    background: #228be6;
+}
+
+.filter-drop-target.filter-dnd-active {
+    background: rgba(34, 139, 230, 0.16);
+    box-shadow: 0 0 0 2px rgba(116, 192, 252, 0.72);
+}
+
+.filter-drop-target.filter-drop-hover {
+    background: rgba(34, 139, 230, 0.24);
+    box-shadow: 0 0 0 2px #228be6;
+}
+
+.filters-drawer-content {
+    overflow: hidden;
+}
+
+.filters-drawer-header {
+    min-height: 54px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.filters-drawer-body {
+    height: calc(100dvh - 54px);
+    padding: 0;
+    overflow: hidden;
+}
+
+.filter-panel-shell {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    background: #f8f9fa;
+}
+
+.filter-panel-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.filter-panel-intro {
+    padding: 1px 2px 9px;
+}
+
+.filter-drawer-drop-zone {
+    display: flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-bottom: 10px;
+    color: #1c7ed6;
+    background: #f1f8ff;
+    border: 1px dashed #74c0fc;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.filter-cards {
+    display: grid;
+    gap: 8px;
+}
+
+.filter-card {
+    padding: 9px;
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 9px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035);
+}
+
+.filter-card-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.filter-card-column {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.filter-type-marker {
+    position: relative;
+    top: -4px;
+    min-width: 10px;
+    flex: 0 0 auto;
+    font: 800 7px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.04em;
+    text-align: right;
+}
+
+.filter-type-marker--numeric { color: #1971c2; }
+.filter-type-marker--categorical { color: #2b8a3e; }
+.filter-type-marker--datetime { color: #d9480f; }
+.filter-type-marker--unknown { color: #868e96; }
+
+.filter-card-control {
+    min-width: 0;
+    margin-top: 8px;
+}
+
+.filter-control-empty {
+    padding: 8px 4px 3px;
+    color: #adb5bd;
+    font-size: 10px;
+    text-align: center;
+}
+
+.filter-numeric-bounds,
+.filter-date-caption {
+    margin-bottom: 6px;
+    color: #868e96;
+    font-size: 9px;
+}
+
+.filter-empty-state {
+    display: none;
+    min-height: 150px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    padding: 24px;
+    color: #adb5bd;
+}
+
+.filter-cards:empty + .filter-empty-state {
+    display: flex;
+}
+
+.filter-panel-footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #ffffff;
+    border-top: 1px solid #e9ecef;
+    box-shadow: 0 -5px 18px rgba(0, 0, 0, 0.035);
+}
+
+.filter-results-summary {
+    min-width: 0;
+}
+
+@media (max-width: 700px) {
+    .filters-drawer-content {
+        width: min(400px, 94vw) !important;
+    }
+}

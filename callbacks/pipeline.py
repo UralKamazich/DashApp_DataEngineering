@@ -3,7 +3,7 @@
 Callbacks: конвейер данных — фильтрация, биннинг, кластеризация, агрегаты.
 
 Разделено на два независимых колбэка:
-  1. apply_filters — stored-data + filters-state → filtered-data (чистый датасет)
+  1. apply_filters — stored-data + применённые фильтры → filtered-data
   2. run_de_operations — DE-кнопки + filtered-data → filtered-data + новые колонки
 """
 
@@ -25,17 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 # =========================
-# Фильтрация: stored-data + filters-state → filtered-data
+# Фильтрация: stored-data + применённые фильтры → filtered-data
 # =========================
 @app.callback(
     Output("filtered-data", "data", allow_duplicate=True),
     Output("meta-columns", "data", allow_duplicate=True),
-    Input("filters-state", "data"),
+    Input("filters-applied-state", "data"),
+    Input("filter-logic-mode", "value"),
     State("stored-data", "data"),
     State("meta-columns", "data"),
     prevent_initial_call=True
 )
-def apply_filters(filters_state, stored_json, meta_state):
+def apply_filters(filters_state, logic_mode, stored_json, meta_state):
     """Применяет фильтры к исходному датасету → filtered-data (чистый, без DE-колонок)."""
     if not stored_json:
         raise PreventUpdate
@@ -51,24 +52,46 @@ def apply_filters(filters_state, stored_json, meta_state):
     fs = filters_state if isinstance(filters_state, dict) else {}
     meta0 = meta_from_df(df)
 
-    # Применяем фильтры
+    # Применяем фильтры. Карточки можно объединять как через И, так и через ИЛИ.
     if fs:
-        mask = pd.Series(True, index=df.index)
+        conditions = []
         for _, cfg in fs.items():
             col = (cfg or {}).get("column")
             val = (cfg or {}).get("value")
             if not col or val in (None, [], '') or col not in df.columns:
                 continue
             if col in (meta0.get("numeric") or []):
-                lo, hi = (val or [None, None])
+                if not isinstance(val, (list, tuple)) or len(val) != 2:
+                    continue
+                lo, hi = val
+                condition = pd.Series(True, index=df.index)
                 if lo is not None:
-                    mask &= (pd.to_numeric(df[col], errors="coerce") >= float(lo))
+                    condition &= pd.to_numeric(df[col], errors="coerce") >= float(lo)
                 if hi is not None:
-                    mask &= (pd.to_numeric(df[col], errors="coerce") <= float(hi))
+                    condition &= pd.to_numeric(df[col], errors="coerce") <= float(hi)
+            elif col in (meta0.get("datetime") or []):
+                if not isinstance(val, (list, tuple)) or len(val) != 2:
+                    continue
+                start, end = val
+                series = pd.to_datetime(df[col], errors="coerce")
+                condition = pd.Series(True, index=df.index)
+                if start:
+                    condition &= series >= pd.Timestamp(start)
+                if end:
+                    condition &= series < pd.Timestamp(end) + pd.Timedelta(days=1)
             else:
                 vs = val if isinstance(val, list) else [val]
-                mask &= df[col].isin(vs)
-        df = df.loc[mask]
+                condition = df[col].astype("string").isin([str(item) for item in vs])
+            conditions.append(condition.fillna(False))
+
+        if conditions:
+            mask = pd.Series(logic_mode != "or", index=df.index)
+            for condition in conditions:
+                if logic_mode == "or":
+                    mask |= condition
+                else:
+                    mask &= condition
+            df = df.loc[mask]
 
     js = df.to_json(date_format='iso', orient='split')
     meta = meta_from_df(df)

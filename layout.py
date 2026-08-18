@@ -11,6 +11,7 @@ import dash_mantine_components as dmc
 
 from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
+from filter_panel import create_filter_drawer, create_filter_trigger
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
@@ -23,7 +24,6 @@ from components import (
     agg_keys_select, agg_cols_select, agg_metrics_select,
     agg_exclude_zeros_switch, agg_exclude_empty_switch,
     txtcopy_cols_select, txtcopy_suffix_input, txtcopy_strip_switch,
-    add_filter_button,
     dropdown_chart_type,
     SwitchBubble,
     dropdown_text_pozition, dropdown_category_ascending,
@@ -102,6 +102,8 @@ CORRELATION_WORKSPACE = CorrelationWorkspace(dropdown_corr_columns)
 def create_layout():
     graph_workspace = GRAPH_WORKSPACE.render()
     correlation_workspace = CORRELATION_WORKSPACE.render()
+    filter_trigger = create_filter_trigger()
+    filter_drawer = create_filter_drawer()
 
     return dmc.MantineProvider(
         children=[
@@ -121,8 +123,9 @@ def create_layout():
             dcc.Store(id='stored-data', data=False, storage_type="memory"),
             dcc.Store(id='filtered-data'),
             dcc.Store(id='bin-applied-name'),
-            dcc.Store(id='filter-count', data=1),
+            dcc.Store(id='filter-count', data=0),
             dcc.Store(id='filters-state', data={}),
+            dcc.Store(id='filters-applied-state', data={}),
             dcc.Store(id='stored-sheet-names'),
             dcc.Store(id='selected-sheet'),
             dcc.Store(id='sheet-modal-toggle', data=True),
@@ -130,7 +133,6 @@ def create_layout():
             dcc.Store(id='cluster-metrics'),
             dcc.Store(id='source-file-path'),
             dcc.Store(id='source-file-name'),
-            dcc.Store(id='filters-initialized', data=False),
 
             dmc.NotificationContainer(id="notifications-container"),
 
@@ -151,6 +153,8 @@ def create_layout():
                             style={"borderColor": "rgba(255,255,255,0.3)", "color": "#ccc"}
                         ),
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
+                        filter_trigger,
+                        dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         *[make_nav_link(item["label"], item["href"]) for item in NAV_LINKS],
                     ], gap="sm", align="center", wrap="nowrap", px="md", py=6),
                 ],
@@ -170,6 +174,7 @@ def create_layout():
                 dmc.Modal(id="sheet-modal", title="Выберите лист Excel", opened=False, centered=True, zIndex=1000, children=[]),
                 id="sheet-menu-wrapper"
             ),
+            filter_drawer,
             html.Div(id='status-message', style={'display': 'none'}),
 
             # --- de-modal (скрыт) ---
@@ -211,12 +216,6 @@ def create_layout():
                     children=[
                     html.Div(id="page-graph", children=[
                         graph_workspace,
-                        dmc.Paper([
-                            html.Center(dmc.Text("Фильтры", c="black", size="sm")),
-                            html.Div(id="filters-container", children=[]),
-                            dmc.Space(h=10),
-                            add_filter_button
-                        ], style={**STYLE_CARD, "marginTop": "8px"}, shadow="sm", p="md", withBorder=True),
                     ]),
 
                     html.Div(id="page-correlation", style={"display": "none"}, children=[

@@ -249,11 +249,6 @@ txtcopy_strip_switch = dmc.Switch(
     size="md"
 )
 
-# =========================
-# Кнопки и элементы управления
-# =========================
-add_filter_button = dmc.Button("Добавить фильтр", id="add-filter-btn", size="xs", variant="outline", leftSection=html.Div("+"))
-
 dropdown_chart_type = dmc.Select(
     id="segmented",
     allowDeselect=False,

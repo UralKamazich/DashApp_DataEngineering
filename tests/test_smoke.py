@@ -10,6 +10,11 @@ from dash import Dash, Input, dcc, html
 from app import app
 from callbacks.dropdowns import _select_options
 from callbacks.modals import _normalize_main_chart_type
+from callbacks.filters import (
+    _clean_filter_state,
+    _default_filter_value,
+    _filter_card,
+)
 from callbacks.graph import (
     Y_ONLY_CHART_TYPES,
     _build_pie_figure,
@@ -18,12 +23,13 @@ from callbacks.graph import (
     _primary_axis_errors,
     update_main_graph,
 )
+from callbacks.pipeline import apply_filters
 from components import dropdown_chart_type, make_column_badge
 from config import APP_NAME, APP_TITLE, APP_VERSION
 from correlation_workspace import _build_correlation_figures
 from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
-from utils import meta_from_df, read_df_from_store
+from utils import create_value_control, meta_from_df, read_df_from_store
 
 
 def walk_components(root):
@@ -75,6 +81,8 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/graph_context_menu.js": "text/javascript",
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
+            "/assets/filter_panel.css": "text/css",
+            "/assets/filter_panel.js": "text/javascript",
         }
         for path, content_type in assets.items():
             with self.subTest(path=path):
@@ -129,6 +137,30 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertEqual(drop_props["data-accept-type"], "numeric")
         self.assertEqual(_normalize_main_chart_type("Correlation"), "Scatter")
         self.assertEqual(_normalize_main_chart_type("Pie"), "Pie")
+
+    def test_filter_panel_is_global_and_not_below_the_graph(self):
+        components = list(walk_components(app.layout))
+        component_ids = {getattr(component, "id", None) for component in components}
+        for component_id in (
+            "filters-panel-toggle",
+            "filters-drawer",
+            "filters-container",
+            "filters-applied-state",
+            "filter-logic-mode",
+            "apply-filters-btn",
+            "reset-filters-btn",
+        ):
+            self.assertIn(component_id, component_ids)
+
+        graph_page = next(
+            component for component in components
+            if getattr(component, "id", None) == "page-graph"
+        )
+        graph_page_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(graph_page)
+        }
+        self.assertNotIn("filters-container", graph_page_ids)
 
 
 class DataStoreRoundTripTests(unittest.TestCase):
@@ -194,6 +226,70 @@ class DropdownOptionTests(unittest.TestCase):
                 {"label": "1", "value": "1"},
             ],
         )
+
+
+class FilterPanelTests(unittest.TestCase):
+    def setUp(self):
+        self.source = pd.DataFrame({
+            "value": [1.0, 2.0, 3.0, 4.0],
+            "category": ["A", "A", "B", "C"],
+            "date": pd.to_datetime(["2026-08-15", "2026-08-16", "2026-08-17", "2026-08-18"]),
+        })
+        self.meta = meta_from_df(self.source)
+        self.payload = self.source.to_json(date_format="iso", orient="split")
+
+    def test_filter_cards_use_type_aware_compact_controls(self):
+        state = {"1": {"column": "value", "value": [1.0, 4.0]}}
+        card = _filter_card(1, "value", state, self.source)
+        classes = {
+            getattr(component, "className", "")
+            for component in walk_components(card)
+        }
+        names = {component.__class__.__name__ for component in walk_components(card)}
+        self.assertIn("filter-card filter-card--numeric", classes)
+        self.assertIn("RangeSlider", names)
+
+        date_control = create_value_control("date", "date", None, self.source)
+        category_control = create_value_control("category", "category", None, self.source)
+        self.assertIn("DatePickerInput", {
+            component.__class__.__name__ for component in walk_components(date_control)
+        })
+        self.assertIn("MultiSelect", {
+            component.__class__.__name__ for component in walk_components(category_control)
+        })
+
+    def test_filter_state_is_cleaned_before_apply(self):
+        state = {
+            "1": {"column": "category", "value": ["A"]},
+            "2": {"column": "value", "value": None},
+            "3": {"column": "date", "value": ["2026-08-15", None]},
+        }
+        self.assertEqual(
+            _clean_filter_state(state),
+            {"1": {"column": "category", "value": ["A"]}},
+        )
+        self.assertEqual(_default_filter_value(self.source, "value"), [1.0, 4.0])
+
+    def test_pipeline_supports_and_or_and_date_ranges(self):
+        filters = {
+            "1": {"column": "category", "value": ["A"]},
+            "2": {"column": "value", "value": [3.0, 4.0]},
+        }
+        and_payload, _ = apply_filters(filters, "and", self.payload, self.meta)
+        or_payload, _ = apply_filters(filters, "or", self.payload, self.meta)
+        and_frame = read_df_from_store(and_payload, self.meta)
+        or_frame = read_df_from_store(or_payload, self.meta)
+        self.assertTrue(and_frame.empty)
+        self.assertEqual(or_frame["value"].tolist(), [1.0, 2.0, 3.0, 4.0])
+
+        date_payload, _ = apply_filters(
+            {"1": {"column": "date", "value": ["2026-08-16", "2026-08-17"]}},
+            "and",
+            self.payload,
+            self.meta,
+        )
+        date_frame = read_df_from_store(date_payload, self.meta)
+        self.assertEqual(date_frame["value"].tolist(), [2.0, 3.0])
 
 
 class CorrelationAnalysisTests(unittest.TestCase):

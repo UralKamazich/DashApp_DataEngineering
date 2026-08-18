@@ -467,11 +467,11 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
     Input("bar-text-auto", "checked"),
     Input(GRAPH_WORKSPACE.ids["view_revision"], "data"),
 
-    State("filtered-data", "data"),
+    Input("filtered-data", "data"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_hover_data"], "value"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_row"], "value"),
     Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_col"], "value"),
-    State("filters-state", "data"),
+    State("filters-applied-state", "data"),
     Input("font-size-xaxis", "value"),
     Input("font-size-yaxis", "value"),
     Input("font-size-ticks", "value"),

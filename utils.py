@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import dash
 from dash import html, dcc
+import dash_mantine_components as dmc
 from pandas.api.types import is_numeric_dtype
 from io import StringIO
 from flask import request
@@ -284,29 +285,85 @@ def hide_xlabels_on_upper_facets(fig: go.Figure) -> go.Figure:
 
 # Обновление контролов фильтра
 def create_value_control(filter_id, column, current_value=None, dff: pd.DataFrame | None = None):
+    """Build a compact type-aware value editor for one filter card."""
     dff = dff if dff is not None else pd.DataFrame()
     if not column or (dff.empty or column not in dff.columns):
-        return html.Div("Выберите столбец")
+        return html.Div("Выберите канал", className="filter-control-empty")
 
     numeric_cols, categorical_cols, datetime_cols = classify_simple(dff)
 
     if column in numeric_cols:
-        min_val, max_val = float(dff[column].min()), float(dff[column].max())
-        return dcc.RangeSlider(
-            id={"type": "filter-value", "index": filter_id},
-            min=min_val,
-            max=max_val,
-            value=current_value if current_value else [min_val, max_val],
-            marks={min_val: str(min_val), max_val: str(max_val)},
-            tooltip={"placement": "bottom", "always_visible": True}
+        values = pd.to_numeric(dff[column], errors="coerce").dropna()
+        if values.empty or float(values.min()) == float(values.max()):
+            return html.Div(
+                "Диапазон недоступен: значения отсутствуют или постоянны",
+                className="filter-control-empty",
+            )
+        min_val, max_val = float(values.min()), float(values.max())
+        selected = current_value if isinstance(current_value, list) and len(current_value) == 2 else [min_val, max_val]
+        span = max_val - min_val
+        step = max(span / 250, 1e-9)
+
+        def number_label(value):
+            return f"{value:,.4g}".replace(",", " ")
+
+        return html.Div(
+            [
+                dmc.Group(
+                    [html.Span(number_label(selected[0])), html.Span(number_label(selected[1]))],
+                    justify="space-between",
+                    className="filter-numeric-bounds",
+                ),
+                dmc.RangeSlider(
+                    id={"type": "filter-value", "index": filter_id},
+                    min=min_val,
+                    max=max_val,
+                    step=step,
+                    value=selected,
+                    minRange=0,
+                    labelAlwaysOn=False,
+                    size="sm",
+                ),
+            ],
+            className="filter-numeric-control",
         )
-    else:
-        unique_values = dff[column].dropna().unique().tolist()
-        return dcc.Dropdown(
+
+    if column in datetime_cols:
+        values = pd.to_datetime(dff[column], errors="coerce").dropna()
+        if values.empty:
+            return html.Div("В канале нет корректных дат", className="filter-control-empty")
+        min_date = values.min().date().isoformat()
+        max_date = values.max().date().isoformat()
+        selected = current_value if isinstance(current_value, list) and len(current_value) == 2 else [min_date, max_date]
+        return html.Div(
+            [
+                dmc.Text("Диапазон дат", className="filter-date-caption"),
+                dmc.DatePickerInput(
+                    id={"type": "filter-value", "index": filter_id},
+                    type="range",
+                    value=selected,
+                    valueFormat="DD.MM.YYYY",
+                    placeholder="Выберите диапазон",
+                    clearable=True,
+                    size="xs",
+                    w="100%",
+                ),
+            ],
+            className="filter-date-control",
+        )
+
+    unique_values = [str(value) for value in dff[column].dropna().unique().tolist()]
+    selected = [str(value) for value in (current_value or [])]
+    return dmc.MultiSelect(
             id={"type": "filter-value", "index": filter_id},
-            options=[{'label': str(val), 'value': val} for val in unique_values],
-            value=current_value if current_value else [],
-            multi=True,
-            placeholder="Выберите значения...",
-            style={'font-size': '12px', 'width': '100%', 'min-width': '200px', 'max-width': '300px'}
+            data=[{"label": value, "value": value} for value in unique_values],
+            value=selected,
+            searchable=True,
+            clearable=True,
+            hidePickedOptions=True,
+            nothingFoundMessage="Значения не найдены",
+            placeholder="Выберите значения",
+            maxDropdownHeight=260,
+            size="xs",
+            w="100%",
         )
