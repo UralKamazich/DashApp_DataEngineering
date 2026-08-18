@@ -7,6 +7,7 @@ import pandas as pd
 from dash import Dash, Input, dcc, html
 
 from app import app
+from callbacks.dropdowns import _select_options
 from callbacks.graph import (
     Y_ONLY_CHART_TYPES,
     _graph_uirevision,
@@ -112,6 +113,17 @@ class ColumnBadgeTests(unittest.TestCase):
         )
         self.assertEqual(badge.className, "column-badge-pill")
         self.assertTrue(badge.fullWidth)
+
+
+class DropdownOptionTests(unittest.TestCase):
+    def test_numeric_column_labels_are_safe_for_mantine_controls(self):
+        self.assertEqual(
+            _select_options(["depth", 1]),
+            [
+                {"label": "depth", "value": "depth"},
+                {"label": "1", "value": "1"},
+            ],
+        )
 
 
 class GraphAxisValidationTests(unittest.TestCase):

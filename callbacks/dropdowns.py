@@ -8,6 +8,11 @@ from dash import callback, Output, Input, State
 from utils import read_df_from_store, classify_simple
 
 
+def _select_options(columns):
+    """Return renderer-safe options even when dataframe labels are numeric."""
+    return [{"label": str(column), "value": str(column)} for column in columns]
+
+
 @app.callback(
     [
         Output("dropdown_x", "options"),
@@ -56,17 +61,14 @@ def update_dropdown_options_all(filtered_json, meta):
 
     numeric_cols, categorical_cols, datetime_cols = classify_simple(dff)
 
-    def _opts(cols):
-        return [{"label": str(c), "value": str(c)} for c in cols]
-
     all_cols     = [str(c) for c in dff.columns]
-    all_options  = _opts(all_cols)
-    color_options= [{"label": "Нет", "value": "Нет"}] + _opts(categorical_cols + numeric_cols)
-    numeric_opts = _opts(numeric_cols)
+    all_options  = _select_options(all_cols)
+    color_options= [{"label": "Нет", "value": "Нет"}] + _select_options(categorical_cols + numeric_cols)
+    numeric_opts = _select_options(numeric_cols)
     facet_options= [{"label": "Нет", "value": "Нет"}] + all_options
 
-    bin_options     = [{"label": c, "value": c} for c in numeric_cols]
-    cluster_options = [{"label": c, "value": c} for c in numeric_cols]
+    bin_options     = _select_options(numeric_cols)
+    cluster_options = _select_options(numeric_cols)
 
     return [
         all_options,      # X
