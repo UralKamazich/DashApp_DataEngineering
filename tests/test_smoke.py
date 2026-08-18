@@ -143,6 +143,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
         component_ids = {getattr(component, "id", None) for component in components}
         for component_id in (
             "filters-panel-toggle",
+            "filters-side-tab",
             "filters-drawer",
             "filters-container",
             "filters-applied-state",

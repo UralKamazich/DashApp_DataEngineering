@@ -136,12 +136,13 @@ def _serialized_row_count(payload):
 @app.callback(
     Output("filters-drawer", "opened"),
     Input("filters-panel-toggle", "n_clicks"),
+    Input("filters-side-tab", "n_clicks"),
     Input("filter-drop-store", "data"),
     Input("apply-filters-btn", "n_clicks"),
     State("filters-drawer", "opened"),
     prevent_initial_call=True,
 )
-def toggle_filters_drawer(_toggle_clicks, _dropped, _apply_clicks, opened):
+def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _dropped, _apply_clicks, opened):
     trigger = ctx.triggered_id
     if trigger == "filter-drop-store":
         return True
@@ -296,6 +297,8 @@ def update_filters_state(columns, values, column_ids, value_ids, filters_state):
     Output("filters-panel-toggle", "className"),
     Output("filters-drawer-count", "children"),
     Output("filter-results-summary", "children"),
+    Output("filters-side-tab-count", "children"),
+    Output("filters-side-tab", "className"),
     Input("filters-applied-state", "data"),
     Input("stored-data", "data"),
     Input("filtered-data", "data"),
@@ -305,12 +308,14 @@ def update_filter_summary(applied, stored_json, filtered_json):
     source_rows = _serialized_row_count(stored_json)
     filtered_rows = _serialized_row_count(filtered_json)
     trigger_class = "filter-panel-trigger"
+    tab_class = "filter-side-tab"
     if count:
         trigger_class += " has-active-filters"
+        tab_class += " has-active-filters"
     if not source_rows:
         summary = "Загрузите данные"
     elif count:
         summary = f"{filtered_rows:,} из {source_rows:,} строк".replace(",", " ")
     else:
         summary = f"{source_rows:,} строк".replace(",", " ")
-    return str(count), trigger_class, f"Активно: {count}", summary
+    return str(count), trigger_class, f"Активно: {count}", summary, str(count), tab_class

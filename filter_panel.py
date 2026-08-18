@@ -26,6 +26,19 @@ def create_filter_trigger():
     )
 
 
+def create_filter_tab():
+    return html.Div(
+        [
+            DashIconify(icon="tabler:filter", width=15),
+            html.Span("Фильтры", className="filter-side-tab-label"),
+            html.Span("0", id="filters-side-tab-count", className="filter-side-tab-count"),
+        ],
+        id="filters-side-tab",
+        className="filter-side-tab",
+        title="Открыть панель фильтров",
+    )
+
+
 def create_filter_drawer():
     title = dmc.Group(
         [
