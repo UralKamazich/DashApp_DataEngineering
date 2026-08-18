@@ -400,6 +400,7 @@ def create_layout():
             html.Div(style={"display": "none"}, children=[
                 html.Button("download-html", id="download-button"),
                 html.Button("download-excel", id="download-excel-button"),
+                html.Button("save-png", id="save-png-button"),
                 html.Button("shuffle", id="shuffle-button"),
                 dcc.Download(id="download-file"),
                 dcc.Download(id="download-excel"),

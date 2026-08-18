@@ -127,7 +127,7 @@ class GraphWorkspace:
                             html.Div(self.chart_type_control, className="graph-type-control"),
                             html.Div(className="graph-workspace-toolbar-separator"),
                             self._action_button("update-graf", "↻", "Обновить график"),
-                            self._action_button("copy-png-button", "⧉", "Копировать PNG"),
+                            self._action_button("copy-png-button", "⧉", "Копировать PNG в буфер"),
                             self._action_button("context-menu-btn", "⚙", "Настройки графика"),
                         ],
                     ),

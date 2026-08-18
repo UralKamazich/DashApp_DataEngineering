@@ -13,34 +13,52 @@
 
     const menu = document.createElement("div");
     menu.id = "graph-ctx-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Действия с графиком");
     menu.innerHTML =
-      '<div class="ctx-item" data-action="refresh">' +
-        '<span class="ctx-icon">\u{1F504}</span>Обновить график' +
+      '<div class="ctx-header">' +
+        '<span class="ctx-header-title">График</span>' +
+        '<span class="ctx-header-hint">Экспорт и настройки</span>' +
+      '</div>' +
+      '<div class="ctx-group" aria-label="Экспорт">' +
+        menuItem("save-png", "image", "Сохранить PNG", "в файл", true) +
+        menuItem("copy-png", "copy", "Копировать PNG", "в буфер") +
+        menuItem("download-html", "code", "Сохранить HTML", "интерактивный") +
       '</div>' +
       '<div class="ctx-sep"></div>' +
-      '<div class="ctx-item" data-action="download-html">' +
-        '<span class="ctx-icon">\u{1F4C4}</span>Сохранить HTML' +
-      '</div>' +
-      '<div class="ctx-item" data-action="download-excel">' +
-        '<span class="ctx-icon">\u{1F4CA}</span>Сохранить Excel' +
-      '</div>' +
-      '<div class="ctx-item" data-action="copy-png">' +
-        '<span class="ctx-icon">\u{1F5BC}</span>Копировать PNG' +
+      '<div class="ctx-group" aria-label="Вид">' +
+        menuItem("reset-view", "reset", "Сбросить масштаб") +
+        menuItem("refresh", "refresh", "Обновить график") +
       '</div>' +
       '<div class="ctx-sep"></div>' +
-      '<div class="ctx-item" data-action="change-colors">' +
-        '<span class="ctx-icon">\u{1F3A8}</span>Сменить цвета' +
-      '</div>' +
-      '<div class="ctx-item" data-action="reset-view">' +
-        '<span class="ctx-icon">\u21BA</span>Сбросить масштаб' +
-      '</div>' +
-      '<div class="ctx-sep"></div>' +
-      '<div class="ctx-item" data-action="open-settings">' +
-        '<span class="ctx-icon">\u2699</span>Настройки графика' +
+      '<div class="ctx-group" aria-label="Оформление">' +
+        menuItem("change-colors", "palette", "Сменить цвета") +
+        menuItem("open-settings", "settings", "Настройки графика") +
       '</div>';
 
     menu.addEventListener("click", handleItemClick);
     document.body.appendChild(menu);
+  }
+
+  function icon(name) {
+    const paths = {
+      image: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/>',
+      copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+      code: '<path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 5l-4 14"/>',
+      reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+      refresh: '<path d="M20 7h-5V2M4 17h5v5"/><path d="M5.1 9A8 8 0 0 1 18 5l2 2M18.9 15A8 8 0 0 1 6 19l-2-2"/>',
+      palette: '<path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h5a4 4 0 0 0 4-4c0-3.3-4-6-9-6Z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="9.5" cy="6.5" r="1"/><circle cx="14.5" cy="6.5" r="1"/>',
+      settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+    };
+    return '<span class="ctx-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + paths[name] + '</svg></span>';
+  }
+
+  function menuItem(action, iconName, label, note, primary) {
+    return '<button class="ctx-item' + (primary ? ' ctx-item--primary' : '') + '" type="button" role="menuitem" data-action="' + action + '">' +
+      icon(iconName) +
+      '<span class="ctx-label">' + label + '</span>' +
+      (note ? '<span class="ctx-note">' + note + '</span>' : '') +
+    '</button>';
   }
 
   /* ---- Позиционирование меню ---- */
@@ -93,12 +111,12 @@
         clickButton("download-button");
         break;
 
-      case "download-excel":
-        clickButton("download-excel-button");
-        break;
-
       case "copy-png":
         clickButton("copy-png-button");
+        break;
+
+      case "save-png":
+        clickButton("save-png-button");
         break;
 
       case "change-colors":

@@ -57,6 +57,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
         assets = {
             "/assets/context_menu.css": "text/css",
             "/assets/graph_context_menu.js": "text/javascript",
+            "/assets/graph_png.js": "text/javascript",
         }
         for path, content_type in assets.items():
             with self.subTest(path=path):

@@ -102,7 +102,7 @@ def download_excel_dataset(n_clicks, filtered_json, source_path, source_name, sh
         return no_update, _make_error_notif(f"Ошибка сохранения Excel: {e}")
 
 
-# Clientside callback для копирования PNG
+# Кнопка на графике: только копирование PNG в буфер, без скачивания файла.
 app.clientside_callback(
     """
     function(n_clicks, figure) {
@@ -110,91 +110,71 @@ app.clientside_callback(
             throw window.dash_clientside.PreventUpdate;
         }
 
-        // dataURL -> Blob без fetch (чтобы не терять user-gesture)
-        function dataURLtoBlob(dataURL) {
-            const [header, data] = dataURL.split(',');
-            const mime = (header.match(/:(.*?);/) || [,'image/png'])[1];
-            const binary = atob(data);
-            const array = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-            return new Blob([array], { type: mime });
+        function notification(title, message, color) {
+            return [{
+                id: crypto.randomUUID(),
+                title: title,
+                message: message,
+                color: color,
+                action: 'show',
+                autoClose: 4500
+            }];
         }
 
-        try {
-            const host = document.getElementById('graph');
-            const gd = host && host.getElementsByClassName('js-plotly-plot')[0];
-            if (!gd) return 'График не найден в DOM.';
+        if (!window.graphPng) {
+            return notification('PNG не скопирован', 'Модуль экспорта не загружен.', 'red');
+        }
 
-            // === WYSIWYG размеры: берём реальные видимые пиксели SVG ===
-            const svg = gd.querySelector('svg.main-svg') || gd.querySelector('svg');
-            let width, height;
-            if (svg) {
-                const r = svg.getBoundingClientRect(); // учитывает любые CSS-скейлы/zoom
-                width  = Math.max(1, Math.round(r.width));
-                height = Math.max(1, Math.round(r.height));
-            } else {
-                // фоллбэк, если svg не найден
-                const r = gd.getBoundingClientRect();
-                width  = Math.max(1, Math.round(r.width));
-                height = Math.max(1, Math.round(r.height));
+        return window.graphPng.copyToClipboard().then(
+            () => notification('PNG скопирован', 'Изображение помещено в буфер обмена.', 'green'),
+            (error) => {
+                console.error('Clipboard PNG error:', error);
+                return notification('PNG не скопирован', error.message || 'Ошибка буфера обмена.', 'red');
             }
-
-            // Рисуем PNG ровно под видимые размеры (scale:1 для точного соответствия)
-            return window.Plotly.toImage(gd, {
-                format: 'png',
-                width:  width,
-                height: height,
-                scale:  1
-            })
-            .then((dataUrl) => {
-                // Пытаемся записать в буфер в рамках того же клика
-                if (window.isSecureContext && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
-                    try {
-                        const blob = dataURLtoBlob(dataUrl);
-                        const item = new ClipboardItem({ [blob.type]: blob });
-                        return navigator.clipboard.write([item]).then(
-                            () => {
-                                // Параллельно сохраняем файл
-                                const a = document.createElement('a');
-                                a.href = dataUrl;
-                                a.download = 'plotly_graph.png';
-                                document.body.appendChild(a); a.click(); a.remove();
-                                return 'PNG (как на экране) скопирован в буфер и сохранён как файл.';
-                            },
-                            (e) => {
-                                console.warn('Clipboard write failed:', e);
-                                const a = document.createElement('a');
-                                a.href = dataUrl;
-                                a.download = 'plotly_graph.png';
-                                document.body.appendChild(a); a.click(); a.remove();
-                                return 'Буфер недоступен — PNG (как на экране) сохранён как файл.';
-                            }
-                        );
-                    } catch (e) {
-                        console.warn('Clipboard exception:', e);
-                    }
-                }
-
-                // Фоллбэк: только файл (например, не secure-контекст)
-                const a = document.createElement('a');
-                a.href = dataUrl;
-                a.download = 'plotly_graph.png';
-                document.body.appendChild(a); a.click(); a.remove();
-                return 'Копирование в буфер недоступно — PNG (как на экране) сохранён как файл.';
-            })
-            .catch((err) => {
-                console.error('toImage error:', err);
-                return 'Ошибка генерации PNG. См. консоль.';
-            });
-
-        } catch (err) {
-            console.error('Ошибка:', err);
-            return 'Ошибка копирования/сохранения. См. консоль.';
-        }
+        );
     }
     """,
     Output("notifications-container", "sendNotifications", allow_duplicate=True),
     Input("copy-png-button", "n_clicks"),
+    State("graph", "figure"),
+    prevent_initial_call=True
+)
+
+
+# Пункт контекстного меню: только сохранение PNG в файл, без буфера обмена.
+app.clientside_callback(
+    """
+    function(n_clicks, figure) {
+        if (!n_clicks || !figure) {
+            throw window.dash_clientside.PreventUpdate;
+        }
+
+        function notification(title, message, color) {
+            return [{
+                id: crypto.randomUUID(),
+                title: title,
+                message: message,
+                color: color,
+                action: 'show',
+                autoClose: 4500
+            }];
+        }
+
+        if (!window.graphPng) {
+            return notification('PNG не сохранён', 'Модуль экспорта не загружен.', 'red');
+        }
+
+        return window.graphPng.saveToFile().then(
+            () => notification('PNG сохранён', 'Файл с графиком передан в загрузки.', 'green'),
+            (error) => {
+                console.error('Save PNG error:', error);
+                return notification('PNG не сохранён', error.message || 'Ошибка сохранения файла.', 'red');
+            }
+        );
+    }
+    """,
+    Output("notifications-container", "sendNotifications", allow_duplicate=True),
+    Input("save-png-button", "n_clicks"),
     State("graph", "figure"),
     prevent_initial_call=True
 )
