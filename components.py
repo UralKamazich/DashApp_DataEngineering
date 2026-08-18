@@ -12,40 +12,46 @@ from config import PLOTLY_STYLES, COLOR_THRESHOLD
 
 
 # =========================
-# Цвета плашек для типов колонок
+# Маркеры типов каналов
 # =========================
-COLUMN_TYPE_COLORS = {
-    "numeric": "#2196F3",      # синий
-    "categorical": "#4CAF50",  # зелёный
-    "datetime": "#795548",     # коричневый
+COLUMN_TYPE_LABELS = {
+    "numeric": ("123", "Числовой"),
+    "categorical": ("Aa", "Категориальный"),
+    "datetime": ("dt", "Дата и время"),
 }
 
 
 def make_column_badge(col_name: str, col_type: str) -> html.Div:
-    """Плашка-бейдж: название колонки, цвет по типу (c drag-and-drop)."""
-    color = COLUMN_TYPE_COLORS.get(col_type, "#9E9E9E")
+    """Compact draggable dataset channel with a restrained type marker."""
+    type_mark, type_name = COLUMN_TYPE_LABELS.get(col_type, ("…", "Другой тип"))
     return html.Div(
         dmc.Tooltip(
-            dmc.Badge(
-                col_name,
-                color=color,
-                variant="light",
-                size="sm",
-                fullWidth=True,
-                className="column-badge-pill",
-                style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400},
+            html.Div(
+                [
+                    html.Sup(
+                        type_mark,
+                        className=f"column-type-marker column-type-marker--{col_type}",
+                        **{"aria-hidden": "true"},
+                    ),
+                    html.Span(str(col_name), className="column-channel-name"),
+                    html.Span(
+                        className="column-drag-handle",
+                        **{"aria-hidden": "true"},
+                    ),
+                ],
+                className="column-channel-row",
             ),
-            label=str(col_name),
-            openDelay=200,
+            label=f"{col_name} · {type_name}",
+            openDelay=350,
             withArrow=True,
         ),
-        className="column-badge",
+        className=f"column-badge column-badge--{col_type}",
         draggable="true",
+        title=f"Перетащить канал «{col_name}»",
         **{
             "data-column-name": str(col_name),
             "data-column-type": col_type,
         },
-        style={"cursor": "grab", "marginBottom": "2px"},
     )
 
 

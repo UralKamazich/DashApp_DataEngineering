@@ -158,19 +158,31 @@ class DataStoreRoundTripTests(unittest.TestCase):
 class ColumnBadgeTests(unittest.TestCase):
     def test_badge_uses_width_constrained_shell(self):
         badge_shell = make_column_badge("Очень длинное название столбца", "numeric")
-        self.assertEqual(badge_shell.className, "column-badge")
+        self.assertIn("column-badge", badge_shell.className)
+        self.assertIn("column-badge--numeric", badge_shell.className)
         self.assertEqual(
             badge_shell.to_plotly_json()["props"]["data-column-type"],
             "numeric",
         )
 
-        badge = next(
+        row = next(
             component
             for component in walk_components(badge_shell)
-            if component.__class__.__name__ == "Badge"
+            if "column-channel-row" in (getattr(component, "className", "") or "")
         )
-        self.assertEqual(badge.className, "column-badge-pill")
-        self.assertTrue(badge.fullWidth)
+        row_classes = {
+            getattr(component, "className", "")
+            for component in walk_components(row)
+        }
+        self.assertIn("column-type-marker column-type-marker--numeric", row_classes)
+        self.assertIn("column-channel-name", row_classes)
+        self.assertIn("column-drag-handle", row_classes)
+        type_marker = next(
+            component
+            for component in walk_components(row)
+            if "column-type-marker" in (getattr(component, "className", "") or "")
+        )
+        self.assertEqual(type_marker.__class__.__name__, "Sup")
 
 
 class DropdownOptionTests(unittest.TestCase):

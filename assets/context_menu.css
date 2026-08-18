@@ -127,7 +127,7 @@
     margin: 5px 8px;
 }
 
-/* ===== Сайдбар колонок — обрезка длинных названий ===== */
+/* ===== Сайдбар каналов датасета ===== */
 
 #columns-badges {
     box-sizing: border-box;
@@ -140,6 +140,8 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    cursor: grab;
+    user-select: none;
 }
 
 /* dmc.Tooltip adds a fit-content wrapper around its child. It must follow the
@@ -151,22 +153,86 @@
     min-width: 0;
 }
 
-#columns-sidebar .column-badge-pill {
+#columns-sidebar .column-channel-row {
     box-sizing: border-box;
     display: flex;
+    align-items: center;
+    gap: 3px;
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    min-height: 27px;
+    padding: 3px 5px;
     overflow: hidden;
+    color: #343a40;
+    background: #ffffff;
+    border: 1px solid #edf0f2;
+    border-radius: 6px;
+    transition: color 0.12s, background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 
-#columns-sidebar .mantine-Badge-label {
-    width: 100%;
+#columns-sidebar .column-badge:hover .column-channel-row {
+    color: #1864ab;
+    background: #f8f9fa;
+    border-color: #ced4da;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+#columns-sidebar .column-badge:active .column-channel-row {
+    cursor: grabbing;
+    background: #f1f3f5;
+    box-shadow: none;
+}
+
+#columns-sidebar .column-type-marker {
+    position: relative;
+    top: -4px;
+    display: inline-block;
+    min-width: 9px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: 800 6.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.04em;
+    text-align: right;
+}
+
+#columns-sidebar .column-type-marker--numeric {
+    color: #1971c2;
+}
+
+#columns-sidebar .column-type-marker--categorical {
+    color: #2b8a3e;
+}
+
+#columns-sidebar .column-type-marker--datetime {
+    color: #d9480f;
+}
+
+#columns-sidebar .column-channel-name {
     min-width: 0;
+    flex: 1 1 auto;
     overflow: hidden;
+    color: inherit;
+    font: 500 10px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     text-overflow: ellipsis;
     white-space: nowrap;
-    display: block;
+}
+
+#columns-sidebar .column-drag-handle {
+    width: 10px;
+    height: 14px;
+    flex: 0 0 10px;
+    opacity: 0.42;
+    background-image: radial-gradient(circle, #868e96 1px, transparent 1.25px);
+    background-position: 0 0;
+    background-size: 5px 5px;
+    transition: opacity 0.12s;
+}
+
+#columns-sidebar .column-badge:hover .column-drag-handle {
+    opacity: 0.8;
 }
 
 /* ===== Закладки датасета — стиль настоящих закладок ===== */
