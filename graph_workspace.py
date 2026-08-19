@@ -244,8 +244,6 @@ class GraphWorkspace:
                         children=[
                             html.Div(self.chart_type_control, className="graph-type-control"),
                             html.Div(className="graph-workspace-toolbar-separator"),
-                            self._action_button(self.ids["update"], "↻", "Обновить график"),
-                            self._action_button(self.ids["copy_png"], "⧉", "Копировать PNG в буфер"),
                             self._action_button(self.ids["open_settings"], "⚙", "Настройки графика"),
                         ],
                     ),
@@ -313,6 +311,8 @@ class GraphWorkspace:
                 dcc.Store(id=self.ids["custom_colors"], data={}),
                 dcc.Store(id=self.ids["sync"]),
                 html.Button("download-html", id=self.ids["download_html"]),
+                html.Button("update", id=self.ids["update"]),
+                html.Button("copy-png", id=self.ids["copy_png"]),
                 html.Button("save-png", id=self.ids["save_png"]),
                 html.Button("change-colors", id=self.ids["change_colors"]),
                 html.Button("clear-graph", id=self.ids["clear"]),

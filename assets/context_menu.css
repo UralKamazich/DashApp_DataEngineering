@@ -343,6 +343,34 @@
     line-height: 1;
 }
 
+/* Кастомные кнопки в modebar Plotly (assets/graph_modebar.js).
+   Plotly встраивает свой CSS после ассетов и задаёт ".modebar-group a"
+   display:grid (блочный) — поэтому повышаем специфичность и делаем
+   кнопки inline-уровня, чтобы они встали в один ряд с родными. */
+.modebar .modebar-btn-custom {
+    position: relative;
+    top: -4px;
+    display: inline-grid;
+    place-content: center;
+    vertical-align: middle;
+}
+
+.modebar-btn-custom .modebar-custom-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 19px;
+    height: 19px;
+    color: rgba(0, 31, 95, 0.3);
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.modebar-btn-custom:hover .modebar-custom-icon {
+    color: rgba(0, 31, 95, 0.7);
+}
+
 /* Настоящие dropdown остаются состоянием Dash, но не занимают место. */
 .graph-field-state {
     display: none;

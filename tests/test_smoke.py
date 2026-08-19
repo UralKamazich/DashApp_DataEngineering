@@ -81,6 +81,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/graph_context_menu.js": "text/javascript",
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
+            "/assets/graph_modebar.js": "text/javascript",
             "/assets/filter_panel.css": "text/css",
             "/assets/slide_panel.css": "text/css",
             "/assets/filter_panel.js": "text/javascript",
