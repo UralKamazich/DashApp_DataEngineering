@@ -50,6 +50,8 @@
 .slide-panel__tab {
     position: absolute;
     z-index: 1;
+    box-sizing: border-box;
+    width: 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
