@@ -20,6 +20,7 @@ from dash.exceptions import PreventUpdate
 import dash_mantine_components as dmc
 
 from config import COLOR_THRESHOLD
+from graph_help import GRAPH_HELP_OPTIONS, GRAPH_INSTRUCTIONS, render_instruction
 from utils import _make_error_notif, apply_custom_colors_safely
 
 
@@ -158,6 +159,11 @@ class GraphWorkspace:
             "apply_colors": f"{graph_id}-apply-colors",
             "custom_colors": f"{graph_id}-custom-colors",
             "sync": f"{graph_id}-sync",
+            "help": f"{graph_id}-help",
+            "help_modal": f"{graph_id}-help-modal",
+            "help_type": f"{graph_id}-help-type",
+            "help_content": f"{graph_id}-help-content",
+            "help_close": f"{graph_id}-help-close",
         }
         generated_ids.update(action_ids or {})
         self.ids = generated_ids
@@ -245,6 +251,7 @@ class GraphWorkspace:
                             html.Div(self.chart_type_control, className="graph-type-control"),
                             html.Div(className="graph-workspace-toolbar-separator"),
                             self._action_button(self.ids["open_settings"], "⚙", "Настройки графика"),
+                            self._action_button(self.ids["help"], "?", "Инструкция по типу графика"),
                         ],
                     ),
                     dcc.Loading(
@@ -304,6 +311,43 @@ class GraphWorkspace:
             ],
         )
 
+    def _help_modal(self):
+        content, title = render_instruction("Scatter")
+        return dmc.Modal(
+            id=self.ids["help_modal"],
+            title=title,
+            opened=False,
+            size="lg",
+            zIndex=1000,
+            children=[
+                dmc.Select(
+                    id=self.ids["help_type"],
+                    label="Тип графика",
+                    data=GRAPH_HELP_OPTIONS,
+                    value="Scatter",
+                    allowDeselect=False,
+                    clearable=False,
+                    comboboxProps={"shadow": "md"},
+                    mb="sm",
+                ),
+                dmc.ScrollArea(
+                    dmc.Stack(id=self.ids["help_content"], gap="xs", children=content),
+                    mah=480,
+                    type="auto",
+                ),
+                dmc.Group(
+                    dmc.Button(
+                        "Закрыть",
+                        id=self.ids["help_close"],
+                        variant="default",
+                        size="xs",
+                    ),
+                    justify="flex-end",
+                    mt="md",
+                ),
+            ],
+        )
+
     def _service_components(self):
         return html.Div(
             [
@@ -330,6 +374,7 @@ class GraphWorkspace:
             children.append(self.settings_panel.render())
         if self.include_color_controls:
             children.append(self._color_modal())
+        children.append(self._help_modal())
         children.append(self._service_components())
         return html.Div(children, id=self.component_id, className="graph-workspace-component")
 
@@ -348,6 +393,7 @@ class GraphWorkspace:
         self._register_clear_callback(app)
         self._register_zone_labels_callback(app)
         self._register_export_callbacks(app)
+        self._register_help_callbacks(app)
         if self.settings_panel is not None:
             self._register_settings_callbacks(app)
             if self.include_color_controls:
@@ -574,6 +620,42 @@ class GraphWorkspace:
             Output(self.notifications_id, "sendNotifications", allow_duplicate=True),
             Input(self.ids["save_png"], "n_clicks"),
             State(self.graph_id, "figure"),
+            prevent_initial_call=True,
+        )
+
+    def _register_help_callbacks(self, app):
+        @app.callback(
+            Output(self.ids["help_modal"], "opened", allow_duplicate=True),
+            Output(self.ids["help_type"], "value"),
+            Input(self.ids["help"], "n_clicks"),
+            State(self.chart_type_id, "value"),
+            prevent_initial_call=True,
+        )
+        def open_help(n_clicks, chart_type):
+            if not n_clicks:
+                raise PreventUpdate
+            known = chart_type if chart_type in GRAPH_INSTRUCTIONS else "Scatter"
+            return True, known
+
+        @app.callback(
+            Output(self.ids["help_content"], "children"),
+            Output(self.ids["help_modal"], "title"),
+            Input(self.ids["help_type"], "value"),
+        )
+        def render_help(chart_type):
+            return render_instruction(chart_type)
+
+        app.clientside_callback(
+            """
+            function(nClicks) {
+                if (!nClicks) {
+                    return window.dash_clientside.no_update;
+                }
+                return false;
+            }
+            """,
+            Output(self.ids["help_modal"], "opened", allow_duplicate=True),
+            Input(self.ids["help_close"], "n_clicks"),
             prevent_initial_call=True,
         )
 

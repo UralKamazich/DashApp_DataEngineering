@@ -27,6 +27,7 @@ from callbacks.pipeline import apply_filters
 from components import dropdown_chart_type, make_column_badge
 from config import APP_NAME, APP_TITLE, APP_VERSION
 from correlation_workspace import _build_correlation_figures
+from graph_help import GRAPH_HELP_ORDER, GRAPH_INSTRUCTIONS, render_instruction
 from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
 from utils import create_value_control, meta_from_df, read_df_from_store
@@ -826,6 +827,38 @@ class GraphWorkspaceTests(unittest.TestCase):
                 chart_type_control=html.Div(),
                 field_controls={},
             )
+
+    def test_help_button_and_modal_are_rendered(self):
+        descendant_ids = {
+            getattr(component, "id", None) for component in self.components
+        }
+        for key in ("help", "help_modal", "help_type", "help_content", "help_close"):
+            self.assertIn(self.component.ids[key], descendant_ids)
+
+
+class GraphHelpTests(unittest.TestCase):
+    def test_instructions_cover_every_chart_type_option(self):
+        options = {item["value"] for item in dropdown_chart_type.data}
+        self.assertEqual(set(GRAPH_INSTRUCTIONS), options)
+        self.assertEqual(set(GRAPH_HELP_ORDER), options)
+
+    def test_every_instruction_has_required_sections(self):
+        for chart_type, info in GRAPH_INSTRUCTIONS.items():
+            with self.subTest(chart_type=chart_type):
+                self.assertTrue(info["title"])
+                self.assertTrue(info["purpose"])
+                self.assertTrue(info["fields"])
+
+    def test_render_instruction_returns_content_for_each_type(self):
+        for chart_type in GRAPH_HELP_ORDER:
+            with self.subTest(chart_type=chart_type):
+                children, title = render_instruction(chart_type)
+                self.assertTrue(title)
+                self.assertTrue(children)
+
+    def test_unknown_type_falls_back_to_scatter(self):
+        _, title = render_instruction("NoSuchType")
+        self.assertEqual(title, GRAPH_INSTRUCTIONS["Scatter"]["title"])
 
 
 class GraphSettingsPanelTests(unittest.TestCase):
