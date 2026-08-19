@@ -15,7 +15,7 @@ from collections.abc import Mapping
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-from dash import ALL, MATCH, Input, Output, State, dcc, html, no_update
+from dash import ALL, MATCH, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 import dash_mantine_components as dmc
 
@@ -431,11 +431,30 @@ class GraphWorkspace:
         )
 
     def _register_settings_callbacks(self, app):
-        app.callback(
-            Output(self._settings_internal_id("drawer-simple"), "opened"),
+        drawer_id = self._settings_internal_id("drawer-simple")
+        tab_id = self._settings_internal_id("drawer-simple-tab")
+        open_state_id = self._settings_internal_id("drawer-simple-open-state")
+
+        @app.callback(
+            Output(drawer_id, "className"),
+            Output(open_state_id, "data"),
             Input(self.ids["open_settings"], "n_clicks"),
+            Input(tab_id, "n_clicks"),
+            State(open_state_id, "data"),
             prevent_initial_call=True,
-        )(lambda _n_clicks: True)
+        )
+        def toggle_settings_panel(_open_clicks, _tab_clicks, opened):
+            trigger = ctx.triggered_id
+            if trigger == self.ids["open_settings"]:
+                should_open = True
+            else:
+                should_open = not bool(opened)
+            panel_class = (
+                "graph-settings-panel graph-settings-content open"
+                if should_open
+                else "graph-settings-panel graph-settings-content"
+            )
+            return panel_class, should_open
 
         defaults = {
             self._settings_control_id("theme"): {"value": "plotly"},

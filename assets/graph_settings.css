@@ -1,33 +1,95 @@
+.graph-settings-panel {
+    position: fixed;
+    top: 43px;
+    right: 0;
+    bottom: 52px;
+    z-index: 160;
+    width: 340px;
+    pointer-events: none;
+}
+
+.graph-settings-side-tab {
+    pointer-events: auto;
+}
+
 .graph-settings-content {
     container-name: graph-settings;
     container-type: inline-size;
-    background: #f7f9fc;
-    border-left: 1px solid #dfe4ec;
-    box-shadow: -18px 0 48px rgba(20, 29, 45, 0.14);
 }
 
-.graph-settings-header {
-    min-height: 70px;
-    padding: 14px 20px;
-    background: rgba(255, 255, 255, 0.96);
-    border-bottom: 1px solid #e5e9f0;
-    backdrop-filter: blur(12px);
+.graph-settings-side-tab {
+    position: absolute;
+    bottom: 10px;
+    left: -32px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 7px;
+    color: #ffffff;
+    background: #228be6;
+    border-radius: 10px 0 0 10px;
+    box-shadow: -4px 2px 14px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.graph-settings-side-tab:hover {
+    background: #1c7ed6;
+}
+
+.graph-settings-side-tab-label {
+    writing-mode: vertical-rl;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+.graph-settings-mover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+    transform: translateX(100%);
+    transition: transform 0.24s ease;
+}
+
+.graph-settings-panel.open .graph-settings-mover {
+    transform: translateX(0);
 }
 
 .graph-settings-body {
-    height: calc(100vh - 70px);
-    padding: 0;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
+    background: #f7f9fc;
+    border: 1px solid #dee2e6;
+    border-right: 0;
+    border-radius: 8px 0 0 8px;
+    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.08);
+    pointer-events: auto;
 }
 
-#graph-settings-panel {
+.graph-settings-panel-inner {
     position: relative;
-    height: 100%;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
 }
 
 .graph-settings-scroll {
-    height: 100%;
-    padding: 20px 22px 92px;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px 10px 54px;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -39,7 +101,7 @@
     place-items: center;
     color: #3b5bdb;
     background: #edf2ff;
-    border-radius: 9px;
+    border-radius: 7px;
 }
 
 .graph-settings-icon {
@@ -63,33 +125,33 @@
 }
 
 .graph-settings-title-icon {
-    width: 34px;
-    height: 34px;
+    width: 24px;
+    height: 24px;
 }
 
 .graph-settings-section-icon {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
 }
 
 .graph-settings-quick {
     background: linear-gradient(135deg, #ffffff 0%, #f6f8ff 100%);
     border-color: #dfe5f2;
-    box-shadow: 0 8px 24px rgba(40, 55, 90, 0.055);
+    box-shadow: 0 4px 14px rgba(40, 55, 90, 0.055);
 }
 
 .graph-settings-tabs {
-    margin-top: 18px;
+    margin-top: 12px;
 }
 
 .graph-settings-tabs-list {
     position: sticky;
-    top: -20px;
+    top: -10px;
     z-index: 4;
-    padding: 5px;
+    padding: 4px;
     background: rgba(237, 241, 247, 0.96);
     border: 1px solid #dfe4ec;
-    border-radius: 11px;
+    border-radius: 9px;
     backdrop-filter: blur(10px);
 }
 
@@ -98,13 +160,13 @@
 }
 
 .graph-settings-tabs-list button {
-    min-height: 38px;
-    padding: 7px 9px;
+    min-height: 30px;
+    padding: 4px 7px;
     color: #667085;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     border: 0;
-    border-radius: 8px;
+    border-radius: 7px;
     transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
@@ -115,17 +177,16 @@
 }
 
 .graph-settings-tab-panel {
-    min-height: 330px;
-    margin-top: 12px;
-    padding: 20px;
+    margin-top: 8px;
+    padding: 10px;
     background: #ffffff;
     border: 1px solid #e2e6ed;
-    border-radius: 12px;
-    box-shadow: 0 8px 26px rgba(40, 55, 90, 0.045);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(40, 55, 90, 0.045);
 }
 
 .graph-settings-section-intro {
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 .graph-settings-grid {
@@ -141,14 +202,15 @@
 }
 
 .graph-settings-content .mantine-InputWrapper-label {
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     color: #344054;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .graph-settings-content .mantine-Input-input {
-    min-height: 38px;
+    min-height: 28px;
+    font-size: 11px;
     border-color: #d8dee9;
     background: #fbfcfe;
 }
@@ -159,20 +221,24 @@
     background: #ffffff;
 }
 
+.graph-settings-content .mantine-SegmentedControl-root {
+    font-size: 11px;
+}
+
 .graph-settings-feature-card {
-    min-height: 86px;
-    padding: 13px 14px;
+    min-height: 0;
+    padding: 8px 10px;
     background: #f8fafc;
     border: 1px solid #e4e8ef;
-    border-radius: 10px;
+    border-radius: 8px;
 }
 
 .graph-settings-feature-card .mantine-Switch-root {
-    margin-bottom: 9px;
+    margin-bottom: 6px;
 }
 
 .graph-settings-note {
-    font-size: 12px;
+    font-size: 10px;
 }
 
 .graph-settings-footer {
@@ -184,8 +250,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 62px;
-    padding: 10px 22px;
+    min-height: 44px;
+    padding: 6px 12px;
     background: rgba(255, 255, 255, 0.94);
     border-top: 1px solid #e1e6ee;
     backdrop-filter: blur(12px);
@@ -194,11 +260,15 @@
 .graph-settings-auto-status {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     color: #2f9e44;
 }
 
 @media (max-width: 720px) {
+    .graph-settings-panel {
+        width: min(340px, 94vw);
+    }
+
     .graph-settings-quick-grid,
     .graph-settings-grid {
         grid-template-columns: 1fr !important;
@@ -210,15 +280,11 @@
 
     .graph-settings-tabs-list button {
         padding-inline: 5px;
-        font-size: 11px;
+        font-size: 10px;
     }
 }
 
 @container graph-settings (max-width: 540px) {
-    .graph-settings-scroll {
-        padding: 16px 16px 88px;
-    }
-
     .graph-settings-quick-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
@@ -227,18 +293,13 @@
         grid-column: span 2;
     }
 
-    .graph-settings-tab-panel {
-        min-height: 0;
-        padding: 16px;
-    }
-
     .graph-settings-tabs-list button {
         gap: 4px;
         padding-inline: 5px;
-        font-size: 11px;
+        font-size: 10px;
     }
 
     .graph-settings-footer {
-        padding-inline: 16px;
+        padding-inline: 12px;
     }
 }

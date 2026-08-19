@@ -829,8 +829,15 @@ class GraphSettingsPanelTests(unittest.TestCase):
         }
         self.assertEqual(panel_values, {"axes", "labels", "legend", "series"})
 
-    def test_settings_drawer_uses_compact_width(self):
-        self.assertEqual(self.panel.size, "476px")
+    def test_settings_panel_is_slide_out_overlay(self):
+        self.assertEqual(getattr(self.panel, "id", None), "drawer-simple")
+        self.assertIn("graph-settings-panel", self.panel.className)
+        component_ids = {
+            getattr(component, "id", None)
+            for component in self.components
+        }
+        for expected in ("drawer-simple-tab", "drawer-simple-open-state"):
+            self.assertIn(expected, component_ids)
 
     def test_settings_panel_keeps_existing_callback_ids(self):
         component_ids = {
