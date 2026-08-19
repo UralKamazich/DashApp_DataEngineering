@@ -20,6 +20,7 @@ from sklearn.metrics import silhouette_score
 
 from dash_app import app
 from utils import read_df_from_store, meta_from_df, _make_error_notif
+from callbacks.filters import _clean_filter_state
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,14 @@ def apply_filters(filters_state, logic_mode, stored_json, meta_state):
     """Применяет фильтры к исходному датасету → filtered-data (чистый, без DE-колонок)."""
     if not stored_json:
         raise PreventUpdate
+
+    # Без активных фильтров filtered-data уже равен stored-data — его туда
+    # положили загрузчики файла. Не перезаписываем: иначе каждая загрузка
+    # файла вызывала бы лишнюю перерисовку графика.
+    if not _clean_filter_state(filters_state):
+        trigger = _ctx.triggered_id
+        if trigger != "apply-filters-btn":
+            raise PreventUpdate
 
     try:
         df = read_df_from_store(stored_json, meta_state)

@@ -52,8 +52,8 @@ def pick_local_file(n_clicks):
     Output('status-message', 'children'),
     Output('sheet-menu-wrapper', 'children'),
     Output('stored-sheet-names', 'data'),
-    Output('stored-data', 'data'),
     Output('selected-sheet', 'data'),
+    Output('stored-data', 'data'),
     Output('filtered-data', 'data', allow_duplicate=True),
     Output('meta-columns', 'data', allow_duplicate=True),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
@@ -63,7 +63,10 @@ def pick_local_file(n_clicks):
 )
 def on_excel_upload(local_path, local_name):
     """Загрузка данных ТОЛЬКО с локального диска через выбор файла (tkinter).
-    Сохранение пути делается отдельным callback по кнопке pick-file-btn.
+
+    Сам файл здесь НЕ читаем: только узнаём список листов и выставляем
+    selected-sheet. Чтение делает единственный callback load_selected_sheet —
+    иначе файл грузился бы дважды и график перерисовывался лишние разы.
     """
     if not local_path:
         raise PreventUpdate
@@ -76,20 +79,10 @@ def on_excel_upload(local_path, local_name):
             # ВАЖНО: ExcelFile нужно закрывать, иначе на Windows исходный .xlsx может оставаться 'занятым'.
             with pd.ExcelFile(local_path, engine='openpyxl') as xl:
                 sheets = xl.sheet_names
-                # один лист — читаем сразу
-                if len(sheets) == 1:
-                    sheet_name = sheets[0]
-                    df = xl.parse(sheet_name)
 
-            # после выхода из with файл гарантированно закрыт
+            # один лист — сразу выбираем его, данные прочитает load_selected_sheet
             if len(sheets) == 1:
-                meta = meta_from_df(df)
-                js = df.to_json(date_format='iso', orient='split')
-                return (
-                    "",
-                    dash.no_update, sheets, js, sheet_name,
-                    js, meta, []
-                )
+                return "", dash.no_update, sheets, sheets[0], dash.no_update, dash.no_update, dash.no_update, []
 
             # несколько листов — показываем модалку выбора
             modal = dmc.Modal(
@@ -117,35 +110,20 @@ def on_excel_upload(local_path, local_name):
                     )
                 ]
             )
-            return (
-                "",
-                modal, sheets, dash.no_update, dash.no_update,
-                dash.no_update, dash.no_update, []
-            )
+            return "", modal, sheets, dash.no_update, dash.no_update, dash.no_update, dash.no_update, []
         elif ext == '.pkl':
+            # Для .pkl выбора листа нет — читаем сразу здесь.
             df = pd.read_pickle(local_path)
-            meta = meta_from_df(df)
             js = df.to_json(date_format='iso', orient='split')
-            return (
-                "",
-                dash.no_update, None, js, None,
-                js, meta, []
-            )
+            meta = meta_from_df(df)
+            return "", dash.no_update, None, None, js, js, meta, []
 
     except Exception as e:
         notif = _make_error_notif(f"Ошибка загрузки файла: {str(e)}")
-        return (
-            html.Div(f"Ошибка: {e}", style={'color': 'red'}),
-            dash.no_update, None, dash.no_update, dash.no_update,
-            dash.no_update, dash.no_update, notif
-        )
+        return html.Div(f"Ошибка: {e}", style={'color': 'red'}), dash.no_update, None, dash.no_update, dash.no_update, dash.no_update, dash.no_update, notif
 
     notif = _make_error_notif("Неподдерживаемый формат (нужно .xlsx или .pkl)")
-    return (
-        html.Div("Неподдерживаемый формат", style={'color': 'red'}),
-        dash.no_update, None, dash.no_update, dash.no_update,
-        dash.no_update, dash.no_update, notif
-    )
+    return html.Div("Неподдерживаемый формат", style={'color': 'red'}), dash.no_update, None, dash.no_update, dash.no_update, dash.no_update, dash.no_update, notif
 
 
 @app.callback(
