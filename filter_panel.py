@@ -40,36 +40,36 @@ def create_filter_tab():
 
 
 def create_filter_drawer():
-    title = dmc.Group(
+    header = html.Div(
         [
-            DashIconify(icon="tabler:filter", width=18),
-            dmc.Text("Фильтры", fw=700, size="md"),
-            dmc.Badge("0 активных", id="filters-drawer-count", variant="light", size="sm"),
+            dmc.Group(
+                [
+                    DashIconify(icon="tabler:filter", width=16),
+                    dmc.Text("Фильтры", fw=700, size="sm"),
+                    dmc.Badge("0 активных", id="filters-drawer-count", variant="light", size="sm"),
+                ],
+                gap="xs",
+            ),
+            dmc.ActionIcon(
+                DashIconify(icon="tabler:x", width=16),
+                id="filters-drawer-close",
+                variant="subtle",
+                color="gray",
+                size="sm",
+                **{"aria-label": "Закрыть панель фильтров"},
+            ),
         ],
-        gap="xs",
+        className="filters-drawer-header",
     )
 
-    return dmc.Drawer(
-        id="filters-drawer",
-        title=title,
-        opened=False,
-        position="right",
-        size="267px",
-        padding=0,
-        withOverlay=False,
-        overlayProps={"opacity": 0.16, "blur": 1},
-        closeOnClickOutside=False,
-        closeOnEscape=True,
-        trapFocus=False,
-        returnFocus=False,
-        withCloseButton=True,
-        classNames={
-            "content": "filters-drawer-content",
-            "header": "filters-drawer-header",
-            "body": "filters-drawer-body",
-        },
-        children=html.Div(
-            [
+    return html.Div(
+        [
+            create_filter_tab(),
+            html.Div(
+                [
+                    header,
+                    html.Div(
+                        [
                 dcc.Store(id="filter-drop-store"),
                 html.Div(
                     [
@@ -196,7 +196,15 @@ def create_filter_drawer():
                     ],
                     className="filter-panel-footer",
                 ),
-            ],
-            className="filter-panel-shell",
-        ),
+                        ],
+                        className="filter-panel-shell",
+                    ),
+                ],
+                className="filters-drawer-body",
+            ),
+            dcc.Store(id="filters-outside-close-store", data=False),
+            dcc.Store(id="filters-drawer-open-state", data=False),
+        ],
+        id="filters-drawer",
+        className="filters-drawer-panel",
     )

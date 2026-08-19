@@ -4,7 +4,7 @@
 import json
 
 import pandas as pd
-from dash import ALL, MATCH, Input, Output, State, ctx, html, no_update
+from dash import ALL, MATCH, Input, Output, State, clientside_callback, ctx, html, no_update
 from dash.exceptions import PreventUpdate
 from dash_iconify import DashIconify
 import dash_mantine_components as dmc
@@ -134,34 +134,67 @@ def _serialized_row_count(payload):
 
 
 @app.callback(
-    Output("filters-drawer", "opened"),
+    Output("filters-drawer", "className"),
+    Output("filters-drawer-open-state", "data"),
     Input("filters-panel-toggle", "n_clicks"),
     Input("filters-side-tab", "n_clicks"),
+    Input("filters-drawer-close", "n_clicks"),
     Input("filter-drop-store", "data"),
     Input("apply-filters-btn", "n_clicks"),
-    State("filters-drawer", "opened"),
+    State("filters-drawer-open-state", "data"),
     State("filter-close-on-apply", "checked"),
     prevent_initial_call=True,
 )
-def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _dropped, _apply_clicks, opened, close_on_apply):
+def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _close_clicks, _dropped, _apply_clicks, opened, close_on_apply):
     trigger = ctx.triggered_id
-    if trigger == "filter-drop-store":
-        return True
-    if trigger == "apply-filters-btn":
-        return False if close_on_apply else no_update
-    return not bool(opened)
+    if trigger == "filters-drawer-close":
+        should_open = False
+    elif trigger == "filter-drop-store":
+        should_open = True
+    elif trigger == "apply-filters-btn":
+        if not close_on_apply:
+            return no_update, no_update
+        should_open = False
+    else:
+        should_open = not bool(opened)
+    panel_class = "filters-drawer-panel open" if should_open else "filters-drawer-panel"
+    return panel_class, should_open
 
 
 @app.callback(
-    Output("filters-drawer", "closeOnClickOutside"),
-    Output("filters-drawer", "withOverlay"),
+    Output("filters-outside-close-store", "data"),
     Input("filter-close-on-outside", "checked"),
 )
 def sync_drawer_close_on_outside(close_on_outside):
-    # Закрытие кликом вне в Mantine работает только вместе с оверлеем,
-    # поэтому оверлей включаем лишь в этом режиме.
-    close = bool(close_on_outside)
-    return close, close
+    return bool(close_on_outside)
+
+
+clientside_callback(
+    """
+    function (enabled) {
+        if (window.__filtersOutsideAbort) {
+            window.__filtersOutsideAbort.abort();
+            window.__filtersOutsideAbort = null;
+        }
+        if (!enabled) {
+            return window.dash_clientside.no_update;
+        }
+        var controller = new AbortController();
+        window.__filtersOutsideAbort = controller;
+        document.addEventListener("mousedown", function (event) {
+            var panel = document.getElementById("filters-drawer");
+            if (!panel || !panel.classList.contains("open")) return;
+            if (panel.contains(event.target)) return;
+            window.dash_clientside.set_props("filters-drawer", {className: "filters-drawer-panel"});
+            window.dash_clientside.set_props("filters-drawer-open-state", {data: false});
+        }, {signal: controller.signal});
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("filters-drawer-open-state", "data", allow_duplicate=True),
+    Input("filters-outside-close-store", "data"),
+    prevent_initial_call=True,
+)
 
 
 @app.callback(

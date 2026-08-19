@@ -11,7 +11,7 @@ import dash_mantine_components as dmc
 
 from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
-from filter_panel import create_filter_drawer, create_filter_tab, create_filter_trigger
+from filter_panel import create_filter_drawer, create_filter_trigger
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
@@ -103,7 +103,6 @@ def create_layout():
     graph_workspace = GRAPH_WORKSPACE.render()
     correlation_workspace = CORRELATION_WORKSPACE.render()
     filter_trigger = create_filter_trigger()
-    filter_tab = create_filter_tab()
     filter_drawer = create_filter_drawer()
 
     return dmc.MantineProvider(
@@ -175,7 +174,6 @@ def create_layout():
                 dmc.Modal(id="sheet-modal", title="Выберите лист Excel", opened=False, centered=True, zIndex=1000, children=[]),
                 id="sheet-menu-wrapper"
             ),
-            filter_tab,
             filter_drawer,
             html.Div(id='status-message', style={'display': 'none'}),
 
