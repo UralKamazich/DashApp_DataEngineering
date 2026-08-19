@@ -27,7 +27,7 @@ def update_column_badges(stored_json, filtered_json, meta):
     sidebar_style = {
         "overflowY": "auto",
         "overflowX": "hidden",
-        "height": "calc(100% - 28px)",
+        "height": "100%",
         "padding": "8px",
         "fontSize": "10px",
     }

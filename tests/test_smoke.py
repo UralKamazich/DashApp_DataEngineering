@@ -154,6 +154,13 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "reset-filters-btn",
             "filter-close-on-apply",
             "filter-close-on-outside",
+            "dataset-drawer",
+            "dataset-side-tab",
+            "dataset-close-on-outside",
+            "dataset-drawer-open-state",
+            "dataset-outside-close-store",
+            "columns-sidebar",
+            "columns-badges",
         ):
             self.assertIn(component_id, component_ids)
 

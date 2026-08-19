@@ -52,11 +52,11 @@
 
 .filters-drawer-panel {
     position: fixed;
-    top: 0;
+    top: 43px;
     right: 0;
+    bottom: 52px;
     z-index: 150;
     width: 267px;
-    height: 100dvh;
     transform: translateX(100%);
     transition: transform 0.24s ease;
 }
@@ -67,7 +67,7 @@
 
 .filter-side-tab {
     position: absolute;
-    top: 50%;
+    top: 66%;
     left: -32px;
     z-index: 1;
     display: flex;

@@ -11,6 +11,7 @@ import dash_mantine_components as dmc
 
 from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
+from dataset_panel import create_dataset_drawer
 from filter_panel import create_filter_drawer, create_filter_trigger
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
@@ -104,6 +105,7 @@ def create_layout():
     correlation_workspace = CORRELATION_WORKSPACE.render()
     filter_trigger = create_filter_trigger()
     filter_drawer = create_filter_drawer()
+    dataset_drawer = create_dataset_drawer()
 
     return dmc.MantineProvider(
         children=[
@@ -192,23 +194,8 @@ def create_layout():
                     "gap": "8px",
                 },
                 children=[
-                # ---------- САЙДБАР ПЛАШЕК КОЛОНОК ----------
-                html.Div(
-                    style={"flexShrink": "0", "width": "15.23%", "maxWidth": "15.23%", "minWidth": "15.23%"},
-                    children=[
-                        dmc.Text("Датасет", size="sm", fw=600, c="dimmed", ta="center", style={"marginBottom": "4px"}),
-                        dmc.Paper(
-                            id="columns-sidebar",
-                            children=[
-                                dmc.Stack(id="columns-badges", children=[], gap="2px", style={"maxWidth": "100%", "overflow": "hidden"}),
-                            ],
-                            shadow="sm",
-                            p="xs",
-                            withBorder=True,
-                            style={"overflowY": "auto", "overflowX": "hidden", "height": "calc(100% - 28px)", "padding": "8px", "fontSize": "10px"},
-                        ),
-                    ],
-                ),
+                # ---------- ВЫКАТНАЯ ПАНЕЛЬ ДАТАСЕТА (слева) ----------
+                dataset_drawer,
 
                 # ---------- ПРАВАЯ ПАНЕЛЬ — график + страницы ----------------
                 html.Div(

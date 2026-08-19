@@ -35,4 +35,4 @@ CORRELATION_WORKSPACE.register_callbacks(app)
 # =========================
 # Регистрация callbacks
 # =========================
-from callbacks import modals, file_handling, filters, pipeline, data_engineering, dropdowns, graph, download, columns_sidebar
+from callbacks import modals, file_handling, filters, pipeline, data_engineering, dropdowns, graph, download, columns_sidebar, dataset_panel
