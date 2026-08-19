@@ -51,24 +51,22 @@
 }
 
 .filters-drawer-panel {
-    position: fixed;
-    top: 43px;
-    right: 0;
-    bottom: 52px;
-    z-index: 150;
-    width: 267px;
-    transform: translateX(100%);
-    transition: transform 0.24s ease;
+    position: relative;
+    flex: 0 0 auto;
+    width: 32px;
+    height: calc(100% + 16px);
+    margin: -8px -8px -8px 0;
+    transition: width 0.24s ease;
 }
 
 .filters-drawer-panel.open {
-    transform: translateX(0);
+    width: 299px;
 }
 
 .filter-side-tab {
     position: absolute;
     top: 66%;
-    left: -32px;
+    left: 0;
     z-index: 1;
     display: flex;
     flex-direction: column;
@@ -122,40 +120,28 @@
     position: absolute;
     top: 0;
     right: 0;
-    bottom: 0;
-    left: 0;
     display: flex;
     flex-direction: column;
+    width: 267px;
+    height: 100%;
     overflow: hidden;
     background: #ffffff;
-    border-left: 1px solid #dee2e6;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+    border: 1px solid #dee2e6;
+    border-radius: 8px 0 0 8px;
+    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.08);
+    transform: translateX(calc(100% + 16px));
+    transition: transform 0.24s ease;
 }
 
-.filters-drawer-header {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    min-height: 54px;
-    padding: 10px 12px;
-    border-bottom: 1px solid #e9ecef;
+.filters-drawer-panel.open .filters-drawer-body {
+    transform: translateX(0);
 }
 
-.filter-panel-shell {
-    display: flex;
+.filter-panel-columns {
     flex: 1 1 auto;
     min-height: 0;
-    flex-direction: column;
+    padding: 8px;
     background: #f8f9fa;
-}
-
-.filter-panel-scroll {
-    min-height: 0;
-    flex: 1 1 auto;
-    overflow-y: auto;
-    padding: 12px;
 }
 
 .filter-panel-intro {
@@ -281,7 +267,11 @@
 }
 
 @media (max-width: 700px) {
-    .filters-drawer-panel {
-        width: min(267px, 94vw);
+    .filters-drawer-panel.open {
+        width: min(299px, 96vw);
+    }
+
+    .filters-drawer-body {
+        width: min(267px, calc(96vw - 32px));
     }
 }

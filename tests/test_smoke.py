@@ -145,7 +145,6 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "filters-panel-toggle",
             "filters-side-tab",
             "filters-drawer",
-            "filters-drawer-close",
             "filters-outside-close-store",
             "filters-container",
             "filters-applied-state",

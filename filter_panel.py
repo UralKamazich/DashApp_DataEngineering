@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Global overlay filter panel shared by every analysis page."""
+"""Slide-out filter panel on the right edge with an attached handle tab."""
 
 from dash import dcc, html
 from dash_iconify import DashIconify
@@ -40,26 +40,140 @@ def create_filter_tab():
 
 
 def create_filter_drawer():
-    header = html.Div(
+    content = dmc.Paper(
         [
-            dmc.Group(
+            html.Div(
                 [
-                    DashIconify(icon="tabler:filter", width=16),
-                    dmc.Text("Фильтры", fw=700, size="sm"),
-                    dmc.Badge("0 активных", id="filters-drawer-count", variant="light", size="sm"),
+                    dmc.Group(
+                        [
+                            dmc.Text("Связь условий", size="xs", fw=600),
+                            dmc.SegmentedControl(
+                                id="filter-logic-mode",
+                                value="and",
+                                data=[
+                                    {"label": "И", "value": "and"},
+                                    {"label": "ИЛИ", "value": "or"},
+                                ],
+                                size="xs",
+                                persistence=True,
+                            ),
+                        ],
+                        justify="space-between",
+                    ),
+                    dmc.Text(
+                        "Перетащите канал из датасета или добавьте условие вручную",
+                        size="xs",
+                        c="dimmed",
+                        mt=3,
+                    ),
                 ],
-                gap="xs",
+                className="filter-panel-intro",
             ),
-            dmc.ActionIcon(
-                DashIconify(icon="tabler:x", width=16),
-                id="filters-drawer-close",
-                variant="subtle",
-                color="gray",
-                size="sm",
-                **{"aria-label": "Закрыть панель фильтров"},
+            html.Div(
+                [
+                    DashIconify(icon="tabler:drag-drop", width=18),
+                    html.Span("Перетащить канал сюда"),
+                ],
+                id="filter-drawer-drop-zone",
+                className="filter-drop-target filter-drawer-drop-zone",
+            ),
+            html.Div(id="filters-container", children=[], className="filter-cards"),
+            html.Div(
+                [
+                    DashIconify(icon="tabler:filter-plus", width=24),
+                    dmc.Text("Активных условий пока нет", size="sm", fw=600),
+                    dmc.Text(
+                        "Добавьте фильтр или перетащите канал из списка датасета.",
+                        size="xs",
+                        c="dimmed",
+                        ta="center",
+                    ),
+                ],
+                className="filter-empty-state",
+            ),
+            dmc.Button(
+                "Добавить фильтр",
+                id="add-filter-btn",
+                size="xs",
+                variant="light",
+                leftSection=DashIconify(icon="tabler:plus", width=14),
+                fullWidth=True,
+                mt="sm",
             ),
         ],
-        className="filters-drawer-header",
+        shadow="sm",
+        p="xs",
+        withBorder=True,
+        style={
+            "overflowY": "auto",
+            "overflowX": "hidden",
+            "height": "100%",
+            "padding": "8px",
+            "fontSize": "10px",
+        },
+    )
+
+    footer = html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            dmc.Text("Результат", size="xs", c="dimmed"),
+                            dmc.Text(
+                                "Загрузите данные",
+                                id="filter-results-summary",
+                                size="xs",
+                                fw=600,
+                            ),
+                        ],
+                        className="filter-results-summary",
+                    ),
+                    dmc.Group(
+                        [
+                            dmc.Button(
+                                "Сбросить",
+                                id="reset-filters-btn",
+                                variant="subtle",
+                                color="gray",
+                                size="xs",
+                                leftSection=DashIconify(icon="tabler:rotate", width=14),
+                            ),
+                            dmc.Button(
+                                "Применить",
+                                id="apply-filters-btn",
+                                size="xs",
+                                leftSection=DashIconify(icon="tabler:check", width=14),
+                            ),
+                        ],
+                        gap="xs",
+                    ),
+                ],
+                className="filter-panel-footer-row",
+            ),
+            dmc.Group(
+                [
+                    dmc.Checkbox(
+                        id="filter-close-on-apply",
+                        label="Закрывать при «Применить»",
+                        checked=False,
+                        size="xs",
+                        persistence=True,
+                    ),
+                    dmc.Checkbox(
+                        id="filter-close-on-outside",
+                        label="Закрывать при клике вне",
+                        checked=False,
+                        size="xs",
+                        persistence=True,
+                    ),
+                ],
+                gap="md",
+                wrap="wrap",
+                className="filter-panel-options",
+            ),
+        ],
+        className="filter-panel-footer",
     )
 
     return html.Div(
@@ -67,138 +181,9 @@ def create_filter_drawer():
             create_filter_tab(),
             html.Div(
                 [
-                    header,
-                    html.Div(
-                        [
-                dcc.Store(id="filter-drop-store"),
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                dmc.Group(
-                                    [
-                                        dmc.Text("Связь условий", size="xs", fw=600),
-                                        dmc.SegmentedControl(
-                                            id="filter-logic-mode",
-                                            value="and",
-                                            data=[
-                                                {"label": "И", "value": "and"},
-                                                {"label": "ИЛИ", "value": "or"},
-                                            ],
-                                            size="xs",
-                                            persistence=True,
-                                        ),
-                                    ],
-                                    justify="space-between",
-                                ),
-                                dmc.Text(
-                                    "Перетащите канал из датасета или добавьте условие вручную",
-                                    size="xs",
-                                    c="dimmed",
-                                    mt=3,
-                                ),
-                            ],
-                            className="filter-panel-intro",
-                        ),
-                        html.Div(
-                            [
-                                DashIconify(icon="tabler:drag-drop", width=18),
-                                html.Span("Перетащить канал сюда"),
-                            ],
-                            id="filter-drawer-drop-zone",
-                            className="filter-drop-target filter-drawer-drop-zone",
-                        ),
-                        html.Div(id="filters-container", children=[], className="filter-cards"),
-                        html.Div(
-                            [
-                                DashIconify(icon="tabler:filter-plus", width=24),
-                                dmc.Text("Активных условий пока нет", size="sm", fw=600),
-                                dmc.Text(
-                                    "Добавьте фильтр или перетащите канал из списка датасета.",
-                                    size="xs",
-                                    c="dimmed",
-                                    ta="center",
-                                ),
-                            ],
-                            className="filter-empty-state",
-                        ),
-                        dmc.Button(
-                            "Добавить фильтр",
-                            id="add-filter-btn",
-                            size="xs",
-                            variant="light",
-                            leftSection=DashIconify(icon="tabler:plus", width=14),
-                            fullWidth=True,
-                            mt="sm",
-                        ),
-                    ],
-                    className="filter-panel-scroll",
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.Div(
-                                    [
-                                        dmc.Text("Результат", size="xs", c="dimmed"),
-                                        dmc.Text(
-                                            "Загрузите данные",
-                                            id="filter-results-summary",
-                                            size="xs",
-                                            fw=600,
-                                        ),
-                                    ],
-                                    className="filter-results-summary",
-                                ),
-                                dmc.Group(
-                                    [
-                                        dmc.Button(
-                                            "Сбросить",
-                                            id="reset-filters-btn",
-                                            variant="subtle",
-                                            color="gray",
-                                            size="xs",
-                                            leftSection=DashIconify(icon="tabler:rotate", width=14),
-                                        ),
-                                        dmc.Button(
-                                            "Применить",
-                                            id="apply-filters-btn",
-                                            size="xs",
-                                            leftSection=DashIconify(icon="tabler:check", width=14),
-                                        ),
-                                    ],
-                                    gap="xs",
-                                ),
-                            ],
-                            className="filter-panel-footer-row",
-                        ),
-                        dmc.Group(
-                            [
-                                dmc.Checkbox(
-                                    id="filter-close-on-apply",
-                                    label="Закрывать при «Применить»",
-                                    checked=False,
-                                    size="xs",
-                                    persistence=True,
-                                ),
-                                dmc.Checkbox(
-                                    id="filter-close-on-outside",
-                                    label="Закрывать при клике вне",
-                                    checked=False,
-                                    size="xs",
-                                    persistence=True,
-                                ),
-                            ],
-                            gap="md",
-                            wrap="wrap",
-                            className="filter-panel-options",
-                        ),
-                    ],
-                    className="filter-panel-footer",
-                ),
-                        ],
-                        className="filter-panel-shell",
-                    ),
+                    dcc.Store(id="filter-drop-store"),
+                    html.Div(content, className="filter-panel-columns"),
+                    footer,
                 ],
                 className="filters-drawer-body",
             ),

@@ -176,7 +176,6 @@ def create_layout():
                 dmc.Modal(id="sheet-modal", title="Выберите лист Excel", opened=False, centered=True, zIndex=1000, children=[]),
                 id="sheet-menu-wrapper"
             ),
-            filter_drawer,
             html.Div(id='status-message', style={'display': 'none'}),
 
             # --- de-modal (скрыт) ---
@@ -289,6 +288,9 @@ def create_layout():
                         ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
                     ]),
                 ]),  # конец правой панели
+
+                # ---------- ВЫКАТНАЯ ПАНЕЛЬ ФИЛЬТРОВ (справа) ----------
+                filter_drawer,
                 ]  # конец flex-контейнера
             ),
 
