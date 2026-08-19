@@ -150,6 +150,8 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "filter-logic-mode",
             "apply-filters-btn",
             "reset-filters-btn",
+            "filter-close-on-apply",
+            "filter-close-on-outside",
         ):
             self.assertIn(component_id, component_ids)
 

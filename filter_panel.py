@@ -54,12 +54,14 @@ def create_filter_drawer():
         title=title,
         opened=False,
         position="right",
-        size="400px",
+        size="267px",
         padding=0,
-        withOverlay=True,
+        withOverlay=False,
         overlayProps={"opacity": 0.16, "blur": 1},
-        closeOnClickOutside=True,
+        closeOnClickOutside=False,
         closeOnEscape=True,
+        trapFocus=False,
+        returnFocus=False,
         withCloseButton=True,
         classNames={
             "content": "filters-drawer-content",
@@ -136,34 +138,60 @@ def create_filter_drawer():
                     [
                         html.Div(
                             [
-                                dmc.Text("Результат", size="xs", c="dimmed"),
-                                dmc.Text(
-                                    "Загрузите данные",
-                                    id="filter-results-summary",
-                                    size="xs",
-                                    fw=600,
+                                html.Div(
+                                    [
+                                        dmc.Text("Результат", size="xs", c="dimmed"),
+                                        dmc.Text(
+                                            "Загрузите данные",
+                                            id="filter-results-summary",
+                                            size="xs",
+                                            fw=600,
+                                        ),
+                                    ],
+                                    className="filter-results-summary",
+                                ),
+                                dmc.Group(
+                                    [
+                                        dmc.Button(
+                                            "Сбросить",
+                                            id="reset-filters-btn",
+                                            variant="subtle",
+                                            color="gray",
+                                            size="xs",
+                                            leftSection=DashIconify(icon="tabler:rotate", width=14),
+                                        ),
+                                        dmc.Button(
+                                            "Применить",
+                                            id="apply-filters-btn",
+                                            size="xs",
+                                            leftSection=DashIconify(icon="tabler:check", width=14),
+                                        ),
+                                    ],
+                                    gap="xs",
                                 ),
                             ],
-                            className="filter-results-summary",
+                            className="filter-panel-footer-row",
                         ),
                         dmc.Group(
                             [
-                                dmc.Button(
-                                    "Сбросить",
-                                    id="reset-filters-btn",
-                                    variant="subtle",
-                                    color="gray",
+                                dmc.Checkbox(
+                                    id="filter-close-on-apply",
+                                    label="Закрывать при «Применить»",
+                                    checked=False,
                                     size="xs",
-                                    leftSection=DashIconify(icon="tabler:rotate", width=14),
+                                    persistence=True,
                                 ),
-                                dmc.Button(
-                                    "Применить",
-                                    id="apply-filters-btn",
+                                dmc.Checkbox(
+                                    id="filter-close-on-outside",
+                                    label="Закрывать при клике вне",
+                                    checked=False,
                                     size="xs",
-                                    leftSection=DashIconify(icon="tabler:check", width=14),
+                                    persistence=True,
                                 ),
                             ],
-                            gap="xs",
+                            gap="md",
+                            wrap="wrap",
+                            className="filter-panel-options",
                         ),
                     ],
                     className="filter-panel-footer",

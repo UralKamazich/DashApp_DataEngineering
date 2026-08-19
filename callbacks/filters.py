@@ -140,15 +140,28 @@ def _serialized_row_count(payload):
     Input("filter-drop-store", "data"),
     Input("apply-filters-btn", "n_clicks"),
     State("filters-drawer", "opened"),
+    State("filter-close-on-apply", "checked"),
     prevent_initial_call=True,
 )
-def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _dropped, _apply_clicks, opened):
+def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _dropped, _apply_clicks, opened, close_on_apply):
     trigger = ctx.triggered_id
     if trigger == "filter-drop-store":
         return True
     if trigger == "apply-filters-btn":
-        return False
+        return False if close_on_apply else no_update
     return not bool(opened)
+
+
+@app.callback(
+    Output("filters-drawer", "closeOnClickOutside"),
+    Output("filters-drawer", "withOverlay"),
+    Input("filter-close-on-outside", "checked"),
+)
+def sync_drawer_close_on_outside(close_on_outside):
+    # Закрытие кликом вне в Mantine работает только вместе с оверлеем,
+    # поэтому оверлей включаем лишь в этом режиме.
+    close = bool(close_on_outside)
+    return close, close
 
 
 @app.callback(
