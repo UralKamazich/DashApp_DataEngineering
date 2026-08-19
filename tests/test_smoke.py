@@ -82,6 +82,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
             "/assets/filter_panel.css": "text/css",
+            "/assets/slide_panel.css": "text/css",
             "/assets/filter_panel.js": "text/javascript",
         }
         for path, content_type in assets.items():
@@ -172,6 +173,27 @@ class DashApplicationSmokeTests(unittest.TestCase):
             for component in walk_components(graph_page)
         }
         self.assertNotIn("filters-container", graph_page_ids)
+
+    def test_side_panels_share_unified_slide_panel_class(self):
+        panels = {
+            component.id: component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None) in {
+                "dataset-drawer",
+                "filters-drawer",
+                "drawer-simple",
+            }
+        }
+        self.assertEqual(set(panels), {"dataset-drawer", "filters-drawer", "drawer-simple"})
+        for panel in panels.values():
+            classes = panel.className.split()
+            self.assertIn("slide-panel", classes)
+        self.assertIn("slide-panel--left", panels["dataset-drawer"].className.split())
+        self.assertIn("slide-panel--reflow", panels["dataset-drawer"].className.split())
+        self.assertIn("slide-panel--right", panels["filters-drawer"].className.split())
+        self.assertIn("slide-panel--reflow", panels["filters-drawer"].className.split())
+        self.assertIn("slide-panel--right", panels["drawer-simple"].className.split())
+        self.assertIn("slide-panel--overlay", panels["drawer-simple"].className.split())
 
 
 class DataStoreRoundTripTests(unittest.TestCase):
@@ -831,7 +853,8 @@ class GraphSettingsPanelTests(unittest.TestCase):
 
     def test_settings_panel_is_slide_out_overlay(self):
         self.assertEqual(getattr(self.panel, "id", None), "drawer-simple")
-        self.assertIn("graph-settings-panel", self.panel.className)
+        self.assertIn("slide-panel", self.panel.className.split())
+        self.assertIn("slide-panel--overlay", self.panel.className.split())
         component_ids = {
             getattr(component, "id", None)
             for component in self.components

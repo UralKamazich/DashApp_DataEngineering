@@ -4,19 +4,10 @@
 from dash import Input, Output, State, clientside_callback
 
 from dash_app import app
+from dataset_panel import DATASET_PANEL
 
 
-@app.callback(
-    Output("dataset-drawer", "className"),
-    Output("dataset-drawer-open-state", "data"),
-    Input("dataset-side-tab", "n_clicks"),
-    State("dataset-drawer-open-state", "data"),
-    prevent_initial_call=True,
-)
-def toggle_dataset_drawer(_tab_clicks, opened):
-    should_open = not bool(opened)
-    panel_class = "dataset-drawer-panel open" if should_open else "dataset-drawer-panel"
-    return panel_class, should_open
+DATASET_PANEL.register_toggle(app)
 
 
 @app.callback(
@@ -43,12 +34,12 @@ clientside_callback(
             var panel = document.getElementById("dataset-drawer");
             if (!panel || !panel.classList.contains("open")) return;
             if (panel.contains(event.target)) return;
-            window.dash_clientside.set_props("dataset-drawer", {className: "dataset-drawer-panel"});
+            window.dash_clientside.set_props("dataset-drawer", {className: "__PANEL_CLOSED_CLASS__"});
             window.dash_clientside.set_props("dataset-drawer-open-state", {data: false});
         }, {signal: controller.signal});
         return window.dash_clientside.no_update;
     }
-    """,
+    """.replace("__PANEL_CLOSED_CLASS__", DATASET_PANEL.closed_class),
     Output("dataset-drawer-open-state", "data", allow_duplicate=True),
     Input("dataset-outside-close-store", "data"),
     prevent_initial_call=True,

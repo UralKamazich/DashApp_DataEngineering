@@ -1,81 +1,8 @@
-.graph-settings-panel {
-    position: fixed;
-    top: 43px;
-    right: 0;
-    bottom: 52px;
-    z-index: 160;
-    width: 340px;
-    pointer-events: none;
-}
-
-.graph-settings-side-tab {
-    pointer-events: auto;
-}
+/* Механика выезжания и ярлычок — в slide_panel.css; здесь только содержимое. */
 
 .graph-settings-content {
     container-name: graph-settings;
     container-type: inline-size;
-}
-
-.graph-settings-side-tab {
-    position: absolute;
-    bottom: 10px;
-    left: -32px;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 14px 7px;
-    color: #ffffff;
-    background: #228be6;
-    border-radius: 10px 0 0 10px;
-    box-shadow: -4px 2px 14px rgba(0, 0, 0, 0.28);
-    cursor: pointer;
-    transition: background-color 0.15s;
-}
-
-.graph-settings-side-tab:hover {
-    background: #1c7ed6;
-}
-
-.graph-settings-side-tab-label {
-    writing-mode: vertical-rl;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-}
-
-.graph-settings-mover {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    pointer-events: none;
-    transform: translateX(100%);
-    transition: transform 0.24s ease;
-}
-
-.graph-settings-panel.open .graph-settings-mover {
-    transform: translateX(0);
-}
-
-.graph-settings-body {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: #f7f9fc;
-    border: 1px solid #dee2e6;
-    border-right: 0;
-    border-radius: 8px 0 0 8px;
-    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.08);
-    pointer-events: auto;
 }
 
 .graph-settings-panel-inner {
@@ -265,10 +192,6 @@
 }
 
 @media (max-width: 720px) {
-    .graph-settings-panel {
-        width: min(340px, 94vw);
-    }
-
     .graph-settings-quick-grid,
     .graph-settings-grid {
         grid-template-columns: 1fr !important;

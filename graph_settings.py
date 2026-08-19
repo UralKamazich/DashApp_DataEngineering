@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from dash import dcc, html
 import dash_mantine_components as dmc
 
+from slide_panel import SlidePanel
+
 
 REQUIRED_CONTROLS = {
     "theme",
@@ -53,6 +55,20 @@ class GraphSettingsPanel:
         missing = REQUIRED_CONTROLS.difference(controls)
         if missing:
             raise ValueError(f"Missing graph settings controls: {sorted(missing)}")
+        self.slide = SlidePanel(
+            root_id=self.component_id("drawer-simple"),
+            tab_id=self.component_id("drawer-simple-tab"),
+            state_id=self.component_id("drawer-simple-open-state"),
+            side="right",
+            mode="overlay",
+            width=340,
+            tab_icon=self._icon("sliders-horizontal", 15),
+            tab_label="Настройки",
+            tab_title="Открыть настройки графика",
+            tab_style={"bottom": "10px"},
+            extra_root_classes=("graph-settings-content",),
+            content=self._settings_body,
+        )
 
     def component_id(self, legacy_id: str) -> str:
         """Return the instance-specific id for an internal settings control."""
@@ -326,16 +342,9 @@ class GraphSettingsPanel:
         )
 
     def render(self):
-        tab = html.Div(
-            [
-                self._icon("sliders-horizontal", 15),
-                html.Span("Настройки", className="graph-settings-side-tab-label"),
-            ],
-            id=self.component_id("drawer-simple-tab"),
-            className="graph-settings-side-tab",
-            title="Открыть настройки графика",
-        )
+        return self.slide.render()
 
+    def _settings_body(self):
         tabs = dmc.Tabs(
             [
                 dmc.TabsList(
@@ -361,49 +370,33 @@ class GraphSettingsPanel:
             className="graph-settings-tabs",
         )
 
-        return html.Div(
-            [
-                html.Div(
-                    [
-                        tab,
-                        html.Div(
-                            [
-                                html.Div(
-                                    id=self.component_id("graph-settings-panel"),
-                                    className="graph-settings-panel-inner",
-                                    children=[
-                                        dcc.Store(id=self.component_id("graph-settings-reset-state")),
-                                        html.Div([self._quick_settings(), tabs], className="graph-settings-scroll"),
-                                        html.Div(
-                                            [
-                                                html.Div(
-                                                    [
-                                                        self._icon("circle-check", 13),
-                                                        dmc.Text("Применяется автоматически", size="10px", c="dimmed"),
-                                                    ],
-                                                    className="graph-settings-auto-status",
-                                                ),
-                                                dmc.Button(
-                                                    "Сбросить",
-                                                    id=self.component_id("graph-settings-reset"),
-                                                    variant="subtle",
-                                                    color="gray",
-                                                    size="xs",
-                                                    leftSection=self._icon("rotate-ccw", 12),
-                                                ),
-                                            ],
-                                            className="graph-settings-footer",
-                                        ),
-                                    ],
-                                ),
-                            ],
-                            className="graph-settings-body",
-                        ),
-                    ],
-                    className="graph-settings-mover",
-                ),
-                dcc.Store(id=self.component_id("drawer-simple-open-state"), data=False),
-            ],
-            id=self.component_id("drawer-simple"),
-            className="graph-settings-panel graph-settings-content",
-        )
+        return [
+            html.Div(
+                id=self.component_id("graph-settings-panel"),
+                className="graph-settings-panel-inner",
+                children=[
+                    dcc.Store(id=self.component_id("graph-settings-reset-state")),
+                    html.Div([self._quick_settings(), tabs], className="graph-settings-scroll"),
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    self._icon("circle-check", 13),
+                                    dmc.Text("Применяется автоматически", size="10px", c="dimmed"),
+                                ],
+                                className="graph-settings-auto-status",
+                            ),
+                            dmc.Button(
+                                "Сбросить",
+                                id=self.component_id("graph-settings-reset"),
+                                variant="subtle",
+                                color="gray",
+                                size="xs",
+                                leftSection=self._icon("rotate-ccw", 12),
+                            ),
+                        ],
+                        className="graph-settings-footer",
+                    ),
+                ],
+            ),
+        ]

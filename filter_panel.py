@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Slide-out filter panel on the right edge with an attached handle tab."""
+"""Slide-out filter panel on the right edge — instance of the unified SlidePanel."""
 
 from dash import dcc, html
 from dash_iconify import DashIconify
 import dash_mantine_components as dmc
+
+from slide_panel import SlidePanel
 
 
 def create_filter_trigger():
@@ -26,20 +28,7 @@ def create_filter_trigger():
     )
 
 
-def create_filter_tab():
-    return html.Div(
-        [
-            DashIconify(icon="tabler:filter", width=15),
-            html.Span("Фильтры", className="filter-side-tab-label"),
-            html.Span("0", id="filters-side-tab-count", className="filter-side-tab-count"),
-        ],
-        id="filters-side-tab",
-        className="filter-side-tab",
-        title="Открыть панель фильтров",
-    )
-
-
-def create_filter_drawer():
+def _panel_content():
     content = dmc.Paper(
         [
             html.Div(
@@ -176,20 +165,32 @@ def create_filter_drawer():
         className="filter-panel-footer",
     )
 
-    return html.Div(
-        [
-            create_filter_tab(),
-            html.Div(
-                [
-                    dcc.Store(id="filter-drop-store"),
-                    html.Div(content, className="filter-panel-columns"),
-                    footer,
-                ],
-                className="filters-drawer-body",
-            ),
-            dcc.Store(id="filters-outside-close-store", data=False),
-            dcc.Store(id="filters-drawer-open-state", data=False),
-        ],
-        id="filters-drawer",
-        className="filters-drawer-panel",
-    )
+    return [
+        dcc.Store(id="filter-drop-store"),
+        html.Div(content, className="filter-panel-columns"),
+        footer,
+    ]
+
+
+FILTERS_PANEL = SlidePanel(
+    root_id="filters-drawer",
+    tab_id="filters-side-tab",
+    state_id="filters-drawer-open-state",
+    side="right",
+    mode="reflow",
+    width=299,
+    tab_icon="tabler:filter",
+    tab_label="Фильтры",
+    tab_title="Открыть панель фильтров",
+    tab_style={"top": "66%", "transform": "translateY(-50%)"},
+    tab_extra_children=[
+        html.Span("0", id="filters-side-tab-count", className="filter-side-tab-count"),
+    ],
+    extra_tab_classes="filter-side-tab",
+    content=_panel_content,
+    extra_stores=[dcc.Store(id="filters-outside-close-store", data=False)],
+)
+
+
+def create_filter_drawer():
+    return FILTERS_PANEL.render()

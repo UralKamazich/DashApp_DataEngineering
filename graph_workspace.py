@@ -431,30 +431,10 @@ class GraphWorkspace:
         )
 
     def _register_settings_callbacks(self, app):
-        drawer_id = self._settings_internal_id("drawer-simple")
-        tab_id = self._settings_internal_id("drawer-simple-tab")
-        open_state_id = self._settings_internal_id("drawer-simple-open-state")
-
-        @app.callback(
-            Output(drawer_id, "className"),
-            Output(open_state_id, "data"),
-            Input(self.ids["open_settings"], "n_clicks"),
-            Input(tab_id, "n_clicks"),
-            State(open_state_id, "data"),
-            prevent_initial_call=True,
+        self.settings_panel.slide.register_toggle(
+            app,
+            open_inputs=(self.ids["open_settings"],),
         )
-        def toggle_settings_panel(_open_clicks, _tab_clicks, opened):
-            trigger = ctx.triggered_id
-            if trigger == self.ids["open_settings"]:
-                should_open = True
-            else:
-                should_open = not bool(opened)
-            panel_class = (
-                "graph-settings-panel graph-settings-content open"
-                if should_open
-                else "graph-settings-panel graph-settings-content"
-            )
-            return panel_class, should_open
 
         defaults = {
             self._settings_control_id("theme"): {"value": "plotly"},

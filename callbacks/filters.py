@@ -10,6 +10,7 @@ from dash_iconify import DashIconify
 import dash_mantine_components as dmc
 
 from dash_app import app
+from filter_panel import FILTERS_PANEL
 from utils import classify_simple, create_value_control, read_df_from_store
 
 
@@ -154,7 +155,7 @@ def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _dropped, _apply_clicks, 
         should_open = False
     else:
         should_open = not bool(opened)
-    panel_class = "filters-drawer-panel open" if should_open else "filters-drawer-panel"
+    panel_class = FILTERS_PANEL.open_class if should_open else FILTERS_PANEL.closed_class
     return panel_class, should_open
 
 
@@ -182,12 +183,12 @@ clientside_callback(
             var panel = document.getElementById("filters-drawer");
             if (!panel || !panel.classList.contains("open")) return;
             if (panel.contains(event.target)) return;
-            window.dash_clientside.set_props("filters-drawer", {className: "filters-drawer-panel"});
+            window.dash_clientside.set_props("filters-drawer", {className: "__PANEL_CLOSED_CLASS__"});
             window.dash_clientside.set_props("filters-drawer-open-state", {data: false});
         }, {signal: controller.signal});
         return window.dash_clientside.no_update;
     }
-    """,
+    """.replace("__PANEL_CLOSED_CLASS__", FILTERS_PANEL.closed_class),
     Output("filters-drawer-open-state", "data", allow_duplicate=True),
     Input("filters-outside-close-store", "data"),
     prevent_initial_call=True,
@@ -350,7 +351,7 @@ def update_filter_summary(applied, stored_json, filtered_json):
     source_rows = _serialized_row_count(stored_json)
     filtered_rows = _serialized_row_count(filtered_json)
     trigger_class = "filter-panel-trigger"
-    tab_class = "filter-side-tab"
+    tab_class = FILTERS_PANEL.tab_class
     if count:
         trigger_class += " has-active-filters"
         tab_class += " has-active-filters"

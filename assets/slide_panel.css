@@ -1,0 +1,194 @@
+/* ============================================================
+   Унифицированная выезжающая панель (SlidePanel).
+   Общая механика для датасета, фильтров и настроек графика.
+   ============================================================ */
+
+.slide-panel {
+    --sp-width: 299px;
+    --sp-body-width: calc(var(--sp-width) - 32px);
+    position: relative;
+    flex: 0 0 auto;
+    width: 32px;
+    height: calc(100% + 16px);
+    transition: width 0.24s ease;
+}
+
+.slide-panel--left {
+    margin: -8px 0 -8px -8px;
+}
+
+.slide-panel--right {
+    margin: -8px -8px -8px 0;
+}
+
+.slide-panel.open {
+    width: var(--sp-width);
+}
+
+/* overlay: поверх содержимого, между хэдером и футером, без сдвига графика */
+.slide-panel--overlay {
+    position: fixed;
+    top: 43px;
+    bottom: 52px;
+    width: var(--sp-width);
+    height: auto;
+    margin: 0;
+    pointer-events: none;
+    z-index: 160;
+}
+
+.slide-panel--overlay.slide-panel--right {
+    right: 0;
+}
+
+.slide-panel--overlay.slide-panel--left {
+    left: 0;
+}
+
+/* ---------- ярлычок-ручка ---------- */
+
+.slide-panel__tab {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 7px;
+    color: #ffffff;
+    background: #228be6;
+    box-shadow: -4px 2px 14px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background-color 0.15s;
+}
+
+.slide-panel--left .slide-panel__tab {
+    right: 0;
+    border-radius: 0 10px 10px 0;
+    box-shadow: 4px 2px 14px rgba(0, 0, 0, 0.28);
+}
+
+.slide-panel--right .slide-panel__tab {
+    left: 0;
+    border-radius: 10px 0 0 10px;
+}
+
+/* в overlay ярлычок прикреплён снаружи движущегося блока */
+.slide-panel--overlay.slide-panel--right .slide-panel__tab {
+    left: -32px;
+}
+
+.slide-panel--overlay.slide-panel--left .slide-panel__tab {
+    right: -32px;
+}
+
+.slide-panel__tab:hover {
+    background: #1c7ed6;
+}
+
+.slide-panel__tab-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+/* ---------- reflow: тело выезжает из-под корня, соседи сдвигаются ---------- */
+
+.slide-panel--reflow .slide-panel__body {
+    position: absolute;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    width: var(--sp-body-width);
+    height: 100%;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    transition: transform 0.24s ease;
+}
+
+.slide-panel--reflow.slide-panel--left .slide-panel__body {
+    left: 0;
+    border-radius: 0 8px 8px 0;
+    box-shadow: 6px 0 18px rgba(0, 0, 0, 0.08);
+    transform: translateX(calc(-100% - 16px));
+}
+
+.slide-panel--reflow.slide-panel--right .slide-panel__body {
+    right: 0;
+    border-radius: 8px 0 0 8px;
+    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.08);
+    transform: translateX(calc(100% + 16px));
+}
+
+.slide-panel--reflow.open .slide-panel__body {
+    transform: translateX(0);
+}
+
+/* ---------- overlay: ярлычок и тело едут вместе ---------- */
+
+.slide-panel--overlay .slide-panel__mover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+    transform: translateX(100%);
+    transition: transform 0.24s ease;
+}
+
+.slide-panel--overlay.slide-panel--left .slide-panel__mover {
+    transform: translateX(-100%);
+}
+
+.slide-panel--overlay.open .slide-panel__mover {
+    transform: translateX(0);
+}
+
+.slide-panel--overlay .slide-panel__body {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #f7f9fc;
+    border: 1px solid #dee2e6;
+    pointer-events: auto;
+}
+
+.slide-panel--overlay.slide-panel--right .slide-panel__body {
+    border-right: 0;
+    border-radius: 8px 0 0 8px;
+    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.08);
+}
+
+.slide-panel--overlay.slide-panel--left .slide-panel__body {
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    box-shadow: 6px 0 18px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- адаптивность ---------- */
+
+@media (max-width: 700px) {
+    .slide-panel--reflow.open {
+        width: min(var(--sp-width), 96vw);
+    }
+
+    .slide-panel--reflow .slide-panel__body {
+        width: min(var(--sp-body-width), calc(96vw - 32px));
+    }
+}
+
+@media (max-width: 720px) {
+    .slide-panel--overlay {
+        width: min(var(--sp-width), 94vw);
+    }
+}
