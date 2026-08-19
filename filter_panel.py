@@ -67,19 +67,6 @@ def _panel_content():
                 className="filter-drop-target filter-drawer-drop-zone",
             ),
             html.Div(id="filters-container", children=[], className="filter-cards"),
-            html.Div(
-                [
-                    DashIconify(icon="tabler:filter-plus", width=24),
-                    dmc.Text("Активных условий пока нет", size="sm", fw=600),
-                    dmc.Text(
-                        "Добавьте фильтр или перетащите канал из списка датасета.",
-                        size="xs",
-                        c="dimmed",
-                        ta="center",
-                    ),
-                ],
-                className="filter-empty-state",
-            ),
             dmc.Button(
                 "Добавить фильтр",
                 id="add-filter-btn",

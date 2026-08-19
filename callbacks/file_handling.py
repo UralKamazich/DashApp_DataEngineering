@@ -182,11 +182,10 @@ def on_sheet_selected(n_clicks, ids):
     Input('stored-data', 'data'),
     Input('meta-columns', 'data'),
     Input('selected-sheet', 'data'),
-    Input('source-file-path', 'data'),
     State('source-file-name', 'data'),
     prevent_initial_call=True
 )
-def update_file_info(stored_json, meta, sheet_name, source_path, source_name):
+def update_file_info(stored_json, meta, sheet_name, source_name):
     if not stored_json:
         raise PreventUpdate
 
@@ -207,8 +206,6 @@ def update_file_info(stored_json, meta, sheet_name, source_path, source_name):
         parts.append(f"Лист: {sheet_name}")
     parts.append(f"Строк: {n_rows}")
     parts.append(f"Столбцов: {n_cols}")
-    if source_path:
-        parts.append(f"Путь: {source_path}")
 
     info_text = "  |  ".join(parts)
     info_style = {

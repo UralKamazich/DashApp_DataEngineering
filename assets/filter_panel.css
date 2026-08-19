@@ -158,21 +158,6 @@
     font-size: 9px;
 }
 
-.filter-empty-state {
-    display: none;
-    min-height: 150px;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 6px;
-    padding: 24px;
-    color: #adb5bd;
-}
-
-.filter-cards:empty + .filter-empty-state {
-    display: flex;
-}
-
 .filter-panel-footer {
     display: flex;
     flex: 0 0 auto;
