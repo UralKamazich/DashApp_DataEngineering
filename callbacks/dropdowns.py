@@ -31,6 +31,11 @@ def _select_options(columns):
         Output("agg-keys", "data"),
         Output("agg-cols", "data"),
         Output("txtcopy-cols", "data"),
+
+        Output("mv-dropdown-x", "options"),
+        Output("mv-dropdown-y", "options"),
+        Output("mv-dropdown-z", "options"),
+        Output("mv-dropdown-color", "options"),
     ],
     Input("filtered-data", "data"),
     State("meta-columns", "data"),
@@ -41,23 +46,27 @@ def update_dropdown_options_all(filtered_json, meta):
     empty_bin_options = []
     empty_cluster_opts = []
     empty_agg_data = []
+    empty_mv = [[]] * 4
 
     if not filtered_json:
         return (*empty_axes,
                 empty_bin_options, empty_cluster_opts,
-                empty_agg_data, empty_agg_data, empty_agg_data)
+                empty_agg_data, empty_agg_data, empty_agg_data,
+                *empty_mv)
 
     try:
         dff = read_df_from_store(filtered_json, meta)
     except Exception:
         return (*empty_axes,
                 empty_bin_options, empty_cluster_opts,
-                empty_agg_data, empty_agg_data, empty_agg_data)
+                empty_agg_data, empty_agg_data, empty_agg_data,
+                *empty_mv)
 
     if dff is None or dff.empty:
         return (*empty_axes,
                 empty_bin_options, empty_cluster_opts,
-                empty_agg_data, empty_agg_data, empty_agg_data)
+                empty_agg_data, empty_agg_data, empty_agg_data,
+                *empty_mv)
 
     numeric_cols, categorical_cols, datetime_cols = classify_simple(dff)
 
@@ -85,5 +94,9 @@ def update_dropdown_options_all(filtered_json, meta):
         cluster_options,  # cluster-cols.options
         all_options,      # agg-keys.data
         all_options,      # agg-cols.data
-        all_options       # txtcopy-cols.data
+        all_options,      # txtcopy-cols.data
+        numeric_opts,     # mv X
+        numeric_opts,     # mv Y
+        numeric_opts,     # mv Z
+        color_options,    # mv Color
     ]

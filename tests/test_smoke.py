@@ -24,9 +24,9 @@ from callbacks.graph import (
     update_main_graph,
 )
 from callbacks.pipeline import apply_filters
-from components import dropdown_chart_type, make_column_badge
+from components import dropdown_chart_type, make_column_badge, mv_chart_type
 from config import APP_NAME, APP_TITLE, APP_VERSION
-from correlation_workspace import _build_correlation_figures
+from correlation_workspace import _build_correlation_figures, compute_correlation
 from graph_help import GRAPH_HELP_ORDER, GRAPH_INSTRUCTIONS, render_instruction
 from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
@@ -125,7 +125,9 @@ class DashApplicationSmokeTests(unittest.TestCase):
             getattr(component, "id", None)
             for component in walk_components(correlation_page)
         }
-        self.assertIn("correlation-matrix", correlation_ids)
+        self.assertNotIn("correlation-matrix", correlation_ids)
+        self.assertIn("mv-graph", correlation_ids)
+        self.assertIn("mv-chart-type", correlation_ids)
         self.assertIn("correlation-bar-primary", correlation_ids)
         self.assertIn("correlation-bar-secondary", correlation_ids)
         self.assertIn("correlation-columns-drop", correlation_ids)
@@ -376,6 +378,21 @@ class CorrelationAnalysisTests(unittest.TestCase):
         self.assertEqual(list(matrix.data[0].x), ["x", "y"])
         self.assertIn("Исключено столбцов: 1", status)
 
+    def test_compute_correlation_returns_matrix_for_multivariate_workspace(self):
+        source = pd.DataFrame({
+            "a": [1.0, 2.0, 3.0, 4.0],
+            "b": [4.0, 3.0, 2.0, 1.0],
+        })
+
+        correlation, pair_counts, status, error = compute_correlation(
+            source, ["a", "b"], "pearson", 2
+        )
+
+        self.assertIsNone(error)
+        self.assertAlmostEqual(correlation.loc["a", "b"], -1.0)
+        self.assertEqual(int(pair_counts.loc["a", "b"]), 4)
+        self.assertIn("Метод: Пирсон", status)
+
 
 class GraphAxisValidationTests(unittest.TestCase):
     def test_pie_counts_a_single_categorical_column(self):
@@ -541,21 +558,197 @@ class GraphAxisValidationTests(unittest.TestCase):
         for chart_type in Y_ONLY_CHART_TYPES:
             with self.subTest(chart_type=chart_type):
                 self.assertEqual(
-                    _primary_axis_errors(chart_type, None, "value", ["value"]),
+                    _primary_axis_errors(chart_type, None, "value", None, ["value"]),
                     [],
                 )
 
     def test_chart_without_x_or_y_is_rejected(self):
         self.assertEqual(
-            _primary_axis_errors("Line", None, None, ["value"]),
+            _primary_axis_errors("Line", None, None, None, ["value"]),
             ["Не выбран столбец X"],
         )
 
     def test_density_chart_still_requires_x(self):
         self.assertEqual(
-            _primary_axis_errors("DensityHeat", None, "value", ["value"]),
+            _primary_axis_errors("DensityHeat", None, "value", None, ["value"]),
             ["Не выбран столбец X"],
         )
+
+    def test_hierarchy_charts_accept_any_of_color_x_y(self):
+        for chart_type in ("Sunburst", "Treemap"):
+            with self.subTest(chart_type=chart_type):
+                self.assertEqual(
+                    _primary_axis_errors(chart_type, None, None, "region", ["region"]),
+                    [],
+                )
+                self.assertEqual(
+                    _primary_axis_errors(chart_type, None, None, None, ["region"]),
+                    ["Для Sunburst/Treemap выберите хотя бы один столбец из Цвет/X/Y"],
+                )
+
+    def test_hierarchy_charts_render_with_color_field_only(self):
+        source = pd.DataFrame({
+            "region": ["A", "A", "B", "B"],
+            "well": ["W1", "W2", "W3", "W3"],
+            "value": [10.0, 20.0, 30.0, 40.0],
+        })
+        meta = {"numeric": ["value"], "categorical": ["region", "well"], "datetime": []}
+
+        for chart_type, trace_type in (("Sunburst", "sunburst"), ("Treemap", "treemap")):
+            with self.subTest(chart_type=chart_type):
+                figure, notifications = update_main_graph(
+                    n_clicks=1,
+                    x_col=None,
+                    y_col=None,
+                    z_col=None,
+                    color_col="region",
+                    size_col=None,
+                    text_col=None,
+                    dropdown_text_pozition="top right",
+                    chart_type=chart_type,
+                    bubble=False,
+                    MaxSizeBubble=30,
+                    height=550,
+                    width=None,
+                    selected_style="plotly",
+                    bar_text_auto=True,
+                    view_revision=0,
+                    filtered_json=source.to_json(date_format="iso", orient="split"),
+                    hover_cols=None,
+                    facet_row=None,
+                    facet_col=None,
+                    filters_state={},
+                    xaxis_font_size=14,
+                    yaxis_font_size=14,
+                    font_size_ticks=12,
+                    title_font_size=16,
+                    dropdown_sort_column="trace",
+                    axes_category="auto",
+                    dropdown_overlay="overlay",
+                    legend="top-right-outside",
+                    custom_colors=None,
+                    tick_step_x=0,
+                    tick_step_y=0,
+                    legend_order="alphabetical",
+                    legend_custom_order="",
+                    meta=meta,
+                    pie_aggregation="sum",
+                )
+                self.assertEqual(notifications, [])
+                self.assertEqual([trace.type for trace in figure.data], [trace_type])
+
+    def test_string_dtype_columns_do_not_break_numeric_checks(self):
+        source = pd.DataFrame({
+            "region": ["A", "A", "B", "B"],
+            "well": ["W1", "W2", "W3", "W3"],
+            "value": [10.0, 20.0, 30.0, 40.0],
+        })
+        # pandas 3 хранит текст в StringDtype — проверка «числовой ли столбец»
+        # не должна падать на нём исключением.
+        self.assertFalse(pd.api.types.is_numeric_dtype(source["region"]))
+        meta = {"numeric": ["value"], "categorical": ["region", "well"], "datetime": []}
+        kwargs = dict(
+            n_clicks=1,
+            z_col=None,
+            size_col=None,
+            text_col=None,
+            dropdown_text_pozition="top right",
+            bubble=False,
+            MaxSizeBubble=30,
+            height=550,
+            width=None,
+            selected_style="plotly",
+            bar_text_auto=True,
+            view_revision=0,
+            filtered_json=source.to_json(date_format="iso", orient="split"),
+            hover_cols=None,
+            facet_row=None,
+            facet_col=None,
+            filters_state={},
+            xaxis_font_size=14,
+            yaxis_font_size=14,
+            font_size_ticks=12,
+            title_font_size=16,
+            dropdown_sort_column="trace",
+            axes_category="auto",
+            dropdown_overlay="overlay",
+            legend="top-right-outside",
+            custom_colors=None,
+            tick_step_x=0,
+            tick_step_y=0,
+            legend_order="alphabetical",
+            legend_custom_order="",
+            meta=meta,
+            pie_aggregation="sum",
+        )
+
+        # Sunburst: текстовый столбец в Y игнорируется, график строится.
+        figure, notifications = update_main_graph(
+            x_col="well", y_col="region", color_col=None,
+            chart_type="Sunburst", **kwargs,
+        )
+        self.assertEqual(notifications, [])
+        self.assertEqual([trace.type for trace in figure.data], ["sunburst"])
+
+        # DensityHeat: текстовый X — понятная ошибка вместо исключения.
+        _figure, notifications = update_main_graph(
+            x_col="region", y_col="value", color_col=None,
+            chart_type="DensityHeat", **kwargs,
+        )
+        self.assertEqual(len(notifications), 1)
+        self.assertIn("должны быть числовыми", notifications[0]["message"])
+
+    def test_hierarchy_charts_tolerate_empty_path_values(self):
+        source = pd.DataFrame({
+            "region": ["A", "A", None, "B"],
+            "value": [10.0, 20.0, 30.0, 40.0],
+        })
+        meta = {"numeric": ["value"], "categorical": ["region"], "datetime": []}
+
+        for chart_type, trace_type in (("Sunburst", "sunburst"), ("Treemap", "treemap")):
+            with self.subTest(chart_type=chart_type):
+                figure, notifications = update_main_graph(
+                    n_clicks=1,
+                    x_col=None,
+                    y_col=None,
+                    z_col=None,
+                    color_col="region",
+                    size_col=None,
+                    text_col=None,
+                    dropdown_text_pozition="top right",
+                    chart_type=chart_type,
+                    bubble=False,
+                    MaxSizeBubble=30,
+                    height=550,
+                    width=None,
+                    selected_style="plotly",
+                    bar_text_auto=True,
+                    view_revision=0,
+                    filtered_json=source.to_json(date_format="iso", orient="split"),
+                    hover_cols=None,
+                    facet_row=None,
+                    facet_col=None,
+                    filters_state={},
+                    xaxis_font_size=14,
+                    yaxis_font_size=14,
+                    font_size_ticks=12,
+                    title_font_size=16,
+                    dropdown_sort_column="trace",
+                    axes_category="auto",
+                    dropdown_overlay="overlay",
+                    legend="top-right-outside",
+                    custom_colors=None,
+                    tick_step_x=0,
+                    tick_step_y=0,
+                    legend_order="alphabetical",
+                    legend_custom_order="",
+                    meta=meta,
+                    pie_aggregation="sum",
+                )
+                self.assertEqual(notifications, [])
+                self.assertEqual([trace.type for trace in figure.data], [trace_type])
+                # Пропуски помечаются «(пусто)», как в круговой диаграмме.
+                self.assertIn("(пусто)", list(figure.data[0].labels))
 
     def test_large_scatter_with_labels_uses_svg_trace(self):
         row_count = 1200
@@ -791,15 +984,17 @@ class GraphWorkspaceTests(unittest.TestCase):
         expected = {
             self.component.ids["update"],
             self.component.ids["copy_png"],
-            self.component.ids["open_settings"],
             self.component.ids["download_html"],
             self.component.ids["download_component"],
             self.component.ids["save_png"],
             self.component.ids["clear"],
             self.component.ids["view_revision"],
             self.component.ids["custom_colors"],
+            self.component.ids["help"],
         }
         self.assertTrue(expected.issubset(descendant_ids))
+        # Кнопка настроек рендерится только при наличии панели настроек.
+        self.assertNotIn(self.component.ids["open_settings"], descendant_ids)
         self.assertEqual(self.component.ids["update"], "test-graph-update")
 
     def test_clear_action_contains_hard_plotly_recovery(self):
@@ -839,8 +1034,34 @@ class GraphWorkspaceTests(unittest.TestCase):
 class GraphHelpTests(unittest.TestCase):
     def test_instructions_cover_every_chart_type_option(self):
         options = {item["value"] for item in dropdown_chart_type.data}
+        options |= {item["value"] for item in mv_chart_type.data}
         self.assertEqual(set(GRAPH_INSTRUCTIONS), options)
         self.assertEqual(set(GRAPH_HELP_ORDER), options)
+
+    def test_multivariate_types_moved_to_correlation_page(self):
+        main_options = {item["value"] for item in dropdown_chart_type.data}
+        self.assertNotIn("ScatterMatrix", main_options)
+        self.assertNotIn("Parcoords", main_options)
+        self.assertEqual(
+            {item["value"] for item in mv_chart_type.data},
+            {"Correlogram", "ScatterMatrix", "Parcoords"},
+        )
+        self.assertEqual(mv_chart_type.value, "Correlogram")
+
+        correlation_page = next(
+            component for component in walk_components(app.layout)
+            if getattr(component, "id", None) == "page-correlation"
+        )
+        correlation_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(correlation_page)
+        }
+        self.assertIn("mv-graph", correlation_ids)
+        self.assertIn("mv-chart-type", correlation_ids)
+        self.assertNotIn("correlation-matrix", correlation_ids)
+        self.assertTrue(
+            any("mv-graph.figure" in key for key in app.callback_map)
+        )
 
     def test_every_instruction_has_required_sections(self):
         for chart_type, info in GRAPH_INSTRUCTIONS.items():

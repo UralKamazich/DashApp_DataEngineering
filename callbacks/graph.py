@@ -34,6 +34,10 @@ Y_ONLY_CHART_TYPES = {
     "Ridge",
 }
 
+# Иерархические графики собирают путь из Цвет → X → Y, поэтому X для
+# них не обязателен — достаточно любого из трёх полей.
+HIERARCHY_CHART_TYPES = {"Sunburst", "Treemap"}
+
 RIDGE_GRID_SIZE = 180
 MAX_RIDGE_GROUPS = 60
 MAX_PIE_SLICES = 30
@@ -426,13 +430,32 @@ def _build_pie_figure(plot_df, x_col, y_col, color_col, aggregation,
     return fig, None
 
 
+def _prepare_hierarchy_frame(plot_df, path, values):
+    """Рабочий кадр для Sunburst/Treemap без пропусков в уровнях пути.
+
+    Plotly превращает NaN в пустые метки и отказывается строить иерархию
+    («Non-leaves rows are not permitted»), поэтому пропуски каждого уровня
+    помечаются «(пусто)» — как в круговой диаграмме.
+    """
+    frame = plot_df[list(dict.fromkeys([*path, *( [values] if values else [])]))].copy()
+    for column in path:
+        frame[column] = (
+            frame[column]
+            .where(pd.notna(frame[column]), "(пусто)")
+            .astype(str)
+            .str.strip()
+        )
+        frame.loc[frame[column] == "", column] = "(пусто)"
+    return frame
+
+
 def _graph_uirevision(chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision=0):
     """Keep user zoom while the chart keeps the same coordinate system."""
     parts = (chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision or 0)
     return "graph-view:" + "|".join("" if value is None else str(value) for value in parts)
 
 
-def _primary_axis_errors(chart_type, x_col, y_col, columns):
+def _primary_axis_errors(chart_type, x_col, y_col, color_col, columns):
     """Validate X/Y while allowing ordinary charts to use only Y."""
     errors = []
     x_valid = bool(x_col) and x_col in columns
@@ -442,7 +465,10 @@ def _primary_axis_errors(chart_type, x_col, y_col, columns):
         errors.append(f"Не существует столбец X: {x_col}")
     if y_col and not y_valid:
         errors.append(f"Не существует столбец Y: {y_col}")
-    if not x_col and not (chart_type in Y_ONLY_CHART_TYPES and y_valid):
+    if chart_type in HIERARCHY_CHART_TYPES:
+        if not any((color_col, x_col, y_col)):
+            errors.append("Для Sunburst/Treemap выберите хотя бы один столбец из Цвет/X/Y")
+    elif not x_col and not (chart_type in Y_ONLY_CHART_TYPES and y_valid):
         errors.append("Не выбран столбец X")
 
     return errors
@@ -516,7 +542,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         if not any(assigned_fields) and not hover_cols:
             return empty, []
 
-        errors = _primary_axis_errors(chart_type, x_col, y_col, dff.columns)
+        errors = _primary_axis_errors(chart_type, x_col, y_col, color_col, dff.columns)
         if chart_type == "3D_Scatter" and (not z_col or z_col not in dff.columns):
             errors.append("Для 3D требуется столбец Z")
         if errors:
@@ -654,43 +680,8 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             if ridge_error:
                 return empty, _make_error_notif(ridge_error)
 
-        elif chart_type == "ScatterMatrix":
-            use_dims = []
-            for c in [x_col, y_col, z_col]:
-                if c and (c in plot_df.columns) and np.issubdtype(plot_df[c].dtype, np.number):
-                    use_dims.append(c)
-            use_dims = list(dict.fromkeys(use_dims))
-            if len(use_dims) < 2:
-                notif = _make_error_notif("Для Scatter Matrix нужны ≥2 числовых столбца из X/Y/Z.")
-                return empty, notif
-            fig = px.scatter_matrix(
-                plot_df, dimensions=use_dims, color=carg,
-                height=height, width=width, template=selected_style
-            )
-
-        elif chart_type == "Parcoords":
-            use_dims = []
-            for c in [x_col, y_col, z_col]:
-                if c and (c in plot_df.columns) and np.issubdtype(plot_df[c].dtype, np.number):
-                    use_dims.append(c)
-            use_dims = list(dict.fromkeys(use_dims))
-            if len(use_dims) < 2:
-                notif = _make_error_notif("Для Parallel Coordinates нужны ≥2 числовых столбца из X/Y/Z.")
-                return empty, notif
-            line_color = None
-            if carg:
-                if carg in plot_df.columns:
-                    if np.issubdtype(plot_df[carg].dtype, np.number):
-                        line_color = plot_df[carg]
-                    else:
-                        codes, _ = pd.factorize(plot_df[carg].astype(str))
-                        line_color = codes
-            dims = [dict(label=c, values=plot_df[c].values) for c in use_dims]
-            fig = go.Figure(data=go.Parcoords(
-                dimensions=dims,
-                line=dict(color=line_color) if line_color is not None else None
-            ))
-            fig.update_layout(height=height, width=width, template=selected_style)
+        # ScatterMatrix и Parcoords перенесены на страницу корреляционного
+        # анализа: их строит callbacks/multivariate.py в MULTIVARIATE_WORKSPACE.
 
         elif chart_type in ("Sunburst", "Treemap"):
             path = [c for c in [color_col, x_col, y_col] if c and (c in plot_df.columns)]
@@ -698,19 +689,20 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 notif = _make_error_notif("Для Sunburst/Treemap нужен хотя бы один категориальный столбец из Color/X/Y.")
                 return empty, notif
             values = None
-            if y_col and (y_col in plot_df.columns) and np.issubdtype(plot_df[y_col].dtype, np.number):
+            if y_col and (y_col in plot_df.columns) and pd.api.types.is_numeric_dtype(plot_df[y_col]):
                 values = y_col
             color_kw = {}
             if carg and (carg in plot_df.columns) and (carg not in path):
                 color_kw["color"] = carg
+            hierarchy_df = _prepare_hierarchy_frame(plot_df, path, values)
             if chart_type == "Treemap":
                 fig = px.treemap(
-                    plot_df, path=path, values=values,
+                    hierarchy_df, path=path, values=values,
                     height=height, width=width, template=selected_style, **color_kw
                 )
             else:
                 fig = px.sunburst(
-                    plot_df, path=path, values=values,
+                    hierarchy_df, path=path, values=values,
                     height=height, width=width, template=selected_style, **color_kw
                 )
 
@@ -718,7 +710,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             if not x_col or not y_col or (x_col not in plot_df.columns) or (y_col not in plot_df.columns):
                 notif = _make_error_notif("Для 2D-плотности нужны X и Y.")
                 return empty, notif
-            if (not np.issubdtype(plot_df[x_col].dtype, np.number)) or (not np.issubdtype(plot_df[y_col].dtype, np.number)):
+            if (not pd.api.types.is_numeric_dtype(plot_df[x_col])) or (not pd.api.types.is_numeric_dtype(plot_df[y_col])):
                 notif = _make_error_notif("Для 2D-плотности X и Y должны быть числовыми.")
                 return empty, notif
             if chart_type == "DensityHeat":

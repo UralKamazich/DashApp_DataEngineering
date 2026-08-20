@@ -168,6 +168,21 @@ class GraphWorkspace:
         generated_ids.update(action_ids or {})
         self.ids = generated_ids
 
+        # Справка показывает только те типы, которые доступны в этом
+        # воркспейсе (берутся из опций селекта типа графика).
+        help_options = GRAPH_HELP_OPTIONS
+        control_data = getattr(self.chart_type_control, "data", None)
+        if isinstance(control_data, list) and control_data:
+            allowed = {
+                item.get("value") for item in control_data if isinstance(item, dict)
+            }
+            if allowed:
+                filtered = [o for o in GRAPH_HELP_OPTIONS if o["value"] in allowed]
+                if filtered:
+                    help_options = filtered
+        self.help_options = help_options
+        self.help_default_type = help_options[0]["value"]
+
     @staticmethod
     def _pixel_size(value: int | None, fallback: str) -> str:
         return f"{value}px" if value is not None else fallback
@@ -250,7 +265,11 @@ class GraphWorkspace:
                         children=[
                             html.Div(self.chart_type_control, className="graph-type-control"),
                             html.Div(className="graph-workspace-toolbar-separator"),
-                            self._action_button(self.ids["open_settings"], "⚙", "Настройки графика"),
+                            *(
+                                [self._action_button(self.ids["open_settings"], "⚙", "Настройки графика")]
+                                if self.settings_panel is not None
+                                else []
+                            ),
                             self._action_button(self.ids["help"], "?", "Инструкция по типу графика"),
                         ],
                     ),
@@ -312,7 +331,8 @@ class GraphWorkspace:
         )
 
     def _help_modal(self):
-        content, title = render_instruction("Scatter")
+        default_type = self.help_default_type
+        content, title = render_instruction(default_type)
         return dmc.Modal(
             id=self.ids["help_modal"],
             title=title,
@@ -323,8 +343,8 @@ class GraphWorkspace:
                 dmc.Select(
                     id=self.ids["help_type"],
                     label="Тип графика",
-                    data=GRAPH_HELP_OPTIONS,
-                    value="Scatter",
+                    data=self.help_options,
+                    value=default_type,
                     allowDeselect=False,
                     clearable=False,
                     comboboxProps={"shadow": "md"},
@@ -634,7 +654,7 @@ class GraphWorkspace:
         def open_help(n_clicks, chart_type):
             if not n_clicks:
                 raise PreventUpdate
-            known = chart_type if chart_type in GRAPH_INSTRUCTIONS else "Scatter"
+            known = chart_type if chart_type in GRAPH_INSTRUCTIONS else self.help_default_type
             return True, known
 
         @app.callback(

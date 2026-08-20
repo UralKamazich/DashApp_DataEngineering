@@ -141,6 +141,30 @@ dropdown_corr_columns.style = {
 }
 
 # =========================
+# Многомерные графики (Коррелограмма / Scatter Matrix / Parallel Coordinates)
+# на странице корреляционного анализа
+# =========================
+mv_dropdown_x = create_dropdown("mv-dropdown-x", [], None, clearable=True)
+mv_dropdown_y = create_dropdown("mv-dropdown-y", [], None, clearable=True)
+mv_dropdown_z = create_dropdown("mv-dropdown-z", [], None, clearable=True)
+mv_dropdown_color = create_dropdown("mv-dropdown-color", [], None, clearable=True)
+
+mv_chart_type = dmc.Select(
+    id="mv-chart-type",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
+    data=[
+        {"value": "Correlogram", "label": "Коррелограмма"},
+        {"value": "ScatterMatrix", "label": "Scatter Matrix"},
+        {"value": "Parcoords", "label": "Parallel Coordinates"},
+    ],
+    value="Correlogram",
+    clearable=False,
+    persistence=True,
+    style={"width": "200px", "fontSize": "13px"},
+)
+
+# =========================
 # Cluster / Data Engineering колонки
 # =========================
 dropdown_cluster_cols = dmc.MultiSelect(
@@ -264,8 +288,6 @@ dropdown_chart_type = dmc.Select(
         {"value": "Pie", "label": "Круговая диаграмма"},
         {"value": "Violin", "label": "Violin"},
         {"value": "Ridge", "label": "Ridge Plot"},
-        {"value": "ScatterMatrix",   "label": "Scatter Matrix"},
-        {"value": "Parcoords",       "label": "Parallel Coordinates"},
         {"value": "Sunburst",        "label": "Sunburst"},
         {"value": "Treemap",         "label": "Treemap"},
         {"value": "DensityHeat",     "label": "Density Heatmap"},

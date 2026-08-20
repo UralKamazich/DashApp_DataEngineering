@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Self-contained correlation analysis workspace."""
+"""Страница корреляционного анализа: рейтинги корреляций.
+
+Сама коррелограмма (матрица) живёт в мультиграфике
+(callbacks/multivariate.py, тип «Correlogram»); отсюда берутся
+compute_correlation и build_correlogram.
+"""
 
 from __future__ import annotations
 
@@ -85,9 +90,12 @@ def _correlation_bar(correlation, pair_counts, target, template):
     return figure
 
 
-def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
-                               template="plotly"):
-    """Return matrix, two focused bars, status and an optional error."""
+def compute_correlation(frame, columns, method="pearson", min_periods=10):
+    """Посчитать матрицу корреляций по выбранным столбцам.
+
+    Возвращает (correlation, pair_counts, status, error): при ошибке
+    correlation/pair_counts равны None, error содержит текст сообщения.
+    """
     frame = frame.copy()
     frame.columns = [str(column) for column in frame.columns]
     method = method if method in {"pearson", "spearman"} else "pearson"
@@ -100,12 +108,10 @@ def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
             f"Выбрано {len(selected)} столбцов. Максимум для одного анализа — "
             f"{MAX_CORRELATION_COLUMNS}."
         )
-        empty = _empty_analysis_figure(message)
-        return empty, empty, empty, message, message
+        return None, None, message, message
     if len(selected) < 2:
         message = "Выберите минимум два числовых столбца."
-        empty = _empty_analysis_figure(message)
-        return empty, empty, empty, message, message
+        return None, None, message, message
 
     numeric = frame[selected].apply(pd.to_numeric, errors="coerce")
     excluded = [
@@ -118,8 +124,7 @@ def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
             "После исключения константных и недостаточно заполненных столбцов "
             "осталось меньше двух полей."
         )
-        empty = _empty_analysis_figure(message)
-        return empty, empty, empty, message, message
+        return None, None, message, message
 
     numeric = numeric[usable]
     correlation = numeric.corr(method=method, min_periods=min_periods)
@@ -127,7 +132,19 @@ def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
     pair_counts = valid.T.dot(valid)
     correlation = correlation.mask(pair_counts < min_periods)
 
-    count = len(usable)
+    method_label = "Пирсон" if method == "pearson" else "Спирмен"
+    status = (
+        f"Метод: {method_label} · Столбцов: {len(usable)} · "
+        f"Строк: {len(frame)} · Минимум наблюдений: {min_periods}"
+    )
+    if excluded:
+        status += f" · Исключено столбцов: {len(excluded)}"
+    return correlation, pair_counts, status, None
+
+
+def build_correlogram(correlation, pair_counts, template="plotly"):
+    """Тепловая карта матрицы корреляций (коррелограмма)."""
+    count = len(correlation)
     matrix_height = max(620, min(1500, 38 * count + 260))
     show_values = count <= 15
     heatmap = go.Heatmap(
@@ -157,19 +174,25 @@ def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
         xaxis=dict(tickangle=-45, automargin=True, side="bottom"),
         yaxis=dict(automargin=True, autorange="reversed"),
     )
+    return matrix
 
-    first_target = usable[0]
-    second_target = usable[1]
+
+def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
+                               template="plotly"):
+    """Return matrix, two focused bars, status and an optional error."""
+    correlation, pair_counts, status, error = compute_correlation(
+        frame, columns, method, min_periods
+    )
+    if error:
+        empty = _empty_analysis_figure(error)
+        return empty, empty, empty, error, error
+
+    first_target = correlation.columns[0]
+    second_target = correlation.columns[1]
     first_bar = _correlation_bar(correlation, pair_counts, first_target, template)
     second_bar = _correlation_bar(correlation, pair_counts, second_target, template)
 
-    method_label = "Пирсон" if method == "pearson" else "Спирмен"
-    status = (
-        f"Метод: {method_label} · Столбцов: {len(usable)} · "
-        f"Строк: {len(frame)} · Минимум наблюдений: {min_periods}"
-    )
-    if excluded:
-        status += f" · Исключено столбцов: {len(excluded)}"
+    matrix = build_correlogram(correlation, pair_counts, template)
     return matrix, first_bar, second_bar, status, None
 
 
@@ -181,7 +204,6 @@ class CorrelationWorkspace:
         self.ids = {
             "method": f"{prefix}-method",
             "min_periods": f"{prefix}-min-periods",
-            "matrix": f"{prefix}-matrix",
             "bar_primary": f"{prefix}-bar-primary",
             "bar_secondary": f"{prefix}-bar-secondary",
             "status": f"{prefix}-status",
@@ -190,7 +212,9 @@ class CorrelationWorkspace:
         }
         self._callbacks_registered = False
 
-    def render(self):
+    def render(self, matrix_block=None):
+        """Слот матрицы занимает matrix_block — мультиграфик
+        (Scatter Matrix / Parallel Coordinates / Коррелограмма)."""
         graph_config = {"displaylogo": False, "responsive": True}
         columns_drop_target = html.Div(
             [
@@ -267,15 +291,6 @@ class CorrelationWorkspace:
             withBorder=True,
             shadow="sm",
         )
-        matrix = dmc.Paper(
-            dcc.Graph(id=self.ids["matrix"], figure=_empty_analysis_figure(), config=graph_config),
-            mt="sm",
-            p="xs",
-            radius="md",
-            withBorder=True,
-            shadow="sm",
-            style={"overflow": "visible"},
-        )
         lower = dmc.Grid(
             [
                 dmc.GridCol(
@@ -304,8 +319,12 @@ class CorrelationWorkspace:
             mt="sm",
             gutter="sm",
         )
+        blocks = [controls]
+        if matrix_block is not None:
+            blocks.append(html.Div(matrix_block, style={"marginTop": "10px"}))
+        blocks.append(lower)
         return html.Div(
-            [controls, matrix, lower],
+            blocks,
             id="correlation-workspace",
             style={"minWidth": 0, "overflowX": "hidden"},
         )
@@ -357,7 +376,6 @@ class CorrelationWorkspace:
             return recommended[:DEFAULT_CORRELATION_COLUMNS]
 
         @app.callback(
-            Output(self.ids["matrix"], "figure"),
             Output(self.ids["bar_primary"], "figure"),
             Output(self.ids["bar_secondary"], "figure"),
             Output(self.ids["status"], "children"),
@@ -372,16 +390,18 @@ class CorrelationWorkspace:
         def update_analysis(filtered_json, columns, method, min_periods, meta, template):
             if not filtered_json:
                 empty = _empty_analysis_figure("Сначала загрузите датасет")
-                return empty, empty, empty, "Сначала загрузите датасет.", "dimmed"
+                return empty, empty, "Сначала загрузите датасет.", "dimmed"
             try:
                 frame = read_df_from_store(filtered_json, meta)
-                matrix, first, second, status, error = _build_correlation_figures(
+                # Матрица строится мультиграфиком (тип «Correlogram»);
+                # рейтинги корреляций используют тот же расчёт.
+                _matrix, first, second, status, error = _build_correlation_figures(
                     frame, columns, method, min_periods, template or "plotly"
                 )
-                return matrix, first, second, status, "red" if error else "dimmed"
+                return first, second, status, "red" if error else "dimmed"
             except Exception as error:
                 message = f"Не удалось рассчитать корреляции: {error}"
                 empty = _empty_analysis_figure(message)
-                return empty, empty, empty, message, "red"
+                return empty, empty, message, "red"
 
         self._callbacks_registered = True
