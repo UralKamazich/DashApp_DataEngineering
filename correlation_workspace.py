@@ -167,7 +167,11 @@ def build_correlogram(correlation, pair_counts, template="plotly"):
     )
     matrix = go.Figure(heatmap)
     matrix.update_layout(
-        title="Корреляционная матрица",
+        title=dict(
+            text="Корреляционная матрица",
+            x=0.5,
+            xanchor="center",
+        ),
         template=template,
         height=matrix_height,
         margin=dict(l=35, r=40, t=65, b=35),
@@ -326,7 +330,10 @@ class CorrelationWorkspace:
         return html.Div(
             blocks,
             id="correlation-workspace",
-            style={"minWidth": 0, "overflowX": "hidden"},
+            # ``hidden`` creates an implicit vertical scroll container when it
+            # is used only on one axis. ``clip`` trims long Plotly labels
+            # without adding a second scrollbar beside the page scrollbar.
+            style={"minWidth": 0, "overflowX": "clip"},
         )
 
     def register_callbacks(self, app):

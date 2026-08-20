@@ -301,10 +301,10 @@ dropdown_chart_type = dmc.Select(
 
 SwitchBubble = dmc.Switch(
     id="SwitchBubble",
-    size="sm",
+    size="xs",
     radius="sm",
-    label="Пузырьковый режим",
-    checked=False,
+    label="Bubbles",
+    checked=True,
 )
 
 # =========================
@@ -435,7 +435,6 @@ bar_text_auto_switch = dmc.Switch(
 bar_aggregation_select = dmc.Select(
     id="bar-aggregation",
     label="Bar: агрегация",
-    description="Как считать высоту столбца по категории",
     value="sum",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},

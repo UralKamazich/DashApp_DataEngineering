@@ -137,7 +137,6 @@ def _serialized_row_count(payload):
 @app.callback(
     Output("filters-drawer", "className"),
     Output("filters-drawer-open-state", "data"),
-    Input("filters-panel-toggle", "n_clicks"),
     Input("filters-side-tab", "n_clicks"),
     Input("filter-drop-store", "data"),
     Input("apply-filters-btn", "n_clicks"),
@@ -145,7 +144,7 @@ def _serialized_row_count(payload):
     State("filter-close-on-apply", "checked"),
     prevent_initial_call=True,
 )
-def toggle_filters_drawer(_toggle_clicks, _tab_clicks, _dropped, _apply_clicks, opened, close_on_apply):
+def toggle_filters_drawer(_tab_clicks, _dropped, _apply_clicks, opened, close_on_apply):
     trigger = ctx.triggered_id
     if trigger == "filter-drop-store":
         should_open = True
@@ -337,8 +336,6 @@ def update_filters_state(columns, values, column_ids, value_ids, filters_state):
 
 
 @app.callback(
-    Output("filters-active-count", "children"),
-    Output("filters-panel-toggle", "className"),
     Output("filter-results-summary", "children"),
     Output("filters-side-tab-count", "children"),
     Output("filters-side-tab", "className"),
@@ -350,10 +347,8 @@ def update_filter_summary(applied, stored_json, filtered_json):
     count = len(_clean_filter_state(applied))
     source_rows = _serialized_row_count(stored_json)
     filtered_rows = _serialized_row_count(filtered_json)
-    trigger_class = "filter-panel-trigger"
     tab_class = FILTERS_PANEL.tab_class
     if count:
-        trigger_class += " has-active-filters"
         tab_class += " has-active-filters"
     if not source_rows:
         summary = "Загрузите данные"
@@ -361,4 +356,4 @@ def update_filter_summary(applied, stored_json, filtered_json):
         summary = f"{filtered_rows:,} из {source_rows:,} строк".replace(",", " ")
     else:
         summary = f"{source_rows:,} строк".replace(",", " ")
-    return str(count), trigger_class, summary, str(count), tab_class
+    return summary, str(count), tab_class

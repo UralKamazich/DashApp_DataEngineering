@@ -17,6 +17,8 @@ dcc.Store с состоянием. Отличия задаются параме�
 ``render()``, а для переключения по ярлычку — ``register_toggle(app)``.
 """
 
+import json
+
 from dash import Input, Output, State, ctx, dcc, html
 from dash_iconify import DashIconify
 
@@ -145,3 +147,39 @@ class SlidePanel:
             return (self.open_class if should_open else self.closed_class), should_open
 
         return _toggle
+
+    def register_outside_close(self, app, enabled_id, sink_id):
+        """Close an open panel on an outside click when the checkbox is enabled."""
+        abort_key = f"__slidePanelOutsideAbort_{self.root_id}"
+        script = f"""
+            function (enabled) {{
+                var abortKey = {json.dumps(abort_key)};
+                if (window[abortKey]) {{
+                    window[abortKey].abort();
+                    window[abortKey] = null;
+                }}
+                if (enabled) {{
+                    var controller = new AbortController();
+                    window[abortKey] = controller;
+                    document.addEventListener("mousedown", function (event) {{
+                        var panel = document.getElementById({json.dumps(self.root_id)});
+                        if (!panel || !panel.classList.contains("open")) return;
+                        if (panel.contains(event.target)) return;
+                        window.dash_clientside.set_props(
+                            {json.dumps(self.root_id)},
+                            {{className: {json.dumps(self.closed_class)}}}
+                        );
+                        window.dash_clientside.set_props(
+                            {json.dumps(self.state_id)},
+                            {{data: false}}
+                        );
+                    }}, {{signal: controller.signal}});
+                }}
+                return Boolean(enabled);
+            }}
+        """
+        return app.clientside_callback(
+            script,
+            Output(sink_id, "data"),
+            Input(enabled_id, "checked"),
+        )

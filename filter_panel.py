@@ -7,27 +7,6 @@ import dash_mantine_components as dmc
 
 from slide_panel import SlidePanel
 
-
-def create_filter_trigger():
-    return html.Div(
-        dmc.Button(
-            [
-                DashIconify(icon="tabler:filter", width=15),
-                html.Span("Фильтры"),
-                html.Span("0", id="filters-active-count", className="filter-trigger-count"),
-            ],
-            id="filters-panel-toggle",
-            variant="subtle",
-            color="gray",
-            size="xs",
-            className="filter-panel-trigger",
-        ),
-        id="filter-drop-target",
-        className="filter-drop-target filter-header-drop-target",
-        title="Открыть фильтры или перетащить сюда канал",
-    )
-
-
 def _panel_content():
     content = dmc.Paper(
         [

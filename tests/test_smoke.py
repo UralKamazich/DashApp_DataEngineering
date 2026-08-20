@@ -24,7 +24,13 @@ from callbacks.graph import (
     update_main_graph,
 )
 from callbacks.pipeline import apply_filters
-from components import dropdown_chart_type, make_column_badge, mv_chart_type
+from components import (
+    SwitchBubble,
+    bar_aggregation_select,
+    dropdown_chart_type,
+    make_column_badge,
+    mv_chart_type,
+)
 from config import APP_NAME, APP_TITLE, APP_VERSION
 from correlation_workspace import _build_correlation_figures, compute_correlation
 from graph_help import GRAPH_HELP_ORDER, GRAPH_INSTRUCTIONS, render_instruction
@@ -140,14 +146,22 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertEqual(drop_props["data-drop-target"], "dropdown_corr_columns")
         self.assertEqual(drop_props["data-drop-mode"], "append")
         self.assertEqual(drop_props["data-accept-type"], "numeric")
+        workspace = next(
+            component for component in walk_components(correlation_page)
+            if getattr(component, "id", None) == "correlation-workspace"
+        )
+        workspace_style = workspace.to_plotly_json()["props"]["style"]
+        self.assertEqual(workspace_style["overflowX"], "clip")
+        self.assertNotIn("overflowY", workspace_style)
         self.assertEqual(_normalize_main_chart_type("Correlation"), "Scatter")
         self.assertEqual(_normalize_main_chart_type("Pie"), "Pie")
 
     def test_filter_panel_is_global_and_not_below_the_graph(self):
         components = list(walk_components(app.layout))
         component_ids = {getattr(component, "id", None) for component in components}
+        self.assertNotIn("filters-panel-toggle", component_ids)
+        self.assertNotIn("filter-drop-target", component_ids)
         for component_id in (
-            "filters-panel-toggle",
             "filters-side-tab",
             "filters-drawer",
             "filters-outside-close-store",
@@ -1176,8 +1190,18 @@ class GraphSettingsPanelTests(unittest.TestCase):
             getattr(component, "id", None)
             for component in self.components
         }
-        for expected in ("drawer-simple-tab", "drawer-simple-open-state"):
+        for expected in (
+            "drawer-simple-tab",
+            "drawer-simple-open-state",
+            "graph-settings-close-on-outside",
+            "graph-settings-outside-close-store",
+        ):
             self.assertIn(expected, component_ids)
+
+    def test_series_controls_use_compact_defaults(self):
+        self.assertEqual(SwitchBubble.label, "Bubbles")
+        self.assertTrue(SwitchBubble.checked)
+        self.assertIsNone(getattr(bar_aggregation_select, "description", None))
 
     def test_settings_panel_keeps_existing_callback_ids(self):
         component_ids = {

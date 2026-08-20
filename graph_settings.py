@@ -34,6 +34,8 @@ SETTINGS_COMPONENT_IDS = (
     "graph-settings-panel",
     "graph-settings-reset-state",
     "graph-settings-reset",
+    "graph-settings-close-on-outside",
+    "graph-settings-outside-close-store",
     "InputSizePlot",
     "InputSizePlotW",
     "font-size-xaxis",
@@ -69,6 +71,9 @@ class GraphSettingsPanel:
             tab_style={"bottom": "10px"},
             extra_root_classes=("graph-settings-content",),
             content=self._settings_body,
+            extra_stores=[
+                dcc.Store(id=self.component_id("graph-settings-outside-close-store"), data=False),
+            ],
         )
 
     def component_id(self, legacy_id: str) -> str:
@@ -315,9 +320,9 @@ class GraphSettingsPanel:
                 ),
                 dmc.SimpleGrid(
                     [
-                        self._feature_card(
+                        html.Div(
                             self.controls["bubble"],
-                            "Использует выбранный столбец Size для масштаба маркеров.",
+                            className="graph-settings-control graph-settings-bubbles",
                         ),
                         self._number_input(
                             "InputMaxSizeBubble",
@@ -391,18 +396,31 @@ class GraphSettingsPanel:
                         [
                             html.Div(
                                 [
-                                    self._icon("circle-check", 13),
-                                    dmc.Text("Применяется автоматически", size="10px", c="dimmed"),
+                                    html.Div(
+                                        [
+                                            self._icon("circle-check", 13),
+                                            dmc.Text("Применяется автоматически", size="10px", c="dimmed"),
+                                        ],
+                                        className="graph-settings-auto-status",
+                                    ),
+                                    dmc.Button(
+                                        "Сбросить",
+                                        id=self.component_id("graph-settings-reset"),
+                                        variant="subtle",
+                                        color="gray",
+                                        size="xs",
+                                        leftSection=self._icon("rotate-ccw", 12),
+                                    ),
                                 ],
-                                className="graph-settings-auto-status",
+                                className="graph-settings-footer-main",
                             ),
-                            dmc.Button(
-                                "Сбросить",
-                                id=self.component_id("graph-settings-reset"),
-                                variant="subtle",
-                                color="gray",
+                            dmc.Checkbox(
+                                id=self.component_id("graph-settings-close-on-outside"),
+                                label="Закрывать при клике вне",
+                                checked=False,
                                 size="xs",
-                                leftSection=self._icon("rotate-ccw", 12),
+                                persistence=True,
+                                className="graph-settings-close-option",
                             ),
                         ],
                         className="graph-settings-footer",

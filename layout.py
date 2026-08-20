@@ -12,7 +12,7 @@ import dash_mantine_components as dmc
 from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
 from dataset_panel import create_dataset_drawer
-from filter_panel import create_filter_drawer, create_filter_trigger
+from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
@@ -133,7 +133,6 @@ def create_layout():
     correlation_workspace = CORRELATION_WORKSPACE.render(
         matrix_block=multivariate_workspace
     )
-    filter_trigger = create_filter_trigger()
     filter_drawer = create_filter_drawer()
     dataset_drawer = create_dataset_drawer()
 
@@ -184,8 +183,6 @@ def create_layout():
                             color="gray",
                             style={"borderColor": "rgba(255,255,255,0.3)", "color": "#ccc"}
                         ),
-                        dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
-                        filter_trigger,
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         *[make_nav_link(item["label"], item["href"]) for item in NAV_LINKS],
                     ], gap="sm", align="center", wrap="nowrap", px="md", py=6),

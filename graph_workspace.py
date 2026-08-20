@@ -501,6 +501,11 @@ class GraphWorkspace:
             app,
             open_inputs=(self.ids["open_settings"],),
         )
+        self.settings_panel.slide.register_outside_close(
+            app,
+            self._settings_internal_id("graph-settings-close-on-outside"),
+            self._settings_internal_id("graph-settings-outside-close-store"),
+        )
 
         defaults = {
             self._settings_control_id("theme"): {"value": "plotly"},
@@ -521,7 +526,7 @@ class GraphWorkspace:
             self._settings_control_id("legend_position"): {"value": "top-right-outside"},
             self._settings_control_id("legend_order"): {"value": "alphabetical"},
             self._settings_control_id("legend_custom_order"): {"value": ""},
-            self._settings_control_id("bubble"): {"checked": False},
+            self._settings_control_id("bubble"): {"checked": True},
             self._settings_internal_id("InputMaxSizeBubble"): {"value": 30},
             self._settings_control_id("bar_labels"): {"checked": True},
         }

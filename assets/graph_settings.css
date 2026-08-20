@@ -16,7 +16,7 @@
 .graph-settings-scroll {
     flex: 1 1 auto;
     min-height: 0;
-    padding: 10px 10px 54px;
+    padding: 10px 10px 82px;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -164,6 +164,13 @@
     margin-bottom: 6px;
 }
 
+.graph-settings-bubbles {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    padding: 14px 4px 0;
+}
+
 .graph-settings-note {
     font-size: 10px;
 }
@@ -175,13 +182,25 @@
     left: 0;
     z-index: 6;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 44px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    min-height: 72px;
     padding: 6px 12px;
     background: rgba(255, 255, 255, 0.94);
     border-top: 1px solid #e1e6ee;
     backdrop-filter: blur(12px);
+}
+
+.graph-settings-footer-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.graph-settings-close-option {
+    padding-top: 5px;
+    border-top: 1px dashed #e1e6ee;
 }
 
 .graph-settings-auto-status {
