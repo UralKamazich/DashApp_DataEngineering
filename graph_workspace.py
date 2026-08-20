@@ -365,6 +365,8 @@ class GraphWorkspace:
             opened=False,
             size="lg",
             zIndex=1000,
+            centered=True,
+            className="graph-help-modal",
             children=[
                 dmc.Select(
                     id=self.ids["help_type"],
@@ -373,13 +375,17 @@ class GraphWorkspace:
                     value=default_type,
                     allowDeselect=False,
                     clearable=False,
-                    comboboxProps={"shadow": "md"},
+                    comboboxProps={"shadow": "md", "withinPortal": True, "zIndex": 1100},
                     mb="sm",
                 ),
                 dmc.ScrollArea(
                     dmc.Stack(id=self.ids["help_content"], gap="xs", children=content),
-                    mah=480,
+                    h="min(58dvh, 540px)",
                     type="auto",
+                    scrollbars="y",
+                    offsetScrollbars="y",
+                    scrollbarSize=8,
+                    className="graph-help-scroll",
                 ),
                 dmc.Group(
                     dmc.Button(

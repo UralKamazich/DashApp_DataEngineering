@@ -1,0 +1,46 @@
+.graph-help-modal .mantine-Modal-content {
+  max-height: calc(100dvh - 32px);
+}
+
+.graph-help-modal .mantine-Modal-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.graph-help-control-hint {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 9px 11px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-gray-7);
+  background: var(--mantine-color-gray-0);
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1.4;
+}
+
+.graph-help-control-icon {
+  flex: 0 0 auto;
+  color: var(--mantine-color-blue-6);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.graph-help-scroll {
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.graph-help-scroll .mantine-List-item + .mantine-List-item {
+  margin-top: 3px;
+}
+
+@media (max-height: 680px) {
+  .graph-help-modal .mantine-Modal-header,
+  .graph-help-modal .mantine-Modal-body {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}

@@ -1536,6 +1536,7 @@ class GraphHelpTests(unittest.TestCase):
                 self.assertTrue(info["title"])
                 self.assertTrue(info["purpose"])
                 self.assertTrue(info["fields"])
+                self.assertTrue(info["reading"])
 
     def test_render_instruction_returns_content_for_each_type(self):
         for chart_type in GRAPH_HELP_ORDER:
