@@ -184,8 +184,25 @@ def build_correlogram(correlation, pair_counts, template="plotly"):
     return matrix
 
 
+def _rating_target_options(columns, primary=None, secondary=None):
+    """Keep rating targets inside the shared correlation channel set."""
+    selected = list(dict.fromkeys(str(column) for column in (columns or [])))
+    options = [{"label": column, "value": column} for column in selected]
+    if not selected:
+        return options, None, None
+
+    primary = primary if primary in selected else selected[0]
+    if secondary not in selected or (secondary == primary and len(selected) > 1):
+        secondary = next(
+            (column for column in selected if column != primary),
+            primary,
+        )
+    return options, primary, secondary
+
+
 def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
-                               template="plotly"):
+                               template="plotly", primary_target=None,
+                               secondary_target=None):
     """Return matrix, two focused bars, status and an optional error."""
     correlation, pair_counts, status, error = compute_correlation(
         frame, columns, method, min_periods
@@ -194,10 +211,19 @@ def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
         empty = _empty_analysis_figure(error, template)
         return empty, empty, empty, error, error
 
-    first_target = correlation.columns[0]
-    second_target = correlation.columns[1]
-    first_bar = _correlation_bar(correlation, pair_counts, first_target, template)
-    second_bar = _correlation_bar(correlation, pair_counts, second_target, template)
+    available = list(correlation.columns)
+
+    def rating_figure(requested, fallback_index):
+        target = requested or available[min(fallback_index, len(available) - 1)]
+        if target not in available:
+            return _empty_analysis_figure(
+                f"Канал «{target}» исключён из расчёта", template
+            ), target
+        return _correlation_bar(correlation, pair_counts, target, template), target
+
+    first_bar, first_target = rating_figure(primary_target, 0)
+    second_bar, second_target = rating_figure(secondary_target, 1)
+    status += f" · Рейтинги: {first_target} / {second_target}"
 
     matrix = build_correlogram(correlation, pair_counts, template)
     return matrix, first_bar, second_bar, status, None
@@ -213,6 +239,8 @@ class CorrelationWorkspace:
             "min_periods": f"{prefix}-min-periods",
             "bar_primary": f"{prefix}-bar-primary",
             "bar_secondary": f"{prefix}-bar-secondary",
+            "bar_primary_target": f"{prefix}-bar-primary-target",
+            "bar_secondary_target": f"{prefix}-bar-secondary-target",
             "status": f"{prefix}-status",
             "columns_drop": f"{prefix}-columns-drop",
             "columns_sync": f"{prefix}-columns-sync",
@@ -302,22 +330,70 @@ class CorrelationWorkspace:
             [
                 dmc.GridCol(
                     dmc.Paper(
-                        dcc.Graph(
-                            id=self.ids["bar_primary"],
-                            figure=_empty_analysis_figure(),
-                            config=graph_config,
-                        ),
+                        [
+                            dmc.Group(
+                                [
+                                    dmc.Text("Рейтинг корреляций", fw=600, size="sm"),
+                                    dmc.Select(
+                                        id=self.ids["bar_primary_target"],
+                                        data=[],
+                                        value=None,
+                                        placeholder="Целевой канал",
+                                        **{"aria-label": "Целевой канал левого рейтинга"},
+                                        searchable=True,
+                                        allowDeselect=False,
+                                        size="xs",
+                                        persistence=True,
+                                        comboboxProps={"shadow": "md", "zIndex": 1100},
+                                        className="correlation-rating-target",
+                                    ),
+                                ],
+                                justify="space-between",
+                                align="center",
+                                gap="xs",
+                                mb=4,
+                            ),
+                            dcc.Graph(
+                                id=self.ids["bar_primary"],
+                                figure=_empty_analysis_figure(),
+                                config=graph_config,
+                            ),
+                        ],
                         p="xs", radius="md", withBorder=True, shadow="sm",
                     ),
                     span=6,
                 ),
                 dmc.GridCol(
                     dmc.Paper(
-                        dcc.Graph(
-                            id=self.ids["bar_secondary"],
-                            figure=_empty_analysis_figure(),
-                            config=graph_config,
-                        ),
+                        [
+                            dmc.Group(
+                                [
+                                    dmc.Text("Рейтинг корреляций", fw=600, size="sm"),
+                                    dmc.Select(
+                                        id=self.ids["bar_secondary_target"],
+                                        data=[],
+                                        value=None,
+                                        placeholder="Целевой канал",
+                                        **{"aria-label": "Целевой канал правого рейтинга"},
+                                        searchable=True,
+                                        allowDeselect=False,
+                                        size="xs",
+                                        persistence=True,
+                                        comboboxProps={"shadow": "md", "zIndex": 1100},
+                                        className="correlation-rating-target",
+                                    ),
+                                ],
+                                justify="space-between",
+                                align="center",
+                                gap="xs",
+                                mb=4,
+                            ),
+                            dcc.Graph(
+                                id=self.ids["bar_secondary"],
+                                figure=_empty_analysis_figure(),
+                                config=graph_config,
+                            ),
+                        ],
                         p="xs", radius="md", withBorder=True, shadow="sm",
                     ),
                     span=6,
@@ -394,6 +470,21 @@ class CorrelationWorkspace:
             return numeric_columns[:DEFAULT_CORRELATION_COLUMNS]
 
         @app.callback(
+            Output(self.ids["bar_primary_target"], "data"),
+            Output(self.ids["bar_primary_target"], "value"),
+            Output(self.ids["bar_secondary_target"], "data"),
+            Output(self.ids["bar_secondary_target"], "value"),
+            Input(self.columns_control.id, "value"),
+            State(self.ids["bar_primary_target"], "value"),
+            State(self.ids["bar_secondary_target"], "value"),
+        )
+        def sync_rating_targets(columns, primary, secondary):
+            options, primary, secondary = _rating_target_options(
+                columns, primary, secondary
+            )
+            return options, primary, options, secondary
+
+        @app.callback(
             Output(self.ids["bar_primary"], "figure"),
             Output(self.ids["bar_secondary"], "figure"),
             Output(self.ids["status"], "children"),
@@ -402,11 +493,15 @@ class CorrelationWorkspace:
             Input(self.columns_control.id, "value"),
             Input(self.ids["method"], "value"),
             Input(self.ids["min_periods"], "value"),
+            Input(self.ids["bar_primary_target"], "value"),
+            Input(self.ids["bar_secondary_target"], "value"),
             Input("url", "pathname"),
             Input("dropdown_style", "value"),
             State("meta-columns", "data"),
         )
-        def update_analysis(filtered_json, columns, method, min_periods, pathname, template, meta):
+        def update_analysis(filtered_json, columns, method, min_periods,
+                            primary_target, secondary_target, pathname,
+                            template, meta):
             if pathname != "/correlation":
                 return no_update, no_update, no_update, no_update
             if not filtered_json:
@@ -422,7 +517,8 @@ class CorrelationWorkspace:
                 # Матрица строится мультиграфиком (тип «Correlogram»);
                 # рейтинги корреляций используют тот же расчёт.
                 _matrix, first, second, status, error = _build_correlation_figures(
-                    frame, columns, method, min_periods, template or "plotly"
+                    frame, columns, method, min_periods, template or "plotly",
+                    primary_target, secondary_target,
                 )
                 return first, second, status, "red" if error else "dimmed"
             except Exception as error:

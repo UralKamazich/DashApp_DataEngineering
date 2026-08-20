@@ -26,7 +26,7 @@ from components import (
     agg_exclude_zeros_switch, agg_exclude_empty_switch,
     txtcopy_cols_select, txtcopy_suffix_input, txtcopy_strip_switch,
     dropdown_chart_type,
-    mv_chart_type, mv_dropdown_x, mv_dropdown_y, mv_dropdown_z, mv_dropdown_color,
+    mv_chart_type,
     SwitchBubble,
     dropdown_text_pozition, dropdown_category_ascending,
     dropdown_axes_category, dropdown_overlay, dropdown_pie_aggregation,
@@ -102,25 +102,13 @@ GRAPH_WORKSPACE = GraphWorkspace(
 
 CORRELATION_WORKSPACE = CorrelationWorkspace(dropdown_corr_columns)
 
-# Многомерные графики (Scatter Matrix / Parallel Coordinates) живут на
-# странице корреляционного анализа: им нужны только X/Y/Z и Цвет.
-MULTIVARIATE_FIELDS = (
-    {"key": "x", "label": "X", "target": "dropdown_x", "zone": "axis-x"},
-    {"key": "y", "label": "Y", "target": "dropdown_y", "zone": "axis-y"},
-    {"key": "z", "label": "Z", "target": "dropdown_z", "zone": "secondary"},
-    {"key": "color", "label": "Цвет", "target": "dropdown_color", "zone": "secondary"},
-)
-
+# Все многомерные графики используют единый список «Коррелируемые каналы»
+# над рабочей областью. Собственные DnD-поля здесь намеренно отсутствуют.
 MULTIVARIATE_WORKSPACE = GraphWorkspace(
     graph_id="mv-graph",
     chart_type_control=mv_chart_type,
-    field_controls={
-        "dropdown_x": mv_dropdown_x,
-        "dropdown_y": mv_dropdown_y,
-        "dropdown_z": mv_dropdown_z,
-        "dropdown_color": mv_dropdown_color,
-    },
-    fields=MULTIVARIATE_FIELDS,
+    field_controls={},
+    fields=(),
     include_color_controls=False,
 )
 

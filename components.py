@@ -140,15 +140,6 @@ dropdown_corr_columns.style = {
     "maxWidth": "100%",
 }
 
-# =========================
-# Многомерные графики (Коррелограмма / Scatter Matrix / Parallel Coordinates)
-# на странице корреляционного анализа
-# =========================
-mv_dropdown_x = create_dropdown("mv-dropdown-x", [], None, clearable=True)
-mv_dropdown_y = create_dropdown("mv-dropdown-y", [], None, clearable=True)
-mv_dropdown_z = create_dropdown("mv-dropdown-z", [], None, clearable=True)
-mv_dropdown_color = create_dropdown("mv-dropdown-color", [], None, clearable=True)
-
 mv_chart_type = dmc.Select(
     id="mv-chart-type",
     allowDeselect=False,

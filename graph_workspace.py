@@ -252,6 +252,19 @@ class GraphWorkspace:
     def _render_paper(self):
         secondary = [self._drop_zone(field) for field in self.fields if field["zone"] == "secondary"]
         axes = [self._drop_zone(field) for field in self.fields if field["zone"] != "secondary"]
+        field_layer = []
+        if self.fields:
+            field_layer = [
+                html.Div(
+                    className="graph-drop-layer",
+                    children=[*axes, html.Div(secondary, className="graph-drop-secondary")],
+                ),
+                html.Div(
+                    list(self.field_controls.values()),
+                    className="graph-field-state",
+                    **{"aria-hidden": "true"},
+                ),
+            ]
 
         workspace_data = {
             "data-graph-id": self.graph_id,
@@ -319,15 +332,7 @@ class GraphWorkspace:
                         parent_className="graph-workspace-loading",
                         parent_style={"height": "100%", "width": "100%"},
                     ),
-                    html.Div(
-                        className="graph-drop-layer",
-                        children=[*axes, html.Div(secondary, className="graph-drop-secondary")],
-                    ),
-                    html.Div(
-                        list(self.field_controls.values()),
-                        className="graph-field-state",
-                        **{"aria-hidden": "true"},
-                    ),
+                    *field_layer,
                 ],
             ),
         )
@@ -514,6 +519,8 @@ class GraphWorkspace:
         )
 
     def _register_zone_labels_callback(self, app):
+        if not self.fields:
+            return
         targets = [self.field_ids[field["target"]] for field in self.fields]
         inputs = [Input(target, "value") for target in targets]
 

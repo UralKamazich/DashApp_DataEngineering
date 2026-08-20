@@ -541,6 +541,11 @@
     flex: 0 0 76px;
 }
 
+.correlation-rating-target {
+    width: min(58%, 260px);
+    min-width: 170px;
+}
+
 .graph-drop-zone--axis-x {
     position: absolute;
     right: 12%;

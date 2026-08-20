@@ -40,7 +40,11 @@ from components import (
     mv_chart_type,
 )
 from config import APP_NAME, APP_TITLE, APP_VERSION
-from correlation_workspace import _build_correlation_figures, compute_correlation
+from correlation_workspace import (
+    _build_correlation_figures,
+    _rating_target_options,
+    compute_correlation,
+)
 from graph_help import GRAPH_HELP_ORDER, GRAPH_INSTRUCTIONS, render_instruction
 from graph_settings import (
     GraphSettingsPanel,
@@ -185,7 +189,21 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("mv-chart-type", correlation_ids)
         self.assertIn("correlation-bar-primary", correlation_ids)
         self.assertIn("correlation-bar-secondary", correlation_ids)
+        self.assertIn("correlation-bar-primary-target", correlation_ids)
+        self.assertIn("correlation-bar-secondary-target", correlation_ids)
         self.assertIn("correlation-columns-drop", correlation_ids)
+        for obsolete_id in (
+            "mv-dropdown-x", "mv-dropdown-y", "mv-dropdown-z", "mv-dropdown-color"
+        ):
+            self.assertNotIn(obsolete_id, correlation_ids)
+        multivariate_workspace = next(
+            component for component in walk_components(correlation_page)
+            if getattr(component, "id", None) == "mv-graph-workspace"
+        )
+        self.assertFalse(any(
+            "graph-drop-zone" in (getattr(component, "className", "") or "")
+            for component in walk_components(multivariate_workspace)
+        ))
         self.assertNotIn("graph", correlation_ids)
         drop_target = next(
             component for component in walk_components(correlation_page)
@@ -204,6 +222,22 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertNotIn("overflowY", workspace_style)
         self.assertEqual(_normalize_main_chart_type("Correlation"), "Scatter")
         self.assertEqual(_normalize_main_chart_type("Pie"), "Pie")
+
+        rating_callback = next(
+            callback for key, callback in app.callback_map.items()
+            if "correlation-bar-primary.figure" in key
+        )
+        rating_inputs = {
+            (dependency["id"], dependency["property"])
+            for dependency in rating_callback["inputs"]
+        }
+        self.assertIn(("dropdown_corr_columns", "value"), rating_inputs)
+        self.assertIn(("correlation-bar-primary-target", "value"), rating_inputs)
+        self.assertIn(("correlation-bar-secondary-target", "value"), rating_inputs)
+        self.assertFalse(any(
+            component_id.startswith("mv-dropdown-")
+            for component_id, _property in rating_inputs
+        ))
 
     def test_filter_panel_is_global_and_not_below_the_graph(self):
         components = list(walk_components(app.layout))
@@ -471,12 +505,59 @@ class CorrelationAnalysisTests(unittest.TestCase):
             side_effect=AssertionError("hidden page should not read the dataset"),
         ):
             figure, notifications = build_multivariate_figure(
-                None, None, None, None,
                 "Correlogram", ["x", "y"], "pearson", 2,
                 '{"large":"payload"}', "/", "plotly", {},
             )
         self.assertIs(figure, no_update)
         self.assertIs(notifications, no_update)
+
+    def test_multivariate_graph_uses_only_shared_correlation_channels(self):
+        source = pd.DataFrame({
+            "a": [1.0, 2.0, 3.0],
+            "b": [3.0, 2.0, 1.0],
+            "c": [2.0, 4.0, 8.0],
+        })
+        figure, notifications = build_multivariate_figure(
+            "ScatterMatrix", ["c", "a", "b"], "pearson", 2,
+            source.to_json(orient="split"), "/correlation", "plotly",
+            meta_from_df(source),
+        )
+
+        self.assertEqual(notifications, [])
+        self.assertEqual(
+            [dimension.label for dimension in figure.data[0].dimensions],
+            ["c", "a", "b"],
+        )
+
+    def test_rating_targets_are_limited_to_shared_channels(self):
+        options, primary, secondary = _rating_target_options(
+            ["gamma", "alpha", "beta"], "alpha", "removed"
+        )
+        self.assertEqual(
+            options,
+            [
+                {"label": "gamma", "value": "gamma"},
+                {"label": "alpha", "value": "alpha"},
+                {"label": "beta", "value": "beta"},
+            ],
+        )
+        self.assertEqual(primary, "alpha")
+        self.assertEqual(secondary, "gamma")
+
+    def test_rating_graphs_follow_explicit_target_channels(self):
+        source = pd.DataFrame({
+            "a": [1.0, 2.0, 3.0, 4.0],
+            "b": [4.0, 3.0, 2.0, 1.0],
+            "c": [1.0, 4.0, 2.0, 3.0],
+        })
+        _matrix, first, second, status, error = _build_correlation_figures(
+            source, ["a", "b", "c"], "pearson", 2, "plotly", "c", "a"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(first.layout.title.text, "Корреляции с «c»")
+        self.assertEqual(second.layout.title.text, "Корреляции с «a»")
+        self.assertIn("Рейтинги: c / a", status)
 
     def test_spearman_detects_monotonic_relationship(self):
         source = pd.DataFrame({
@@ -1529,6 +1610,19 @@ class GraphHelpTests(unittest.TestCase):
         self.assertTrue(
             any("mv-graph.figure" in key for key in app.callback_map)
         )
+        multivariate_callback = next(
+            callback for key, callback in app.callback_map.items()
+            if "mv-graph.figure" in key
+        )
+        multivariate_inputs = {
+            (dependency["id"], dependency["property"])
+            for dependency in multivariate_callback["inputs"]
+        }
+        self.assertIn(("dropdown_corr_columns", "value"), multivariate_inputs)
+        self.assertFalse(any(
+            component_id.startswith("mv-dropdown-")
+            for component_id, _property in multivariate_inputs
+        ))
 
     def test_every_instruction_has_required_sections(self):
         for chart_type, info in GRAPH_INSTRUCTIONS.items():
