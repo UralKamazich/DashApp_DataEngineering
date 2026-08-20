@@ -54,23 +54,27 @@ def update_dropdown_options_all(filtered_json, meta):
                 empty_agg_data, empty_agg_data, empty_agg_data,
                 *empty_mv)
 
-    try:
-        dff = read_df_from_store(filtered_json, meta)
-    except Exception:
-        return (*empty_axes,
-                empty_bin_options, empty_cluster_opts,
-                empty_agg_data, empty_agg_data, empty_agg_data,
-                *empty_mv)
+    if isinstance(meta, dict) and meta.get("columns") is not None:
+        all_cols = [str(column) for column in (meta.get("columns") or [])]
+        numeric_cols = [str(column) for column in (meta.get("numeric") or [])]
+        categorical_cols = [str(column) for column in (meta.get("categorical") or [])]
+    else:
+        # Compatibility fallback for old stores without metadata.
+        try:
+            dff = read_df_from_store(filtered_json, meta)
+        except Exception:
+            return (*empty_axes,
+                    empty_bin_options, empty_cluster_opts,
+                    empty_agg_data, empty_agg_data, empty_agg_data,
+                    *empty_mv)
+        if dff is None or dff.empty:
+            return (*empty_axes,
+                    empty_bin_options, empty_cluster_opts,
+                    empty_agg_data, empty_agg_data, empty_agg_data,
+                    *empty_mv)
+        numeric_cols, categorical_cols, _datetime_cols = classify_simple(dff)
+        all_cols = [str(c) for c in dff.columns]
 
-    if dff is None or dff.empty:
-        return (*empty_axes,
-                empty_bin_options, empty_cluster_opts,
-                empty_agg_data, empty_agg_data, empty_agg_data,
-                *empty_mv)
-
-    numeric_cols, categorical_cols, datetime_cols = classify_simple(dff)
-
-    all_cols     = [str(c) for c in dff.columns]
     all_options  = _select_options(all_cols)
     color_options= [{"label": "Нет", "value": "Нет"}] + _select_options(categorical_cols + numeric_cols)
     numeric_opts = _select_options(numeric_cols)

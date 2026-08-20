@@ -1,9 +1,12 @@
-/** Shared PNG export operations for the main Plotly graph. */
+/** Shared PNG export operations for GraphWorkspace instances. */
 (function () {
   "use strict";
 
   function getPlot(graphId) {
-    const host = document.getElementById(graphId || "graph");
+    if (!graphId) {
+      throw new Error("Не указан экземпляр графика.");
+    }
+    const host = document.getElementById(graphId);
     const plot = host && host.querySelector(".js-plotly-plot");
     if (!plot || !window.Plotly) {
       throw new Error("График не найден в DOM.");
@@ -64,7 +67,8 @@
     const link = document.createElement("a");
     const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
     link.href = dataUrl;
-    link.download = `graph-${stamp}.png`;
+    const safeGraphId = String(graphId).replace(/[^a-zA-Z0-9_-]+/g, "-") || "graph";
+    link.download = `${safeGraphId}-${stamp}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -116,7 +116,7 @@ class GraphWorkspace:
         notifications_id: str = "notifications-container",
         initial_height: int = 750,
         initial_width: int | None = None,
-        include_color_controls: bool = True,
+        include_color_controls: bool | None = None,
     ):
         self.graph_id = graph_id
         self.component_id = f"{graph_id}-component"
@@ -126,6 +126,15 @@ class GraphWorkspace:
         self.chart_type_id = _component_id(chart_type_control)
         self.field_controls = dict(field_controls)
         self.fields = tuple(fields)
+        self._fields_by_key = {}
+        for field in self.fields:
+            key = field.get("key")
+            target = field.get("target")
+            if not key or not target:
+                raise ValueError("Each graph field needs non-empty 'key' and 'target'")
+            if key in self._fields_by_key:
+                raise ValueError(f"Duplicate graph field key: {key!r}")
+            self._fields_by_key[key] = field
         self.settings_panel = settings_panel
         if self.settings_panel is not None:
             self.settings_panel.bind_namespace(graph_id)
@@ -133,7 +142,13 @@ class GraphWorkspace:
         self.notifications_id = notifications_id
         self.initial_height = initial_height
         self.initial_width = initial_width
-        self.include_color_controls = include_color_controls
+        self.include_color_controls = (
+            self.settings_panel is not None
+            if include_color_controls is None
+            else bool(include_color_controls)
+        )
+        if self.include_color_controls and self.settings_panel is None:
+            raise ValueError("Color controls require a GraphSettingsPanel")
         self._callbacks_registered = False
 
         required = {field["target"] for field in self.fields}
@@ -144,6 +159,10 @@ class GraphWorkspace:
         self.field_ids = {
             key: _component_id(control)
             for key, control in self.field_controls.items()
+        }
+        self.field_ids_by_key = {
+            key: self.field_ids[field["target"]]
+            for key, field in self._fields_by_key.items()
         }
         generated_ids = {
             "update": f"{graph_id}-update",
@@ -241,12 +260,13 @@ class GraphWorkspace:
             "data-action-download-html": self.ids["download_html"],
             "data-action-copy-png": self.ids["copy_png"],
             "data-action-save-png": self.ids["save_png"],
-            "data-action-change-colors": self.ids["change_colors"],
             "data-action-clear-graph": self.ids["clear"],
         }
+        if self.include_color_controls:
+            workspace_data["data-action-change-colors"] = self.ids["change_colors"]
         if self.settings_panel is not None:
             workspace_data.update({
-                "data-settings-popup-id": self._settings_internal_id("graph-settings-popover"),
+                "data-settings-popup-id": self.settings_id("graph-settings-popover"),
                 "data-action-open-specific-settings": self.ids["open_settings"],
             })
 
@@ -375,19 +395,21 @@ class GraphWorkspace:
         )
 
     def _service_components(self):
+        children = [
+            dcc.Store(id=self.ids["view_revision"], data=0),
+            dcc.Store(id=self.ids["custom_colors"], data={}),
+            dcc.Store(id=self.ids["sync"]),
+            html.Button("download-html", id=self.ids["download_html"]),
+            html.Button("update", id=self.ids["update"]),
+            html.Button("copy-png", id=self.ids["copy_png"]),
+            html.Button("save-png", id=self.ids["save_png"]),
+            html.Button("clear-graph", id=self.ids["clear"]),
+            dcc.Download(id=self.ids["download_component"]),
+        ]
+        if self.include_color_controls:
+            children.append(html.Button("change-colors", id=self.ids["change_colors"]))
         return html.Div(
-            [
-                dcc.Store(id=self.ids["view_revision"], data=0),
-                dcc.Store(id=self.ids["custom_colors"], data={}),
-                dcc.Store(id=self.ids["sync"]),
-                html.Button("download-html", id=self.ids["download_html"]),
-                html.Button("update", id=self.ids["update"]),
-                html.Button("copy-png", id=self.ids["copy_png"]),
-                html.Button("save-png", id=self.ids["save_png"]),
-                html.Button("change-colors", id=self.ids["change_colors"]),
-                html.Button("clear-graph", id=self.ids["clear"]),
-                dcc.Download(id=self.ids["download_component"]),
-            ],
+            children,
             className="graph-workspace-services",
             style={"display": "none"},
             **{"aria-hidden": "true"},
@@ -408,10 +430,23 @@ class GraphWorkspace:
             className="graph-workspace-component",
         )
 
-    def _settings_control_id(self, key: str) -> str:
+    def field_id(self, key: str) -> str:
+        """Return a field control ID by its semantic key (x, y, color, ...)."""
+        try:
+            return self.field_ids_by_key[key]
+        except KeyError as error:
+            raise KeyError(f"GraphWorkspace has no field {key!r}") from error
+
+    def settings_control_id(self, key: str) -> str:
+        """Return the external settings control ID owned by this workspace."""
+        if self.settings_panel is None:
+            raise RuntimeError("GraphWorkspace has no settings panel")
         return _component_id(self.settings_panel.controls[key])
 
-    def _settings_internal_id(self, legacy_id: str) -> str:
+    def settings_id(self, legacy_id: str) -> str:
+        """Return an instance-scoped ID for a settings panel component."""
+        if self.settings_panel is None:
+            raise RuntimeError("GraphWorkspace has no settings panel")
         return self.settings_panel.component_id(legacy_id)
 
     def register_callbacks(self, app):
@@ -426,8 +461,8 @@ class GraphWorkspace:
         self._register_help_callbacks(app)
         if self.settings_panel is not None:
             self._register_settings_callbacks(app)
-            if self.include_color_controls:
-                self._register_color_callbacks(app)
+        if self.include_color_controls:
+            self._register_color_callbacks(app)
 
     def figure_callback(self, app, *dependencies, prevent_initial_call=True):
         """Return a decorator that connects a dashboard figure builder.
@@ -537,37 +572,37 @@ class GraphWorkspace:
                 ];
             }
             """,
-            Output(self._settings_internal_id("graph-settings-specific-title"), "children"),
-            Output(self._settings_internal_id("graph-settings-specific-points"), "style"),
-            Output(self._settings_internal_id("graph-settings-specific-bars"), "style"),
-            Output(self._settings_internal_id("graph-settings-specific-bar-only"), "style"),
-            Output(self._settings_internal_id("graph-settings-specific-pie"), "style"),
-            Output(self._settings_internal_id("graph-settings-specific-empty"), "style"),
+            Output(self.settings_id("graph-settings-specific-title"), "children"),
+            Output(self.settings_id("graph-settings-specific-points"), "style"),
+            Output(self.settings_id("graph-settings-specific-bars"), "style"),
+            Output(self.settings_id("graph-settings-specific-bar-only"), "style"),
+            Output(self.settings_id("graph-settings-specific-pie"), "style"),
+            Output(self.settings_id("graph-settings-specific-empty"), "style"),
             Input(self.chart_type_id, "value"),
         )
 
         defaults = {
-            self._settings_control_id("theme"): {"value": "plotly"},
-            self._settings_internal_id("InputSizePlot"): {"value": 750},
-            self._settings_internal_id("InputSizePlotW"): {"value": None},
-            self._settings_internal_id("font-size-xaxis"): {"value": 14},
-            self._settings_internal_id("font-size-yaxis"): {"value": 14},
-            self._settings_internal_id("font-size-title"): {"value": 16},
-            self._settings_internal_id("font-size-ticks"): {"value": 12},
-            self._settings_internal_id("tick-step-xaxis"): {"value": 0},
-            self._settings_internal_id("tick-step-yaxis"): {"value": 0},
-            self._settings_control_id("text_position"): {"value": "middle center"},
-            self._settings_control_id("category_axis"): {"value": "auto"},
-            self._settings_control_id("category_order"): {"value": "total ascending"},
-            self._settings_control_id("bar_mode"): {"value": "overlay"},
-            self._settings_control_id("bar_aggregation"): {"value": "sum"},
-            self._settings_control_id("pie_aggregation"): {"value": "sum"},
-            self._settings_control_id("legend_position"): {"value": "top-right-outside"},
-            self._settings_control_id("legend_order"): {"value": "alphabetical"},
-            self._settings_control_id("legend_custom_order"): {"value": ""},
-            self._settings_control_id("bubble"): {"checked": True},
-            self._settings_internal_id("InputMaxSizeBubble"): {"value": 30},
-            self._settings_control_id("bar_labels"): {"checked": True},
+            self.settings_control_id("theme"): {"value": "plotly"},
+            self.settings_id("InputSizePlot"): {"value": 750},
+            self.settings_id("InputSizePlotW"): {"value": None},
+            self.settings_id("font-size-xaxis"): {"value": 14},
+            self.settings_id("font-size-yaxis"): {"value": 14},
+            self.settings_id("font-size-title"): {"value": 16},
+            self.settings_id("font-size-ticks"): {"value": 12},
+            self.settings_id("tick-step-xaxis"): {"value": 0},
+            self.settings_id("tick-step-yaxis"): {"value": 0},
+            self.settings_control_id("text_position"): {"value": "middle center"},
+            self.settings_control_id("category_axis"): {"value": "auto"},
+            self.settings_control_id("category_order"): {"value": "total ascending"},
+            self.settings_control_id("bar_mode"): {"value": "overlay"},
+            self.settings_control_id("bar_aggregation"): {"value": "sum"},
+            self.settings_control_id("pie_aggregation"): {"value": "sum"},
+            self.settings_control_id("legend_position"): {"value": "top-right-outside"},
+            self.settings_control_id("legend_order"): {"value": "alphabetical"},
+            self.settings_control_id("legend_custom_order"): {"value": ""},
+            self.settings_control_id("bubble"): {"checked": True},
+            self.settings_id("InputMaxSizeBubble"): {"value": 30},
+            self.settings_control_id("bar_labels"): {"checked": True},
         }
 
         app.clientside_callback(
@@ -581,8 +616,8 @@ class GraphWorkspace:
                 return {{clicks: nClicks, resetAt: Date.now()}};
             }}
             """,
-            Output(self._settings_internal_id("graph-settings-reset-state"), "data"),
-            Input(self._settings_internal_id("graph-settings-reset"), "n_clicks"),
+            Output(self.settings_id("graph-settings-reset-state"), "data"),
+            Input(self.settings_id("graph-settings-reset"), "n_clicks"),
             prevent_initial_call=True,
         )
 
@@ -602,33 +637,39 @@ class GraphWorkspace:
             }
             """,
             Output(self.paper_id, "style"),
-            Input(self._settings_internal_id("InputSizePlot"), "value"),
-            Input(self._settings_internal_id("InputSizePlotW"), "value"),
+            Input(self.settings_id("InputSizePlot"), "value"),
+            Input(self.settings_id("InputSizePlotW"), "value"),
         )
 
     def _register_export_callbacks(self, app):
-        x_id = self.field_ids["dropdown_x"]
-        y_id = self.field_ids["dropdown_y"]
+        export_field_ids = [
+            self.field_id(key)
+            for key in ("x", "y")
+            if key in self.field_ids_by_key
+        ]
+        export_states = [State(component_id, "value") for component_id in export_field_ids]
 
         @app.callback(
             Output(self.ids["download_component"], "data"),
             Output(self.notifications_id, "sendNotifications", allow_duplicate=True),
             Input(self.ids["download_html"], "n_clicks"),
             State(self.graph_id, "figure"),
-            State(x_id, "value"),
-            State(y_id, "value"),
+            *export_states,
             State(self.chart_type_id, "value"),
             prevent_initial_call=True,
         )
-        def download_html(n_clicks, figure, x_value, y_value, chart_type):
+        def download_html(n_clicks, figure, *field_values_and_chart_type):
             if not n_clicks or not figure:
                 raise PreventUpdate
             try:
+                *field_values, chart_type = field_values_and_chart_type
                 fig = go.Figure(figure)
+                axis_label = " vs ".join(str(value) for value in field_values if value)
+                filename_parts = [part for part in (axis_label, chart_type) if part]
                 filename = (
-                    f"{x_value} vs {y_value} {chart_type}.html"
-                    if all([x_value, y_value, chart_type])
-                    else "graph.html"
+                    " ".join(filename_parts) + ".html"
+                    if filename_parts
+                    else f"{self.graph_id}.html"
                 )
                 return {
                     "content": fig.to_html(include_plotlyjs="cdn"),
@@ -727,7 +768,7 @@ class GraphWorkspace:
     def _register_color_callbacks(self, app):
         picker_type = f"{self.graph_id}-color-picker"
         preview_type = f"{self.graph_id}-color-preview"
-        theme_id = self._settings_control_id("theme")
+        theme_id = self.settings_control_id("theme")
 
         @app.callback(
             Output(self.ids["color_modal"], "opened", allow_duplicate=True),

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Extensible property inspector for the main graph."""
+"""Extensible, instance-scoped property inspector for GraphWorkspace."""
 
 from __future__ import annotations
 
@@ -50,6 +50,8 @@ SETTINGS_COMPONENT_IDS = (
     "InputMaxSizeBubble",
 )
 
+SETTINGS_COMBOBOX_Z_INDEX = 10030
+
 
 class GraphSettingsPanel:
     """Build a scalable, single-level graph settings inspector."""
@@ -64,6 +66,16 @@ class GraphSettingsPanel:
         missing = REQUIRED_CONTROLS.difference(controls)
         if missing:
             raise ValueError(f"Missing graph settings controls: {sorted(missing)}")
+
+        # Mantine renders Select menus in a body-level portal. Its default
+        # layer (300) is below our movable settings window (10020), making a
+        # menu look as though it did not open. Apply the fix to every current
+        # and future combobox control supplied to this panel.
+        for control in controls.values():
+            if hasattr(control, "comboboxProps"):
+                combobox_props = dict(getattr(control, "comboboxProps", None) or {})
+                combobox_props["zIndex"] = SETTINGS_COMBOBOX_Z_INDEX
+                control.comboboxProps = combobox_props
 
     def bind_namespace(self, namespace: str):
         """Bind internal IDs to exactly one GraphWorkspace instance."""

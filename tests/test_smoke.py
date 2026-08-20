@@ -3,13 +3,18 @@
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
-from dash import Dash, Input, dcc, html
+from dash import Dash, Input, dcc, html, no_update
+import dash_mantine_components as dmc
 
 from app import app
-from callbacks.dropdowns import _select_options
+from callbacks.columns_sidebar import update_column_badges
+from callbacks.dropdowns import _select_options, update_dropdown_options_all
+from callbacks.file_handling import _clicked_sheet, on_excel_upload
 from callbacks.modals import _normalize_main_chart_type
+from callbacks.multivariate import build_multivariate_figure
 from callbacks.filters import (
     _clean_filter_state,
     _default_filter_value,
@@ -21,6 +26,7 @@ from callbacks.graph import (
     Y_ONLY_CHART_TYPES,
     _build_pie_figure,
     _build_ridge_figure,
+    build_main_figure,
     _graph_uirevision,
     _primary_axis_errors,
     update_main_graph,
@@ -36,7 +42,11 @@ from components import (
 from config import APP_NAME, APP_TITLE, APP_VERSION
 from correlation_workspace import _build_correlation_figures, compute_correlation
 from graph_help import GRAPH_HELP_ORDER, GRAPH_INSTRUCTIONS, render_instruction
-from graph_settings import GraphSettingsPanel, REQUIRED_CONTROLS
+from graph_settings import (
+    GraphSettingsPanel,
+    REQUIRED_CONTROLS,
+    SETTINGS_COMBOBOX_Z_INDEX,
+)
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
 from utils import create_value_control, meta_from_df, read_df_from_store
 
@@ -240,6 +250,8 @@ class DataStoreRoundTripTests(unittest.TestCase):
         self.assertEqual(meta["numeric"], ["value"])
         self.assertEqual(meta["categorical"], ["category"])
         self.assertEqual(meta["datetime"], ["date"])
+        self.assertEqual(meta["row_count"], 2)
+        self.assertEqual(meta["column_count"], 3)
         self.assertEqual(restored["value"].tolist(), [1.5, 2.5])
         self.assertEqual(restored["category"].tolist(), ["A", "B"])
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(restored["date"]))
@@ -283,6 +295,65 @@ class DropdownOptionTests(unittest.TestCase):
                 {"label": "depth", "value": "depth"},
                 {"label": "1", "value": "1"},
             ],
+        )
+
+    def test_metadata_builds_options_without_deserializing_dataset(self):
+        source = pd.DataFrame({"value": [1.0], "category": ["A"]})
+        meta = meta_from_df(source)
+        payload = source.to_json(orient="split")
+        with patch(
+            "callbacks.dropdowns.read_df_from_store",
+            side_effect=AssertionError("dataset should not be deserialized"),
+        ):
+            result = update_dropdown_options_all(payload, meta)
+        self.assertEqual(result[0], _select_options(["value", "category"]))
+
+    def test_metadata_builds_badges_without_deserializing_dataset(self):
+        source = pd.DataFrame({"value": [1.0], "category": ["A"]})
+        meta = meta_from_df(source)
+        payload = source.to_json(orient="split")
+        with patch(
+            "callbacks.columns_sidebar.read_df_from_store",
+            side_effect=AssertionError("dataset should not be deserialized"),
+        ):
+            badges, _style = update_column_badges(payload, payload, meta)
+        self.assertEqual(
+            [badge.to_plotly_json()["props"]["data-column-name"] for badge in badges],
+            ["value", "category"],
+        )
+
+
+class ExcelLoadingTests(unittest.TestCase):
+    def test_single_sheet_is_parsed_from_the_already_open_workbook(self):
+        frame = pd.DataFrame({"depth": [100.0, 200.0]})
+        workbook = MagicMock()
+        workbook.sheet_names = ["Data"]
+        workbook.parse.return_value = frame
+        manager = MagicMock()
+        manager.__enter__.return_value = workbook
+
+        with patch("callbacks.file_handling.pd.ExcelFile", return_value=manager) as excel_file:
+            result = on_excel_upload("/tmp/example.xlsx", "example.xlsx")
+
+        excel_file.assert_called_once_with("/tmp/example.xlsx", engine="openpyxl")
+        workbook.parse.assert_called_once_with("Data")
+        self.assertEqual(result[2], ["Data"])
+        self.assertEqual(result[3], "Data")
+        self.assertEqual(result[4], result[5])
+        self.assertEqual(result[6]["row_count"], 2)
+
+    def test_triggered_sheet_wins_when_other_buttons_were_clicked_before(self):
+        ids = [
+            {"type": "sheet-select", "index": "First"},
+            {"type": "sheet-select", "index": "Second"},
+        ]
+        self.assertEqual(
+            _clicked_sheet(
+                [1, 1],
+                ids,
+                {"type": "sheet-select", "index": "Second"},
+            ),
+            "Second",
         )
 
 
@@ -351,6 +422,19 @@ class FilterPanelTests(unittest.TestCase):
 
 
 class CorrelationAnalysisTests(unittest.TestCase):
+    def test_hidden_correlation_page_does_not_deserialize_loaded_data(self):
+        with patch(
+            "callbacks.multivariate.read_df_from_store",
+            side_effect=AssertionError("hidden page should not read the dataset"),
+        ):
+            figure, notifications = build_multivariate_figure(
+                None, None, None, None,
+                "Correlogram", ["x", "y"], "pearson", 2,
+                '{"large":"payload"}', "/", {}, "plotly",
+            )
+        self.assertIs(figure, no_update)
+        self.assertIs(notifications, no_update)
+
     def test_spearman_detects_monotonic_relationship(self):
         source = pd.DataFrame({
             "x": [1, 2, 3, 4, 5, 6],
@@ -912,7 +996,7 @@ class GraphAxisValidationTests(unittest.TestCase):
             meta=meta, pie_aggregation="sum", bar_aggregation="none",
         )
 
-        figure, notifications = update_main_graph(**kwargs)
+        figure, notifications = build_main_figure(**kwargs)
 
         self.assertEqual(len(figure.data), 0)
         self.assertEqual(notifications[0]["color"], "red")
@@ -1078,6 +1162,37 @@ class GraphAxisValidationTests(unittest.TestCase):
 
 
 class GraphWorkspaceTests(unittest.TestCase):
+    @staticmethod
+    def _settings_controls(prefix):
+        selects = {
+            key: dmc.Select(
+                id=f"{prefix}-{key}",
+                data=[{"value": "default", "label": "Default"}],
+                value="default",
+            )
+            for key in REQUIRED_CONTROLS
+            if key not in {"bubble", "bar_labels", "legend_custom_order"}
+        }
+        selects["bubble"] = dmc.Switch(id=f"{prefix}-bubble", checked=True)
+        selects["bar_labels"] = dmc.Switch(id=f"{prefix}-bar-labels", checked=True)
+        selects["legend_custom_order"] = dmc.TextInput(
+            id=f"{prefix}-legend-custom-order",
+            value="",
+        )
+        return selects
+
+    @staticmethod
+    def _field_controls(prefix, fields=DEFAULT_FIELDS):
+        controls = {}
+        for field in fields:
+            component_id = f"{prefix}-{field['target']}"
+            controls[field["target"]] = (
+                dmc.MultiSelect(id=component_id, data=[], value=[])
+                if field.get("mode") == "append"
+                else dmc.Select(id=component_id, data=[], value=None)
+            )
+        return controls
+
     def setUp(self):
         controls = {
             field["target"]: dcc.Store(id=f"test-{field['target']}")
@@ -1162,7 +1277,17 @@ class GraphWorkspaceTests(unittest.TestCase):
         self.assertTrue(expected.issubset(descendant_ids))
         # Кнопка настроек рендерится только при наличии панели настроек.
         self.assertNotIn(self.component.ids["open_settings"], descendant_ids)
+        self.assertNotIn(self.component.ids["change_colors"], descendant_ids)
         self.assertEqual(self.component.ids["update"], "test-graph-update")
+
+        workspace_node = next(
+            component for component in self.components
+            if getattr(component, "id", None) == "test-graph-workspace"
+        )
+        self.assertNotIn(
+            "data-action-change-colors",
+            workspace_node.to_plotly_json()["props"],
+        )
 
     def test_settings_are_bound_to_the_workspace_instance(self):
         fields = {
@@ -1225,6 +1350,102 @@ class GraphWorkspaceTests(unittest.TestCase):
                 chart_type_control=html.Div(),
                 field_controls={},
             )
+
+    def test_duplicate_semantic_field_key_is_rejected(self):
+        fields = (
+            {"key": "x", "label": "X", "target": "first", "zone": "axis-x"},
+            {"key": "x", "label": "X2", "target": "second", "zone": "axis-y"},
+        )
+        with self.assertRaises(ValueError):
+            GraphWorkspace(
+                graph_id="duplicate-fields",
+                chart_type_control=dmc.Select(id="duplicate-chart", data=[]),
+                field_controls={
+                    "first": dmc.Select(id="duplicate-first", data=[]),
+                    "second": dmc.Select(id="duplicate-second", data=[]),
+                },
+                fields=fields,
+            )
+
+    def test_color_editor_cannot_be_enabled_without_settings(self):
+        with self.assertRaises(ValueError):
+            GraphWorkspace(
+                graph_id="orphan-colors",
+                chart_type_control=dmc.Select(id="orphan-chart", data=[]),
+                field_controls=self._field_controls("orphan"),
+                include_color_controls=True,
+            )
+
+    def test_export_uses_semantic_fields_not_legacy_target_names(self):
+        fields = (
+            {"key": "x", "label": "X", "target": "horizontal", "zone": "axis-x"},
+            {"key": "y", "label": "Y", "target": "vertical", "zone": "axis-y"},
+        )
+        workspace = GraphWorkspace(
+            graph_id="semantic",
+            chart_type_control=dmc.Select(id="semantic-chart", data=[]),
+            field_controls={
+                "horizontal": dmc.Select(id="semantic-horizontal", data=[]),
+                "vertical": dmc.Select(id="semantic-vertical", data=[]),
+            },
+            fields=fields,
+            notifications_id="semantic-notifications",
+        )
+        test_app = Dash("semantic-fields-test")
+        test_app.layout = html.Div([
+            dmc.NotificationContainer(id="semantic-notifications"),
+            workspace.render(),
+        ])
+
+        workspace.register_callbacks(test_app)
+
+        self.assertEqual(workspace.field_id("x"), "semantic-horizontal")
+        self.assertEqual(workspace.field_id("y"), "semantic-vertical")
+        self.assertTrue(
+            any("semantic-download.data" in key for key in test_app.callback_map)
+        )
+
+    def test_two_full_workspaces_register_without_id_collisions(self):
+        def build_workspace(prefix):
+            settings = GraphSettingsPanel(self._settings_controls(f"{prefix}-setting"))
+            return GraphWorkspace(
+                graph_id=prefix,
+                chart_type_control=dmc.Select(
+                    id=f"{prefix}-chart",
+                    data=[{"value": "Scatter", "label": "Scatter"}],
+                    value="Scatter",
+                ),
+                field_controls=self._field_controls(prefix),
+                settings_panel=settings,
+                notifications_id="dashboard-notifications",
+            )
+
+        sales = build_workspace("sales-dashboard")
+        inventory = build_workspace("inventory-dashboard")
+        test_app = Dash("two-workspaces-test")
+        test_app.layout = html.Div([
+            dmc.NotificationContainer(id="dashboard-notifications"),
+            sales.render(),
+            inventory.render(),
+        ])
+
+        sales.register_callbacks(test_app)
+        inventory.register_callbacks(test_app)
+
+        component_ids = [
+            getattr(component, "id", None)
+            for component in walk_components(test_app.layout)
+            if isinstance(getattr(component, "id", None), str)
+        ]
+        self.assertEqual(len(component_ids), len(set(component_ids)))
+        self.assertIn("sales-dashboard-graph-settings-popover", component_ids)
+        self.assertIn("inventory-dashboard-graph-settings-popover", component_ids)
+        self.assertTrue(
+            any("sales-dashboard-paper.style" in key for key in test_app.callback_map)
+        )
+        self.assertTrue(
+            any("inventory-dashboard-paper.style" in key for key in test_app.callback_map)
+        )
 
     def test_help_button_and_modal_are_rendered(self):
         descendant_ids = {
@@ -1339,6 +1560,36 @@ class GraphSettingsPanelTests(unittest.TestCase):
         self.assertEqual(SwitchBubble.label, "Bubbles")
         self.assertTrue(SwitchBubble.checked)
         self.assertIsNone(getattr(bar_aggregation_select, "description", None))
+
+    def test_every_settings_select_opens_above_the_popover(self):
+        settings_popup = next(
+            component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None) == "graph-graph-settings-popover"
+        )
+        selects = {
+            component.id: component
+            for component in walk_components(settings_popup)
+            if component.__class__.__name__ == "Select"
+        }
+        expected_ids = {
+            "dropdown_style",
+            "dropdown_text_pozition",
+            "dropdown_axes_category",
+            "dropdown_category_ascending",
+            "dropdown_overlay",
+            "bar-aggregation",
+            "dropdown_pie_aggregation",
+            "dropdown_legend",
+            "dropdown_legend_order",
+        }
+        self.assertEqual(set(selects), expected_ids)
+        for component_id, select in selects.items():
+            with self.subTest(component_id=component_id):
+                self.assertEqual(
+                    select.comboboxProps.get("zIndex"),
+                    SETTINGS_COMBOBOX_Z_INDEX,
+                )
 
     def test_settings_panel_keeps_existing_callback_ids(self):
         component_ids = {

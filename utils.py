@@ -55,7 +55,17 @@ def classify_simple(df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
 
 def meta_from_df(df: pd.DataFrame) -> dict:
     num, cat, dt = classify_simple(df)
-    return {"numeric": num, "categorical": cat, "datetime": dt, "columns": list(map(str, df.columns))}
+    return {
+        "numeric": num,
+        "categorical": cat,
+        "datetime": dt,
+        "columns": list(map(str, df.columns)),
+        # Keep cheap shape information next to the column metadata.  Several
+        # UI callbacks only need these values and should not deserialize a
+        # potentially very large dataset just to count rows or columns.
+        "row_count": int(len(df.index)),
+        "column_count": int(len(df.columns)),
+    }
 
 
 def read_df_from_store(json_str: str | None, meta: dict | None = None, *, dayfirst: bool = True) -> pd.DataFrame:

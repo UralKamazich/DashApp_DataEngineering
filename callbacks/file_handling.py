@@ -16,6 +16,19 @@ from utils import meta_from_df, _make_error_notif, read_df_from_store
 from config import STYLE_CARD
 
 
+def _clicked_sheet(n_clicks, ids, triggered_id=None):
+    """Resolve the sheet that actually caused an ALL-pattern callback."""
+    if isinstance(triggered_id, dict) and triggered_id.get("type") == "sheet-select":
+        return triggered_id.get("index")
+    clicked = [
+        index for index, count in enumerate(n_clicks or [])
+        if count and index < len(ids or [])
+    ]
+    if not clicked:
+        return None
+    return ids[clicked[-1]].get("index")
+
+
 # ============ Локальный выбор файла (даёт полный путь) ============
 @app.callback(
     Output("source-file-path", "data"),
@@ -80,9 +93,19 @@ def on_excel_upload(local_path, local_name):
             with pd.ExcelFile(local_path, engine='openpyxl') as xl:
                 sheets = xl.sheet_names
 
-            # один лист — сразу выбираем его, данные прочитает load_selected_sheet
+                # Для одно-листовой книги используем уже открытую книгу. Раньше
+                # после получения sheet_names она закрывалась и тут же
+                # открывалась повторно в load_selected_sheet.
+                if len(sheets) == 1:
+                    sheet_name = sheets[0]
+                    df = xl.parse(sheet_name)
+
+            # Один лист прочитан одним проходом; callback выбора листа на этот
+            # случай больше не подписан и повторного чтения не будет.
             if len(sheets) == 1:
-                return "", dash.no_update, sheets, sheets[0], dash.no_update, dash.no_update, dash.no_update, []
+                meta = meta_from_df(df)
+                js = df.to_json(date_format='iso', orient='split')
+                return "", dash.no_update, sheets, sheet_name, js, js, meta, []
 
             # несколько листов — показываем модалку выбора
             modal = dmc.Modal(
@@ -146,10 +169,9 @@ def close_modal(n_clicks):
 def on_sheet_selected(n_clicks, ids):
     if not any(n_clicks):
         raise PreventUpdate
-    clicked_idx = [i for i, n in enumerate(n_clicks) if n]
-    if not clicked_idx:
+    selected = _clicked_sheet(n_clicks, ids, dash.ctx.triggered_id)
+    if selected is None:
         raise PreventUpdate
-    selected = ids[clicked_idx[0]]['index']
     return selected
 
 
@@ -167,15 +189,16 @@ def update_file_info(stored_json, meta, sheet_name, source_name):
     if not stored_json:
         raise PreventUpdate
 
-    n_rows = "?"
-    n_cols = "?"
-    try:
-        df = read_df_from_store(stored_json, meta)
-        n_rows = len(df)
-        n_cols = len(df.columns)
-    except Exception:
-        if isinstance(meta, dict):
-            n_cols = len(meta.get("columns", []) or [])
+    n_rows = meta.get("row_count", "?") if isinstance(meta, dict) else "?"
+    n_cols = meta.get("column_count", "?") if isinstance(meta, dict) else "?"
+    if n_rows == "?" or n_cols == "?":
+        try:
+            df = read_df_from_store(stored_json, meta)
+            n_rows = len(df)
+            n_cols = len(df.columns)
+        except Exception:
+            if isinstance(meta, dict):
+                n_cols = len(meta.get("columns", []) or [])
 
     parts = []
     if source_name:
@@ -207,12 +230,16 @@ def update_file_info(stored_json, meta, sheet_name, source_name):
     Output('filtered-data', 'data', allow_duplicate=True),
     Output('meta-columns', 'data', allow_duplicate=True),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
-    Input('selected-sheet', 'data'),
+    Input({'type': 'sheet-select', 'index': ALL}, 'n_clicks'),
+    State({'type': 'sheet-select', 'index': ALL}, 'id'),
     State('source-file-path', 'data'),
     prevent_initial_call=True
 )
-def load_selected_sheet(sheet_name, local_path):
-    if not sheet_name:
+def load_selected_sheet(n_clicks, ids, local_path):
+    if not any(n_clicks or []):
+        raise PreventUpdate
+    sheet_name = _clicked_sheet(n_clicks, ids, dash.ctx.triggered_id)
+    if sheet_name is None:
         raise PreventUpdate
 
     if not local_path:

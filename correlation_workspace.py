@@ -358,29 +358,37 @@ class CorrelationWorkspace:
         @app.callback(
             Output(self.columns_control.id, "value"),
             Input("filtered-data", "data"),
+            Input("url", "pathname"),
             State("meta-columns", "data"),
             State(self.columns_control.id, "value"),
         )
-        def initialize_columns(filtered_json, meta, current):
+        def initialize_columns(filtered_json, pathname, meta, current):
+            # Pages remain mounted and are only hidden with CSS. Do not scan a
+            # newly loaded Excel dataset while correlation analysis is hidden.
+            if pathname != "/correlation":
+                return no_update
             if not filtered_json:
                 return []
-            try:
-                frame = read_df_from_store(filtered_json, meta)
-            except Exception:
-                return []
-            frame.columns = [str(column) for column in frame.columns]
+            all_columns = {
+                str(column) for column in (meta or {}).get("columns", [])
+            }
             numeric_columns = [
                 str(column) for column in (meta or {}).get("numeric", [])
-                if str(column) in frame.columns
+                if str(column) in all_columns
             ]
+            if not numeric_columns:
+                try:
+                    frame = read_df_from_store(filtered_json, meta)
+                    frame.columns = [str(column) for column in frame.columns]
+                    numeric_columns = [
+                        str(column) for column in frame.select_dtypes(include="number").columns
+                    ]
+                except Exception:
+                    return []
             current = [column for column in (current or []) if column in numeric_columns]
             if len(current) >= 2:
                 return no_update
-            recommended = [
-                column for column in numeric_columns
-                if frame[column].count() >= 10 and frame[column].nunique(dropna=True) > 1
-            ]
-            return recommended[:DEFAULT_CORRELATION_COLUMNS]
+            return numeric_columns[:DEFAULT_CORRELATION_COLUMNS]
 
         @app.callback(
             Output(self.ids["bar_primary"], "figure"),
@@ -391,13 +399,19 @@ class CorrelationWorkspace:
             Input(self.columns_control.id, "value"),
             Input(self.ids["method"], "value"),
             Input(self.ids["min_periods"], "value"),
+            Input("url", "pathname"),
             State("meta-columns", "data"),
             State("dropdown_style", "value"),
         )
-        def update_analysis(filtered_json, columns, method, min_periods, meta, template):
+        def update_analysis(filtered_json, columns, method, min_periods, pathname, meta, template):
+            if pathname != "/correlation":
+                return no_update, no_update, no_update, no_update
             if not filtered_json:
                 empty = _empty_analysis_figure("Сначала загрузите датасет")
                 return empty, empty, "Сначала загрузите датасет.", "dimmed"
+            if len(columns or []) < 2:
+                empty = _empty_analysis_figure("Выберите минимум два числовых канала")
+                return empty, empty, "Выберите минимум два числовых канала.", "dimmed"
             try:
                 frame = read_df_from_store(filtered_json, meta)
                 # Матрица строится мультиграфиком (тип «Correlogram»);

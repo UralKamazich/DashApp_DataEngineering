@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Input, State
+from dash import Input, State, no_update
 
 from correlation_workspace import (
     _empty_analysis_figure,
@@ -33,23 +33,30 @@ def _numeric_dimensions(plot_df, columns):
 
 @MULTIVARIATE_WORKSPACE.figure_callback(
     app,
-    Input(MULTIVARIATE_WORKSPACE.field_ids["dropdown_x"], "value"),
-    Input(MULTIVARIATE_WORKSPACE.field_ids["dropdown_y"], "value"),
-    Input(MULTIVARIATE_WORKSPACE.field_ids["dropdown_z"], "value"),
-    Input(MULTIVARIATE_WORKSPACE.field_ids["dropdown_color"], "value"),
+    Input(MULTIVARIATE_WORKSPACE.field_id("x"), "value"),
+    Input(MULTIVARIATE_WORKSPACE.field_id("y"), "value"),
+    Input(MULTIVARIATE_WORKSPACE.field_id("z"), "value"),
+    Input(MULTIVARIATE_WORKSPACE.field_id("color"), "value"),
     Input(MULTIVARIATE_WORKSPACE.chart_type_id, "value"),
     Input("dropdown_corr_columns", "value"),
     Input(CORRELATION_WORKSPACE.ids["method"], "value"),
     Input(CORRELATION_WORKSPACE.ids["min_periods"], "value"),
     Input("filtered-data", "data"),
+    Input("url", "pathname"),
     State("meta-columns", "data"),
     State("dropdown_style", "value"),
 )
 def build_multivariate_figure(x_col, y_col, z_col, color_col, chart_type,
                               corr_columns, corr_method, min_periods,
-                              filtered_json, meta, selected_style):
+                              filtered_json, pathname, meta, selected_style):
+    if pathname != "/correlation":
+        return no_update, no_update
     empty = go.Figure().update_layout(template=selected_style or "plotly")
     if not filtered_json:
+        return empty, []
+    if chart_type == "Correlogram" and len(corr_columns or []) < 2:
+        return _empty_analysis_figure("Выберите минимум два числовых канала"), []
+    if chart_type != "Correlogram" and not any((x_col, y_col, z_col)):
         return empty, []
     try:
         plot_df = read_df_from_store(filtered_json, meta)
@@ -65,9 +72,6 @@ def build_multivariate_figure(x_col, y_col, z_col, color_col, chart_type,
         if error:
             return _empty_analysis_figure(error), []
         return build_correlogram(correlation, pair_counts, selected_style or "plotly"), []
-
-    if not any((x_col, y_col, z_col)):
-        return empty, []
 
     use_dims = _numeric_dimensions(plot_df, [x_col, y_col, z_col])
     if len(use_dims) < 2:

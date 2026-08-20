@@ -580,50 +580,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, color_col, columns):
     return errors
 
 
-@GRAPH_WORKSPACE.figure_callback(
-    app,
-    Input(GRAPH_WORKSPACE.ids["update"], "n_clicks"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_x"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_y"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_z"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_color"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_size"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_text"], "value"),
-    Input("dropdown_text_pozition", "value"),
-    Input(GRAPH_WORKSPACE.chart_type_id, "value"),
-    Input("SwitchBubble", "checked"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("InputMaxSizeBubble"), "value"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("InputSizePlot"), "value"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("InputSizePlotW"), "value"),
-    Input("dropdown_style", "value"),
-    Input("bar-text-auto", "checked"),
-    Input(GRAPH_WORKSPACE.ids["view_revision"], "data"),
-
-    Input("filtered-data", "data"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_hover_data"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_row"], "value"),
-    Input(GRAPH_WORKSPACE.field_ids["dropdown_facet_col"], "value"),
-    State("filters-applied-state", "data"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("font-size-xaxis"), "value"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("font-size-yaxis"), "value"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("font-size-ticks"), "value"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("font-size-title"), "value"),
-    Input("dropdown_category_ascending", "value"),
-    Input("dropdown_axes_category", "value"),
-    Input("dropdown_overlay", "value"),
-    Input("dropdown_legend", "value"),
-    State(GRAPH_WORKSPACE.ids["custom_colors"], "data"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("tick-step-xaxis"), "value"),
-    Input(GRAPH_WORKSPACE.settings_panel.component_id("tick-step-yaxis"), "value"),
-    Input("dropdown_legend_order", "value"),
-    State("input_legend_custom_order", "value"),
-    State("meta-columns", "data"),
-    Input("dropdown_pie_aggregation", "value"),
-    Input("bar-aggregation", "value"),
-
-    prevent_initial_call=True,
-)
-def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_col, dropdown_text_pozition,
+def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_col, dropdown_text_pozition,
                       chart_type, bubble, MaxSizeBubble, height, width, selected_style, bar_text_auto,
                       view_revision,
                       filtered_json, hover_cols, facet_row, facet_col, filters_state,
@@ -637,17 +594,20 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
     try:
         if not filtered_json:
             return empty, []
-        dff = read_df_from_store(filtered_json, meta)
-        if dff is None or dff.empty:
-            return empty, []
 
         # A deliberately cleared workspace is a valid state. Keep the loaded
         # dataframe in its stores and show a clean canvas without an error.
+        # Check this before deserializing the full dataset: a fresh workspace
+        # does not need to read all Excel rows merely to draw an empty figure.
         assigned_fields = (
             x_col, y_col, z_col, color_col, size_col, text_col,
             facet_row, facet_col,
         )
         if not any(assigned_fields) and not hover_cols:
+            return empty, []
+
+        dff = read_df_from_store(filtered_json, meta)
+        if dff is None or dff.empty:
             return empty, []
 
         errors = _primary_axis_errors(chart_type, x_col, y_col, color_col, dff.columns)
@@ -938,6 +898,52 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         logger.error(f"Ошибка при построении графика: {e}", exc_info=True)
         notif = _make_error_notif(f"Ошибка отрисовки графика: {str(e)}. Попробуйте изменить параметры.")
         return empty, notif
+
+
+@GRAPH_WORKSPACE.figure_callback(
+    app,
+    Input(GRAPH_WORKSPACE.ids["update"], "n_clicks"),
+    Input(GRAPH_WORKSPACE.field_id("x"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("y"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("z"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("color"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("size"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("text"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("text_position"), "value"),
+    Input(GRAPH_WORKSPACE.chart_type_id, "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("bubble"), "checked"),
+    Input(GRAPH_WORKSPACE.settings_id("InputMaxSizeBubble"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("InputSizePlot"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("InputSizePlotW"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("theme"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("bar_labels"), "checked"),
+    Input(GRAPH_WORKSPACE.ids["view_revision"], "data"),
+    Input("filtered-data", "data"),
+    Input(GRAPH_WORKSPACE.field_id("hover"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("facet-row"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("facet-col"), "value"),
+    State("filters-applied-state", "data"),
+    Input(GRAPH_WORKSPACE.settings_id("font-size-xaxis"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("font-size-yaxis"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("font-size-ticks"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("font-size-title"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("category_order"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("category_axis"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("bar_mode"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("legend_position"), "value"),
+    State(GRAPH_WORKSPACE.ids["custom_colors"], "data"),
+    Input(GRAPH_WORKSPACE.settings_id("tick-step-xaxis"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("tick-step-yaxis"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("legend_order"), "value"),
+    State(GRAPH_WORKSPACE.settings_control_id("legend_custom_order"), "value"),
+    State("meta-columns", "data"),
+    Input(GRAPH_WORKSPACE.settings_control_id("pie_aggregation"), "value"),
+    Input(GRAPH_WORKSPACE.settings_control_id("bar_aggregation"), "value"),
+    prevent_initial_call=True,
+)
+def update_main_graph(*args, **kwargs):
+    """Connect the reusable figure builder to this application's stores."""
+    return build_main_figure(*args, **kwargs)
 
 
 # ============ Метрики кластеризации ============

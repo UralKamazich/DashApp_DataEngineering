@@ -75,6 +75,10 @@
     if (settingsItem) {
       settingsItem.hidden = !(_activeWorkspace && _activeWorkspace.getAttribute("data-settings-popup-id"));
     }
+    const colorsItem = menu.querySelector('[data-action="change-colors"]');
+    if (colorsItem) {
+      colorsItem.hidden = !(_activeWorkspace && _activeWorkspace.getAttribute("data-action-change-colors"));
+    }
     menu.style.display = "block";
     _menuVisible = true;
 
