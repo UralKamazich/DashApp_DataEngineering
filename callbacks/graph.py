@@ -34,6 +34,13 @@ Y_ONLY_CHART_TYPES = {
     "Ridge",
 }
 
+# Plotly renders Bar traces as SVG paths. Thousands of raw bars can leave
+# Plotly.react in a state where subsequent figures no longer reach the canvas.
+# Keep the raw mode useful for small datasets and guard the renderer for large
+# ones. Labels have a lower limit because every value adds another SVG node.
+MAX_BAR_POINTS = 800
+MAX_BAR_LABELS = 250
+
 # Иерархические графики собирают путь из Цвет → X → Y, поэтому X для
 # них не обязателен — достаточно любого из трёх полей.
 HIERARCHY_CHART_TYPES = {"Sunburst", "Treemap"}
@@ -473,6 +480,62 @@ def _aggregate_bar_frame(plot_df, x_col, y_col, color_col, facet_row, facet_col,
     return result
 
 
+def _prepare_bar_frame(plot_df, x_col, y_col, color_col, facet_row, facet_col,
+                       aggregation):
+    """Return a renderer-safe Bar frame and an optional user notification."""
+    effective_aggregation = aggregation
+    automatic = False
+    notice = []
+
+    if aggregation == "none" and len(plot_df) > MAX_BAR_POINTS:
+        automatic = True
+        effective_aggregation = (
+            "sum"
+            if y_col and y_col in plot_df.columns
+            and pd.api.types.is_numeric_dtype(plot_df[y_col])
+            else "count"
+        )
+        notice = [{
+            "id": "bar-auto-aggregation",
+            "title": "Bar: безопасная отрисовка",
+            "message": (
+                f"Режим «как есть» создаёт {len(plot_df)} столбцов. "
+                f"Применена агрегация: {effective_aggregation}."
+            ),
+            "color": "yellow",
+            "action": "show",
+            "autoClose": 6500,
+        }]
+
+    bar_df = _aggregate_bar_frame(
+        plot_df, x_col, y_col, color_col, facet_row, facet_col,
+        effective_aggregation,
+    )
+    if len(bar_df) > MAX_BAR_POINTS:
+        return None, _make_error_notif(
+            f"Bar содержит {len(bar_df)} столбцов — это слишком много для "
+            "стабильной отрисовки. Выберите агрегацию, другой X или сузьте данные фильтром."
+        ), None, automatic
+    applied_aggregation = effective_aggregation if bar_df is not plot_df else None
+    return bar_df, notice, applied_aggregation, automatic
+
+
+def _bar_aggregation_caption(aggregation, y_col, group_columns, automatic=False):
+    """Explain the statistical meaning of an aggregated Bar directly on it."""
+    if aggregation not in {"sum", "mean", "count"}:
+        return None
+    groups = [str(column) for column in group_columns if column]
+    grouped_by = ", ".join(f"«{column}»" for column in groups)
+    prefix = "Автоагрегация" if automatic else "Агрегация"
+    if aggregation == "count":
+        meaning = "количество строк"
+    else:
+        operation = "сумма" if aggregation == "sum" else "среднее"
+        meaning = f"{operation} «{y_col}»"
+    suffix = f" по {grouped_by}" if grouped_by else ""
+    return f"<b>{prefix}:</b> {meaning}{suffix}"
+
+
 def _prepare_hierarchy_frame(plot_df, path, values):
     """Рабочий кадр для Sunburst/Treemap без пропусков в уровнях пути.
 
@@ -666,18 +729,43 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             fig.update_layout(boxmode="group")
 
         elif chart_type == "Bar":
-            bar_df = _aggregate_bar_frame(
+            bar_df, bar_notifications, applied_bar_aggregation, automatic_bar_aggregation = _prepare_bar_frame(
                 plot_df, x_col, y_col, carg, facet_row, facet_col, bar_aggregation
             )
+            if bar_df is None:
+                return empty, bar_notifications
             fig = px.bar(
                 bar_df, x=x_col, y=y_col, color=carg,
                 height=height, width=width, facet_row=facet_row, facet_col=facet_col,
-                text_auto=bar_text_auto, category_orders=category_orders, template=selected_style
+                text_auto=bool(bar_text_auto and len(bar_df) <= MAX_BAR_LABELS),
+                category_orders=category_orders, template=selected_style
             )
             if dropdown_overlay in {'group', 'overlay', 'stack', 'relative'}:
                 fig.update_layout(barmode=dropdown_overlay)
             if dropdown_overlay == 'overlay':
                 fig.update_traces(opacity=0.85)
+            aggregation_caption = _bar_aggregation_caption(
+                applied_bar_aggregation,
+                y_col,
+                [x_col, carg, facet_row, facet_col],
+                automatic=automatic_bar_aggregation,
+            )
+            if aggregation_caption:
+                fig.add_annotation(
+                    text=aggregation_caption,
+                    x=0.5,
+                    y=1.025,
+                    xref="paper",
+                    yref="paper",
+                    xanchor="center",
+                    yanchor="bottom",
+                    showarrow=False,
+                    font=dict(size=11, color="#364152"),
+                    bgcolor="rgba(248, 250, 252, 0.94)",
+                    bordercolor="rgba(134, 142, 150, 0.35)",
+                    borderwidth=1,
+                    borderpad=4,
+                )
 
         elif chart_type == "Line":
             fig = px.line(
@@ -844,7 +932,7 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         if chart_type != "3D_Scatter" and facet_row:
            hide_xlabels_on_upper_facets(fig)
 
-        return fig, []
+        return fig, bar_notifications if chart_type == "Bar" else []
 
     except Exception as e:
         logger.error(f"Ошибка при построении графика: {e}", exc_info=True)

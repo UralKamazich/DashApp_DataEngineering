@@ -16,6 +16,8 @@ from callbacks.filters import (
     _filter_card,
 )
 from callbacks.graph import (
+    MAX_BAR_LABELS,
+    MAX_BAR_POINTS,
     Y_ONLY_CHART_TYPES,
     _build_pie_figure,
     _build_ridge_figure,
@@ -172,6 +174,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "reset-filters-btn",
             "filter-close-on-apply",
             "filter-close-on-outside",
+            "right-panels-coordination",
             "dataset-drawer",
             "dataset-side-tab",
             "dataset-close-on-outside",
@@ -212,6 +215,13 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("slide-panel--reflow", panels["filters-drawer"].className.split())
         self.assertIn("slide-panel--right", panels["drawer-simple"].className.split())
         self.assertIn("slide-panel--overlay", panels["drawer-simple"].className.split())
+
+        graph_component = next(
+            component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None) == "graph-component"
+        )
+        self.assertEqual(graph_component.style["--graph-settings-width"], "340px")
 
 
 class DataStoreRoundTripTests(unittest.TestCase):
@@ -816,6 +826,10 @@ class GraphAxisValidationTests(unittest.TestCase):
         summed = build("sum")
         self.assertEqual(list(summed.data[0].x), ["A", "B"])
         self.assertEqual(list(summed.data[0].y), [40.0, 5.0])
+        self.assertIn(
+            "Агрегация:</b> сумма «value» по «cat»",
+            summed.layout.annotations[0].text,
+        )
 
         mean = build("mean")
         self.assertEqual(list(mean.data[0].y), [20.0, 5.0])
@@ -825,6 +839,86 @@ class GraphAxisValidationTests(unittest.TestCase):
 
         raw = build("none")
         self.assertEqual(len(raw.data[0].x), 3)
+
+    def test_large_raw_bar_falls_back_to_safe_aggregation(self):
+        row_count = MAX_BAR_POINTS + 25
+        source = pd.DataFrame({
+            "cat": ["A", "B"] * (row_count // 2) + (["A"] if row_count % 2 else []),
+            "value": range(row_count),
+        })
+        meta = {"numeric": ["value"], "categorical": ["cat"], "datetime": []}
+        figure, notifications = update_main_graph(
+            n_clicks=1,
+            x_col="cat",
+            y_col="value",
+            z_col=None,
+            color_col=None,
+            size_col=None,
+            text_col=None,
+            dropdown_text_pozition="top right",
+            chart_type="Bar",
+            bubble=False,
+            MaxSizeBubble=30,
+            height=550,
+            width=None,
+            selected_style="plotly",
+            bar_text_auto=True,
+            view_revision=0,
+            filtered_json=source.to_json(date_format="iso", orient="split"),
+            hover_cols=None,
+            facet_row=None,
+            facet_col=None,
+            filters_state={},
+            xaxis_font_size=14,
+            yaxis_font_size=14,
+            font_size_ticks=12,
+            title_font_size=16,
+            dropdown_sort_column="trace",
+            axes_category="auto",
+            dropdown_overlay="overlay",
+            legend="top-right-outside",
+            custom_colors=None,
+            tick_step_x=0,
+            tick_step_y=0,
+            legend_order="alphabetical",
+            legend_custom_order="",
+            meta=meta,
+            pie_aggregation="sum",
+            bar_aggregation="none",
+        )
+
+        self.assertEqual(list(figure.data[0].x), ["A", "B"])
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0]["id"], "bar-auto-aggregation")
+        self.assertLessEqual(len(figure.data[0].x), MAX_BAR_LABELS)
+        self.assertIn(
+            "Автоагрегация:</b> сумма «value» по «cat»",
+            figure.layout.annotations[0].text,
+        )
+
+    def test_too_many_unique_bars_returns_error_instead_of_freezing(self):
+        row_count = MAX_BAR_POINTS + 1
+        source = pd.DataFrame({"x": range(row_count), "value": range(row_count)})
+        meta = {"numeric": ["x", "value"], "categorical": [], "datetime": []}
+        kwargs = dict(
+            n_clicks=1, x_col="x", y_col="value", z_col=None, color_col=None,
+            size_col=None, text_col=None, dropdown_text_pozition="top right",
+            chart_type="Bar", bubble=False, MaxSizeBubble=30, height=550,
+            width=None, selected_style="plotly", bar_text_auto=True,
+            view_revision=0, filtered_json=source.to_json(orient="split"),
+            hover_cols=None, facet_row=None, facet_col=None, filters_state={},
+            xaxis_font_size=14, yaxis_font_size=14, font_size_ticks=12,
+            title_font_size=16, dropdown_sort_column="trace",
+            axes_category="auto", dropdown_overlay="overlay",
+            legend="top-right-outside", custom_colors=None, tick_step_x=0,
+            tick_step_y=0, legend_order="alphabetical", legend_custom_order="",
+            meta=meta, pie_aggregation="sum", bar_aggregation="none",
+        )
+
+        figure, notifications = update_main_graph(**kwargs)
+
+        self.assertEqual(len(figure.data), 0)
+        self.assertEqual(notifications[0]["color"], "red")
 
     def test_large_scatter_with_labels_uses_svg_trace(self):
         row_count = 1200
@@ -1194,9 +1288,17 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "drawer-simple-tab",
             "drawer-simple-open-state",
             "graph-settings-close-on-outside",
+            "graph-settings-shift-plot",
             "graph-settings-outside-close-store",
         ):
             self.assertIn(expected, component_ids)
+
+        shift_plot = next(
+            component
+            for component in self.components
+            if getattr(component, "id", None) == "graph-settings-shift-plot"
+        )
+        self.assertFalse(shift_plot.checked)
 
     def test_series_controls_use_compact_defaults(self):
         self.assertEqual(SwitchBubble.label, "Bubbles")

@@ -164,6 +164,7 @@ def create_layout():
             dcc.Store(id='cluster-metrics'),
             dcc.Store(id='source-file-path'),
             dcc.Store(id='source-file-name'),
+            dcc.Store(id='right-panels-coordination'),
 
             dmc.NotificationContainer(id="notifications-container"),
 

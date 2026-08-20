@@ -396,7 +396,15 @@ class GraphWorkspace:
             children.append(self._color_modal())
         children.append(self._help_modal())
         children.append(self._service_components())
-        return html.Div(children, id=self.component_id, className="graph-workspace-component")
+        style = None
+        if self.settings_panel is not None:
+            style = {"--graph-settings-width": f"{self.settings_panel.slide.width}px"}
+        return html.Div(
+            children,
+            id=self.component_id,
+            className="graph-workspace-component",
+            style=style,
+        )
 
     def _settings_control_id(self, key: str) -> str:
         return _component_id(self.settings_panel.controls[key])
@@ -505,6 +513,20 @@ class GraphWorkspace:
             app,
             self._settings_internal_id("graph-settings-close-on-outside"),
             self._settings_internal_id("graph-settings-outside-close-store"),
+        )
+        app.clientside_callback(
+            """
+            function (opened, shiftPlot) {
+                var className = "graph-workspace-component";
+                if (opened && shiftPlot) {
+                    className += " graph-settings-shift-open";
+                }
+                return className;
+            }
+            """,
+            Output(self.component_id, "className"),
+            Input(self._settings_internal_id("drawer-simple-open-state"), "data"),
+            Input(self._settings_internal_id("graph-settings-shift-plot"), "checked"),
         )
 
         defaults = {
