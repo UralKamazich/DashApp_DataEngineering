@@ -430,6 +430,49 @@ def _build_pie_figure(plot_df, x_col, y_col, color_col, aggregation,
     return fig, None
 
 
+def _aggregate_bar_frame(plot_df, x_col, y_col, color_col, facet_row, facet_col,
+                         aggregation):
+    """Схлопнуть повторяющиеся категории Bar в один столбец.
+
+    Группировка идёт по X + Цвет + фасетам; пропуски категориальных ключей
+    помечаются «(пусто)», как в круговой диаграмме. Если агрегация
+    неприменима (нет ключей/режим «как есть»), кадр возвращается без изменений.
+    """
+    if aggregation not in {"sum", "mean", "count"}:
+        return plot_df
+    keys = [c for c in [x_col, color_col, facet_row, facet_col] if c and c in plot_df.columns]
+    if not keys:
+        return plot_df
+    if not y_col or y_col not in plot_df.columns or y_col in keys:
+        return plot_df
+    if aggregation != "count" and not pd.api.types.is_numeric_dtype(plot_df[y_col]):
+        return plot_df
+
+    working = plot_df[list(dict.fromkeys(keys + [y_col]))].copy()
+    for column in keys:
+        if not pd.api.types.is_numeric_dtype(working[column]):
+            working[column] = (
+                working[column]
+                .where(pd.notna(working[column]), "(пусто)")
+                .astype(str)
+                .str.strip()
+            )
+            working.loc[working[column] == "", column] = "(пусто)"
+
+    if aggregation == "count":
+        grouped = working.groupby(keys, sort=False, dropna=False).size()
+    else:
+        values = working[y_col]
+        series = values.groupby([working[key] for key in keys], sort=False)
+        grouped = series.sum() if aggregation == "sum" else series.mean()
+    result = grouped.reset_index()
+    if aggregation == "count":
+        # size() создаёт безымянный столбец 0 — возвращаем ему имя Y,
+        # чтобы px.bar продолжал работать без изменений.
+        result = result.rename(columns={0: y_col})
+    return result
+
+
 def _prepare_hierarchy_frame(plot_df, path, values):
     """Рабочий кадр для Sunburst/Treemap без пропусков в уровнях пути.
 
@@ -513,6 +556,7 @@ def _primary_axis_errors(chart_type, x_col, y_col, color_col, columns):
     State("input_legend_custom_order", "value"),
     State("meta-columns", "data"),
     Input("dropdown_pie_aggregation", "value"),
+    Input("bar-aggregation", "value"),
 
     prevent_initial_call=True,
 )
@@ -523,7 +567,8 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       xaxis_font_size, yaxis_font_size, font_size_ticks, title_font_size,
                       dropdown_sort_column, axes_category, dropdown_overlay, legend, custom_colors,
                       tick_step_x, tick_step_y, legend_order, legend_custom_order, meta,
-                      pie_aggregation="sum"):
+                      pie_aggregation="sum",
+                      bar_aggregation="sum"):
 
     empty = _empty_fig()
     try:
@@ -621,8 +666,11 @@ def update_main_graph(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             fig.update_layout(boxmode="group")
 
         elif chart_type == "Bar":
+            bar_df = _aggregate_bar_frame(
+                plot_df, x_col, y_col, carg, facet_row, facet_col, bar_aggregation
+            )
             fig = px.bar(
-                plot_df, x=x_col, y=y_col, color=carg,
+                bar_df, x=x_col, y=y_col, color=carg,
                 height=height, width=width, facet_row=facet_row, facet_col=facet_col,
                 text_auto=bar_text_auto, category_orders=category_orders, template=selected_style
             )

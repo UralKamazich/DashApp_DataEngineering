@@ -750,6 +750,68 @@ class GraphAxisValidationTests(unittest.TestCase):
                 # Пропуски помечаются «(пусто)», как в круговой диаграмме.
                 self.assertIn("(пусто)", list(figure.data[0].labels))
 
+    def test_bar_aggregates_duplicate_categories(self):
+        source = pd.DataFrame({
+            "cat": ["A", "A", "B"],
+            "value": [10.0, 30.0, 5.0],
+        })
+        meta = {"numeric": ["value"], "categorical": ["cat"], "datetime": []}
+        kwargs = dict(
+            n_clicks=1,
+            z_col=None,
+            size_col=None,
+            text_col=None,
+            dropdown_text_pozition="top right",
+            bubble=False,
+            MaxSizeBubble=30,
+            height=550,
+            width=None,
+            selected_style="plotly",
+            bar_text_auto=True,
+            view_revision=0,
+            filtered_json=source.to_json(date_format="iso", orient="split"),
+            hover_cols=None,
+            facet_row=None,
+            facet_col=None,
+            filters_state={},
+            xaxis_font_size=14,
+            yaxis_font_size=14,
+            font_size_ticks=12,
+            title_font_size=16,
+            dropdown_sort_column="trace",
+            axes_category="auto",
+            dropdown_overlay="overlay",
+            legend="top-right-outside",
+            custom_colors=None,
+            tick_step_x=0,
+            tick_step_y=0,
+            legend_order="alphabetical",
+            legend_custom_order="",
+            meta=meta,
+            pie_aggregation="sum",
+        )
+
+        def build(mode):
+            figure, notifications = update_main_graph(
+                x_col="cat", y_col="value", color_col=None,
+                chart_type="Bar", bar_aggregation=mode, **kwargs,
+            )
+            self.assertEqual(notifications, [])
+            return figure
+
+        summed = build("sum")
+        self.assertEqual(list(summed.data[0].x), ["A", "B"])
+        self.assertEqual(list(summed.data[0].y), [40.0, 5.0])
+
+        mean = build("mean")
+        self.assertEqual(list(mean.data[0].y), [20.0, 5.0])
+
+        count = build("count")
+        self.assertEqual(list(count.data[0].y), [2, 1])
+
+        raw = build("none")
+        self.assertEqual(len(raw.data[0].x), 3)
+
     def test_large_scatter_with_labels_uses_svg_trace(self):
         row_count = 1200
         source = pd.DataFrame(
@@ -1134,6 +1196,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "tick-step-yaxis",
             "graph-settings-reset",
             "test-setting-pie_aggregation",
+            "test-setting-bar_aggregation",
         }
         self.assertTrue(expected_ids.issubset(component_ids))
 

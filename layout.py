@@ -33,6 +33,7 @@ from components import (
     dropdown_legend, dropdown_legend_order, input_legend_custom_order,
     bin_column_select, bin_method, bin_k, bin_label_style,
     bar_text_auto_switch,
+    bar_aggregation_select,
 )
 
 # Навигационные ссылки
@@ -73,6 +74,7 @@ GRAPH_SETTINGS_PANEL = GraphSettingsPanel(
         "category_axis": dropdown_axes_category,
         "category_order": dropdown_category_ascending,
         "bar_mode": dropdown_overlay,
+        "bar_aggregation": bar_aggregation_select,
         "pie_aggregation": dropdown_pie_aggregation,
         "legend_position": dropdown_legend,
         "legend_order": dropdown_legend_order,

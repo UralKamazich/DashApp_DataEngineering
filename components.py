@@ -431,3 +431,20 @@ bar_text_auto_switch = dmc.Switch(
     offLabel="Выкл",
     size="md"
 )
+
+bar_aggregation_select = dmc.Select(
+    id="bar-aggregation",
+    label="Bar: агрегация",
+    description="Как считать высоту столбца по категории",
+    value="sum",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
+    data=[
+        {"value": "none", "label": "Без агрегации (как есть)"},
+        {"value": "sum", "label": "Сумма"},
+        {"value": "mean", "label": "Среднее"},
+        {"value": "count", "label": "Количество строк"},
+    ],
+    clearable=False,
+    persistence=True,
+)
