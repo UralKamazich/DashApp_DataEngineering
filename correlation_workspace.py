@@ -21,7 +21,10 @@ MAX_CORRELATION_COLUMNS = 50
 DEFAULT_CORRELATION_COLUMNS = 12
 
 
-def _empty_analysis_figure(message: str = "Выберите минимум два числовых столбца"):
+def _empty_analysis_figure(
+    message: str = "Выберите минимум два числовых столбца",
+    template: str = "plotly",
+):
     figure = go.Figure()
     figure.add_annotation(
         text=message,
@@ -33,7 +36,7 @@ def _empty_analysis_figure(message: str = "Выберите минимум дв�
         font=dict(size=15, color="#868E96"),
     )
     figure.update_layout(
-        template="plotly",
+        template=template or "plotly",
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
         margin=dict(l=30, r=30, t=55, b=30),
@@ -45,7 +48,7 @@ def _empty_analysis_figure(message: str = "Выберите минимум дв�
 def _correlation_bar(correlation, pair_counts, target, template):
     values = correlation[target].drop(labels=[target], errors="ignore").dropna()
     if values.empty:
-        return _empty_analysis_figure(f"Нет корреляций для «{target}»")
+        return _empty_analysis_figure(f"Нет корреляций для «{target}»", template)
 
     order = values.abs().sort_values(ascending=True, kind="stable").index
     values = values.loc[order]
@@ -188,7 +191,7 @@ def _build_correlation_figures(frame, columns, method="pearson", min_periods=10,
         frame, columns, method, min_periods
     )
     if error:
-        empty = _empty_analysis_figure(error)
+        empty = _empty_analysis_figure(error, template)
         return empty, empty, empty, error, error
 
     first_target = correlation.columns[0]
@@ -400,17 +403,19 @@ class CorrelationWorkspace:
             Input(self.ids["method"], "value"),
             Input(self.ids["min_periods"], "value"),
             Input("url", "pathname"),
+            Input("dropdown_style", "value"),
             State("meta-columns", "data"),
-            State("dropdown_style", "value"),
         )
-        def update_analysis(filtered_json, columns, method, min_periods, pathname, meta, template):
+        def update_analysis(filtered_json, columns, method, min_periods, pathname, template, meta):
             if pathname != "/correlation":
                 return no_update, no_update, no_update, no_update
             if not filtered_json:
-                empty = _empty_analysis_figure("Сначала загрузите датасет")
+                empty = _empty_analysis_figure("Сначала загрузите датасет", template)
                 return empty, empty, "Сначала загрузите датасет.", "dimmed"
             if len(columns or []) < 2:
-                empty = _empty_analysis_figure("Выберите минимум два числовых канала")
+                empty = _empty_analysis_figure(
+                    "Выберите минимум два числовых канала", template
+                )
                 return empty, empty, "Выберите минимум два числовых канала.", "dimmed"
             try:
                 frame = read_df_from_store(filtered_json, meta)
@@ -422,7 +427,7 @@ class CorrelationWorkspace:
                 return first, second, status, "red" if error else "dimmed"
             except Exception as error:
                 message = f"Не удалось рассчитать корреляции: {error}"
-                empty = _empty_analysis_figure(message)
+                empty = _empty_analysis_figure(message, template)
                 return empty, empty, message, "red"
 
         self._callbacks_registered = True

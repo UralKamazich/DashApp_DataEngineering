@@ -67,6 +67,22 @@
     return Boolean(input && input.checked);
   }
 
+  function ownsPortalTarget(popup, target) {
+    if (!popup || !target || !target.closest) return false;
+
+    // Mantine Select renders its dropdown in a body-level portal, outside the
+    // settings DOM subtree. Match that listbox back to the control through
+    // aria-controls so a choice is not mistaken for an outside click.
+    const portal = target.closest(".mantine-Popover-dropdown");
+    if (!portal) return false;
+    const listbox = target.closest("[role='listbox']") ||
+      portal.querySelector("[role='listbox']");
+    if (!listbox || !listbox.id) return false;
+    return Boolean(
+      popup.querySelector("[aria-controls='" + CSS.escape(listbox.id) + "']")
+    );
+  }
+
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(value, maximum));
   }
@@ -145,7 +161,9 @@
 
   document.addEventListener("mousedown", function (event) {
     document.querySelectorAll(".graph-settings-popover.is-open").forEach(function (popup) {
-      if (!popup.contains(event.target) && shouldCloseOutside(popup)) close(popup);
+      const belongsToPopup = popup.contains(event.target) ||
+        ownsPortalTarget(popup, event.target);
+      if (!belongsToPopup && shouldCloseOutside(popup)) close(popup);
     });
   }, true);
 

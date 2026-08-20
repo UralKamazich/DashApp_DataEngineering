@@ -43,19 +43,21 @@ def _numeric_dimensions(plot_df, columns):
     Input(CORRELATION_WORKSPACE.ids["min_periods"], "value"),
     Input("filtered-data", "data"),
     Input("url", "pathname"),
+    Input("dropdown_style", "value"),
     State("meta-columns", "data"),
-    State("dropdown_style", "value"),
 )
 def build_multivariate_figure(x_col, y_col, z_col, color_col, chart_type,
                               corr_columns, corr_method, min_periods,
-                              filtered_json, pathname, meta, selected_style):
+                              filtered_json, pathname, selected_style, meta):
     if pathname != "/correlation":
         return no_update, no_update
     empty = go.Figure().update_layout(template=selected_style or "plotly")
     if not filtered_json:
         return empty, []
     if chart_type == "Correlogram" and len(corr_columns or []) < 2:
-        return _empty_analysis_figure("Выберите минимум два числовых канала"), []
+        return _empty_analysis_figure(
+            "Выберите минимум два числовых канала", selected_style
+        ), []
     if chart_type != "Correlogram" and not any((x_col, y_col, z_col)):
         return empty, []
     try:
@@ -70,7 +72,7 @@ def build_multivariate_figure(x_col, y_col, z_col, color_col, chart_type,
             plot_df, corr_columns, corr_method, min_periods
         )
         if error:
-            return _empty_analysis_figure(error), []
+            return _empty_analysis_figure(error, selected_style), []
         return build_correlogram(correlation, pair_counts, selected_style or "plotly"), []
 
     use_dims = _numeric_dimensions(plot_df, [x_col, y_col, z_col])

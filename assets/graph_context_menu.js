@@ -209,6 +209,15 @@
 
   /* ---- Глобальные обработчики ---- */
   function setupGlobalListeners() {
+    // Plotly starts its zoom/pan gesture on mousedown, while the browser emits
+    // contextmenu only after mouseup. Stop a right-button gesture before it
+    // reaches Plotly so a slightly moved context click cannot zoom the graph.
+    document.addEventListener("mousedown", function (e) {
+      if (e.button !== 2 || !e.target.closest(".graph-workspace-plot")) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+
     document.addEventListener("contextmenu", function (e) {
       // Drop zones own their right-click field picker.
       if (e.target.closest(".graph-drop-zone")) return;

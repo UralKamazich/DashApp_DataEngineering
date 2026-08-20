@@ -48,7 +48,7 @@ from graph_settings import (
     SETTINGS_COMBOBOX_Z_INDEX,
 )
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
-from utils import create_value_control, meta_from_df, read_df_from_store
+from utils import _empty_fig, create_value_control, meta_from_df, read_df_from_store
 
 
 def walk_components(root):
@@ -110,7 +110,21 @@ class DashApplicationSmokeTests(unittest.TestCase):
             with self.subTest(path=path):
                 with self.client.get(path) as response:
                     self.assertEqual(response.status_code, 200)
-                    self.assertIn(content_type, response.content_type)
+                self.assertIn(content_type, response.content_type)
+
+    def test_settings_dropdown_portal_is_treated_as_part_of_popover(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_settings_popover.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn("function ownsPortalTarget", script)
+        self.assertIn("aria-controls", script)
+        self.assertIn("ownsPortalTarget(popup, event.target)", script)
+
+    def test_graph_context_menu_blocks_right_button_drag_before_plotly(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_context_menu.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn('e.button !== 2', script)
+        self.assertIn('e.stopImmediatePropagation()', script)
+        self.assertIn('".graph-workspace-plot"', script)
 
     def test_application_branding_uses_current_version_only_in_window_title(self):
         self.assertEqual(APP_VERSION, "2.0.0")
@@ -130,6 +144,28 @@ class DashApplicationSmokeTests(unittest.TestCase):
         for filename in ("icon.svg", "icon.png", "icon.icns", "favicon.ico"):
             with self.subTest(filename=filename):
                 self.assertTrue((assets / filename).is_file())
+
+    def test_every_plot_group_reacts_to_theme_changes(self):
+        output_markers = (
+            ("..graph.figure...", ("filtered-data", "data")),
+            ("mv-graph.figure", ("filtered-data", "data")),
+            ("correlation-bar-primary.figure", ("filtered-data", "data")),
+            ("cluster-elbow-graph.figure", ("cluster-metrics", "data")),
+        )
+        for marker, source_input in output_markers:
+            callback = next(
+                value for key, value in app.callback_map.items()
+                if marker in key and source_input in {
+                    (dependency["id"], dependency["property"])
+                    for dependency in value["inputs"]
+                }
+            )
+            inputs = {
+                (dependency["id"], dependency["property"])
+                for dependency in callback["inputs"]
+            }
+            with self.subTest(output=marker):
+                self.assertIn(("dropdown_style", "value"), inputs)
 
     def test_correlation_is_a_separate_analysis_page(self):
         chart_values = {item["value"] for item in dropdown_chart_type.data}
@@ -232,6 +268,13 @@ class DashApplicationSmokeTests(unittest.TestCase):
 
 
 class DataStoreRoundTripTests(unittest.TestCase):
+    def test_empty_figure_uses_selected_theme(self):
+        figure = _empty_fig("plotly_dark")
+        self.assertEqual(
+            figure.layout.template.layout.plot_bgcolor,
+            "rgb(17,17,17)",
+        )
+
     def test_dataframe_metadata_and_datetime_round_trip(self):
         source = pd.DataFrame(
             {
@@ -430,7 +473,7 @@ class CorrelationAnalysisTests(unittest.TestCase):
             figure, notifications = build_multivariate_figure(
                 None, None, None, None,
                 "Correlogram", ["x", "y"], "pearson", 2,
-                '{"large":"payload"}', "/", {}, "plotly",
+                '{"large":"payload"}', "/", "plotly", {},
             )
         self.assertIs(figure, no_update)
         self.assertIs(notifications, no_update)

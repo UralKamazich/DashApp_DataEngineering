@@ -216,8 +216,9 @@ def _apply_filters_once(frame: pd.DataFrame, filters_state: dict, meta: dict) ->
     return frame[mask]
 
 
-def _empty_fig():
-    return go.Figure()
+def _empty_fig(template="plotly"):
+    """Return an empty figure that still follows the selected graph theme."""
+    return go.Figure().update_layout(template=template or "plotly")
 
 
 def needs_text_axis(col: str, meta: dict, force_text: list = None) -> bool:

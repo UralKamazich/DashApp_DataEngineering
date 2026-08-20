@@ -590,7 +590,7 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       pie_aggregation="sum",
                       bar_aggregation="sum"):
 
-    empty = _empty_fig()
+    empty = _empty_fig(selected_style)
     try:
         if not filtered_json:
             return empty, []
@@ -953,12 +953,12 @@ def update_main_graph(*args, **kwargs):
     Output("cluster-metrics-section", "style"),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
     Input("cluster-metrics", "data"),
-    State("dropdown_style", "value"),
+    Input("dropdown_style", "value"),
     prevent_initial_call=True
 )
 def update_cluster_metric_graphs(cluster_metrics, selected_style):
 
-    empty = _empty_fig()
+    empty = _empty_fig(selected_style)
     SHOW = {"display": "block"}
     HIDE = {"display": "none"}
 
