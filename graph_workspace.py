@@ -127,6 +127,8 @@ class GraphWorkspace:
         self.field_controls = dict(field_controls)
         self.fields = tuple(fields)
         self.settings_panel = settings_panel
+        if self.settings_panel is not None:
+            self.settings_panel.bind_namespace(graph_id)
         self.columns_container_id = columns_container_id
         self.notifications_id = notifications_id
         self.initial_height = initial_height
@@ -241,8 +243,12 @@ class GraphWorkspace:
             "data-action-save-png": self.ids["save_png"],
             "data-action-change-colors": self.ids["change_colors"],
             "data-action-clear-graph": self.ids["clear"],
-            "data-action-open-settings": self.ids["open_settings"],
         }
+        if self.settings_panel is not None:
+            workspace_data.update({
+                "data-settings-popup-id": self._settings_internal_id("graph-settings-popover"),
+                "data-action-open-specific-settings": self.ids["open_settings"],
+            })
 
         return dmc.Paper(
             id=self.paper_id,
@@ -266,7 +272,7 @@ class GraphWorkspace:
                             html.Div(self.chart_type_control, className="graph-type-control"),
                             html.Div(className="graph-workspace-toolbar-separator"),
                             *(
-                                [self._action_button(self.ids["open_settings"], "⚙", "Настройки графика")]
+                                [self._action_button(self.ids["open_settings"], "⚙", "Настройки типа графика")]
                                 if self.settings_panel is not None
                                 else []
                             ),
@@ -396,14 +402,10 @@ class GraphWorkspace:
             children.append(self._color_modal())
         children.append(self._help_modal())
         children.append(self._service_components())
-        style = None
-        if self.settings_panel is not None:
-            style = {"--graph-settings-width": f"{self.settings_panel.slide.width}px"}
         return html.Div(
             children,
             id=self.component_id,
             className="graph-workspace-component",
-            style=style,
         )
 
     def _settings_control_id(self, key: str) -> str:
@@ -505,28 +507,43 @@ class GraphWorkspace:
         )
 
     def _register_settings_callbacks(self, app):
-        self.settings_panel.slide.register_toggle(
-            app,
-            open_inputs=(self.ids["open_settings"],),
-        )
-        self.settings_panel.slide.register_outside_close(
-            app,
-            self._settings_internal_id("graph-settings-close-on-outside"),
-            self._settings_internal_id("graph-settings-outside-close-store"),
-        )
         app.clientside_callback(
             """
-            function (opened, shiftPlot) {
-                var className = "graph-workspace-component";
-                if (opened && shiftPlot) {
-                    className += " graph-settings-shift-open";
+            function (chartType) {
+                var pointTypes = ["Scatter", "3D_Scatter", "Polar"];
+                var points = pointTypes.indexOf(chartType) !== -1;
+                var bars = chartType === "Bar" || chartType === "Hist";
+                var barOnly = chartType === "Bar";
+                var pie = chartType === "Pie";
+                var hasSpecific = points || bars || pie;
+                var labels = {
+                    "Scatter": "Scatter",
+                    "3D_Scatter": "3D Scatter",
+                    "Polar": "Треугольный график",
+                    "Bar": "Bar",
+                    "Hist": "Histogram",
+                    "Pie": "Pie"
+                };
+                function visible(show) {
+                    return {display: show ? "block" : "none"};
                 }
-                return className;
+                return [
+                    "Настройки: " + (labels[chartType] || chartType || "график"),
+                    visible(points),
+                    visible(bars),
+                    visible(barOnly),
+                    visible(pie),
+                    visible(!hasSpecific)
+                ];
             }
             """,
-            Output(self.component_id, "className"),
-            Input(self._settings_internal_id("drawer-simple-open-state"), "data"),
-            Input(self._settings_internal_id("graph-settings-shift-plot"), "checked"),
+            Output(self._settings_internal_id("graph-settings-specific-title"), "children"),
+            Output(self._settings_internal_id("graph-settings-specific-points"), "style"),
+            Output(self._settings_internal_id("graph-settings-specific-bars"), "style"),
+            Output(self._settings_internal_id("graph-settings-specific-bar-only"), "style"),
+            Output(self._settings_internal_id("graph-settings-specific-pie"), "style"),
+            Output(self._settings_internal_id("graph-settings-specific-empty"), "style"),
+            Input(self.chart_type_id, "value"),
         )
 
         defaults = {

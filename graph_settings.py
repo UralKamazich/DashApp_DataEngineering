@@ -8,8 +8,6 @@ from collections.abc import Mapping
 from dash import dcc, html
 import dash_mantine_components as dmc
 
-from slide_panel import SlidePanel
-
 
 REQUIRED_CONTROLS = {
     "theme",
@@ -27,16 +25,20 @@ REQUIRED_CONTROLS = {
 }
 
 SETTINGS_COMPONENT_IDS = (
-    "drawer-simple",
-    "drawer-simple-tab",
-    "drawer-simple-open-state",
+    "graph-settings-popover",
+    "graph-settings-close",
+    "graph-settings-common",
+    "graph-settings-specific",
+    "graph-settings-specific-title",
+    "graph-settings-specific-points",
+    "graph-settings-specific-bars",
+    "graph-settings-specific-bar-only",
+    "graph-settings-specific-pie",
+    "graph-settings-specific-empty",
     "graph-settings-tabs",
-    "graph-settings-panel",
     "graph-settings-reset-state",
     "graph-settings-reset",
     "graph-settings-close-on-outside",
-    "graph-settings-shift-plot",
-    "graph-settings-outside-close-store",
     "InputSizePlot",
     "InputSizePlotW",
     "font-size-xaxis",
@@ -54,28 +56,31 @@ class GraphSettingsPanel:
 
     def __init__(self, controls: Mapping[str, object], ids: Mapping[str, str] | None = None):
         self.controls = controls
+        self.width = 340
+        self._namespace = None
+        self._explicit_ids = set((ids or {}).keys())
         self.ids = {component_id: component_id for component_id in SETTINGS_COMPONENT_IDS}
         self.ids.update(ids or {})
         missing = REQUIRED_CONTROLS.difference(controls)
         if missing:
             raise ValueError(f"Missing graph settings controls: {sorted(missing)}")
-        self.slide = SlidePanel(
-            root_id=self.component_id("drawer-simple"),
-            tab_id=self.component_id("drawer-simple-tab"),
-            state_id=self.component_id("drawer-simple-open-state"),
-            side="right",
-            mode="overlay",
-            width=340,
-            tab_icon=self._icon("sliders-horizontal", 15),
-            tab_label="Настройки",
-            tab_title="Открыть настройки графика",
-            tab_style={"bottom": "10px"},
-            extra_root_classes=("graph-settings-content",),
-            content=self._settings_body,
-            extra_stores=[
-                dcc.Store(id=self.component_id("graph-settings-outside-close-store"), data=False),
-            ],
-        )
+
+    def bind_namespace(self, namespace: str):
+        """Bind internal IDs to exactly one GraphWorkspace instance."""
+        namespace = str(namespace).strip()
+        if not namespace:
+            raise ValueError("GraphSettingsPanel namespace must not be empty")
+        if self._namespace and self._namespace != namespace:
+            raise ValueError(
+                f"GraphSettingsPanel is already bound to {self._namespace!r}"
+            )
+        if self._namespace == namespace:
+            return self
+        self._namespace = namespace
+        for legacy_id in SETTINGS_COMPONENT_IDS:
+            if legacy_id not in self._explicit_ids:
+                self.ids[legacy_id] = f"{namespace}-{legacy_id}"
+        return self
 
     def component_id(self, legacy_id: str) -> str:
         """Return the instance-specific id for an internal settings control."""
@@ -259,17 +264,11 @@ class GraphSettingsPanel:
                     [
                         self._number_input("font-size-title", "Заголовок", 16, min=6, max=48, step=1),
                         self._number_input("font-size-ticks", "Подписи данных", 12, min=6, max=48, step=1),
-                        html.Div(self.controls["text_position"], className="graph-settings-control graph-settings-span-2"),
                     ],
                     cols=2,
                     spacing="xs",
                     verticalSpacing="xs",
                     className="graph-settings-grid",
-                ),
-                dmc.Divider(my="sm"),
-                self._feature_card(
-                    self.controls["bar_labels"],
-                    "Показывает числовые значения непосредственно на столбцах Bar.",
                 ),
             ],
             value="labels",
@@ -311,12 +310,12 @@ class GraphSettingsPanel:
             className="graph-settings-tab-panel",
         )
 
-    def _series_panel(self):
-        return dmc.TabsPanel(
+    def _specific_settings(self):
+        points = html.Div(
             [
                 self._section_intro(
-                    "Серии и маркеры",
-                    "Отображение точек, столбцов и пузырьковых диаграмм",
+                    "Точки и подписи",
+                    "Параметры Scatter, 3D Scatter и треугольного графика",
                     "scatter-chart",
                 ),
                 dmc.SimpleGrid(
@@ -339,26 +338,67 @@ class GraphSettingsPanel:
                     verticalSpacing="xs",
                     className="graph-settings-grid",
                 ),
-                dmc.Divider(my="sm", label="Столбцы и гистограммы", labelPosition="left"),
-                dmc.SimpleGrid(
-                    [
-                        html.Div(self.controls["bar_mode"], className="graph-settings-control"),
-                        html.Div(self.controls["bar_aggregation"], className="graph-settings-control"),
-                    ],
-                    cols=2,
-                    spacing="xs",
-                    verticalSpacing="xs",
-                    className="graph-settings-grid",
-                ),
-                dmc.Divider(my="sm", label="Круговая диаграмма", labelPosition="left"),
-                html.Div(self.controls["pie_aggregation"], className="graph-settings-control"),
+                dmc.Divider(my="sm", label="Положение подписей", labelPosition="left"),
+                html.Div(self.controls["text_position"], className="graph-settings-control"),
             ],
-            value="series",
-            className="graph-settings-tab-panel",
+            id=self.component_id("graph-settings-specific-points"),
+            className="graph-settings-specific-group",
         )
 
+        bars = html.Div(
+            [
+                self._section_intro(
+                    "Столбцы и гистограммы",
+                    "Режим отображения серий и параметры агрегации Bar",
+                    "list",
+                ),
+                html.Div(self.controls["bar_mode"], className="graph-settings-control"),
+                html.Div(
+                    [
+                        dmc.Divider(my="sm", label="Только Bar", labelPosition="left"),
+                        html.Div(self.controls["bar_aggregation"], className="graph-settings-control"),
+                        self._feature_card(
+                            self.controls["bar_labels"],
+                            "Показывает числовые значения непосредственно на столбцах Bar.",
+                        ),
+                    ],
+                    id=self.component_id("graph-settings-specific-bar-only"),
+                ),
+            ],
+            id=self.component_id("graph-settings-specific-bars"),
+            className="graph-settings-specific-group",
+        )
+
+        pie = html.Div(
+            [
+                self._section_intro(
+                    "Круговая диаграмма",
+                    "Способ объединения значений внутри каждого сектора",
+                    "scatter-chart",
+                ),
+                html.Div(self.controls["pie_aggregation"], className="graph-settings-control"),
+            ],
+            id=self.component_id("graph-settings-specific-pie"),
+            className="graph-settings-specific-group",
+        )
+
+        empty = html.Div(
+            [
+                self._icon("info", 16),
+                dmc.Text("Для этого типа графика специальных настроек пока нет.", size="xs"),
+                dmc.Text(
+                    "Общие параметры доступны через контекстное меню графика.",
+                    size="10px",
+                    c="dimmed",
+                ),
+            ],
+            id=self.component_id("graph-settings-specific-empty"),
+            className="graph-settings-specific-empty",
+        )
+        return [points, bars, pie, empty]
+
     def render(self):
-        return self.slide.render()
+        return self._settings_body()
 
     def _settings_body(self):
         tabs = dmc.Tabs(
@@ -368,7 +408,6 @@ class GraphSettingsPanel:
                         dmc.TabsTab("Оси", value="axes", leftSection=self._icon("move-horizontal", 15)),
                         dmc.TabsTab("Подписи", value="labels", leftSection=self._icon("type", 15)),
                         dmc.TabsTab("Легенда", value="legend", leftSection=self._icon("list", 15)),
-                        dmc.TabsTab("Серии", value="series", leftSection=self._icon("scatter-chart", 15)),
                     ],
                     grow=True,
                     className="graph-settings-tabs-list",
@@ -376,7 +415,6 @@ class GraphSettingsPanel:
                 self._axes_panel(),
                 self._labels_panel(),
                 self._legend_panel(),
-                self._series_panel(),
             ],
             id=self.component_id("graph-settings-tabs"),
             value="axes",
@@ -386,57 +424,104 @@ class GraphSettingsPanel:
             className="graph-settings-tabs",
         )
 
-        return [
-            html.Div(
-                id=self.component_id("graph-settings-panel"),
-                className="graph-settings-panel-inner",
-                children=[
-                    dcc.Store(id=self.component_id("graph-settings-reset-state")),
-                    html.Div([self._quick_settings(), tabs], className="graph-settings-scroll"),
-                    html.Div(
-                        [
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            self._icon("circle-check", 13),
-                                            dmc.Text("Применяется автоматически", size="10px", c="dimmed"),
-                                        ],
-                                        className="graph-settings-auto-status",
-                                    ),
-                                    dmc.Button(
-                                        "Сбросить",
-                                        id=self.component_id("graph-settings-reset"),
-                                        variant="subtle",
-                                        color="gray",
-                                        size="xs",
-                                        leftSection=self._icon("rotate-ccw", 12),
-                                    ),
-                                ],
-                                className="graph-settings-footer-main",
+        return html.Section(
+            id=self.component_id("graph-settings-popover"),
+            className="graph-settings-popover",
+            role="dialog",
+            **{
+                "aria-hidden": "true",
+                "data-close-on-outside-id": self.component_id("graph-settings-close-on-outside"),
+            },
+            children=[
+                dcc.Store(id=self.component_id("graph-settings-reset-state")),
+                html.Header(
+                    [
+                        html.Div(
+                            [
+                                html.Span(
+                                    "⠿",
+                                    className="graph-settings-drag-handle",
+                                    title="Перетащить окно",
+                                    **{"aria-hidden": "true"},
+                                ),
+                                html.Div(
+                                    [
+                                        dmc.Text("Общие настройки", fw=700, size="sm"),
+                                        dmc.Text("Параметры, общие для всех типов", size="10px", c="dimmed"),
+                                    ],
+                                    className="graph-settings-heading graph-settings-heading--common",
+                                ),
+                                html.Div(
+                                    [
+                                        dmc.Text(
+                                            "Настройки типа",
+                                            id=self.component_id("graph-settings-specific-title"),
+                                            fw=700,
+                                            size="sm",
+                                        ),
+                                        dmc.Text("Только параметры выбранного графика", size="10px", c="dimmed"),
+                                    ],
+                                    className="graph-settings-heading graph-settings-heading--specific",
+                                ),
+                            ],
+                            className="graph-settings-heading-wrap",
+                        ),
+                        html.Button(
+                            "×",
+                            id=self.component_id("graph-settings-close"),
+                            type="button",
+                            className="graph-settings-popover-close",
+                            title="Закрыть настройки",
+                            **{"aria-label": "Закрыть настройки"},
+                        ),
+                    ],
+                    className="graph-settings-popover-header",
+                ),
+                html.Div(
+                    [self._quick_settings(), tabs],
+                    id=self.component_id("graph-settings-common"),
+                    className="graph-settings-scroll graph-settings-common",
+                ),
+                html.Div(
+                    self._specific_settings(),
+                    id=self.component_id("graph-settings-specific"),
+                    className="graph-settings-scroll graph-settings-specific",
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        self._icon("circle-check", 13),
+                                        dmc.Text("Применяется автоматически", size="10px", c="dimmed"),
+                                    ],
+                                    className="graph-settings-auto-status",
+                                ),
+                                dmc.Button(
+                                    "Сбросить",
+                                    id=self.component_id("graph-settings-reset"),
+                                    variant="subtle",
+                                    color="gray",
+                                    size="xs",
+                                    leftSection=self._icon("rotate-ccw", 12),
+                                ),
+                            ],
+                            className="graph-settings-footer-main",
+                        ),
+                        html.Div(
+                            dmc.Checkbox(
+                                id=self.component_id("graph-settings-close-on-outside"),
+                                label="Закрывать при клике вне",
+                                checked=False,
+                                size="xs",
+                                persistence=True,
+                                persistence_type="local",
                             ),
-                            html.Div(
-                                [
-                                    dmc.Checkbox(
-                                        id=self.component_id("graph-settings-shift-plot"),
-                                        label="Сдвигать график при открытии",
-                                        checked=False,
-                                        size="xs",
-                                        persistence=True,
-                                    ),
-                                    dmc.Checkbox(
-                                        id=self.component_id("graph-settings-close-on-outside"),
-                                        label="Закрывать при клике вне",
-                                        checked=False,
-                                        size="xs",
-                                        persistence=True,
-                                    ),
-                                ],
-                                className="graph-settings-footer-options",
-                            ),
-                        ],
-                        className="graph-settings-footer",
-                    ),
-                ],
-            ),
-        ]
+                            className="graph-settings-footer-options",
+                        ),
+                    ],
+                    className="graph-settings-footer",
+                ),
+            ],
+        )

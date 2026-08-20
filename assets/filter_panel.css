@@ -14,12 +14,6 @@
     background: #1971c2;
 }
 
-/* Открытая панель настроек перекрывает содержимое фильтров, но ярлычок
-   закрытой панели остаётся доступен у правого края окна. */
-#filters-drawer.filters-drawer--settings-open .filter-side-tab {
-    z-index: 170;
-}
-
 .filter-side-tab-count {
     display: inline-flex;
     min-width: 18px;

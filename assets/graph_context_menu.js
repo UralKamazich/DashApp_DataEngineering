@@ -7,6 +7,7 @@
 
   let _menuVisible = false;
   let _activeWorkspace = null;
+  let _menuOrigin = {x: 0, y: 0};
 
   /* ---- Создание меню (один раз) ---- */
   function createMenu() {
@@ -35,7 +36,7 @@
       '<div class="ctx-sep"></div>' +
       '<div class="ctx-group" aria-label="Оформление">' +
         menuItem("change-colors", "palette", "Сменить цвета") +
-        menuItem("open-settings", "settings", "Настройки графика") +
+        menuItem("open-settings", "settings", "Общие настройки", "для всех типов") +
       '</div>';
 
     menu.addEventListener("click", handleItemClick);
@@ -69,6 +70,11 @@
     const menu = document.getElementById("graph-ctx-menu");
     if (!menu) return;
 
+    _menuOrigin = {x: x, y: y};
+    const settingsItem = menu.querySelector('[data-action="open-settings"]');
+    if (settingsItem) {
+      settingsItem.hidden = !(_activeWorkspace && _activeWorkspace.getAttribute("data-settings-popup-id"));
+    }
     menu.style.display = "block";
     _menuVisible = true;
 
@@ -137,7 +143,14 @@
         break;
 
       case "open-settings":
-        clickAction("open-settings");
+        if (_activeWorkspace && window.graphSettingsPopover) {
+          window.graphSettingsPopover.open(
+            _activeWorkspace,
+            "common",
+            _menuOrigin.x,
+            _menuOrigin.y
+          );
+        }
         break;
     }
   }

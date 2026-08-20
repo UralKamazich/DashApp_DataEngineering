@@ -87,6 +87,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
         assets = {
             "/assets/context_menu.css": "text/css",
             "/assets/graph_settings.css": "text/css",
+            "/assets/graph_settings_popover.js": "text/javascript",
             "/assets/graph_context_menu.js": "text/javascript",
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
@@ -174,7 +175,6 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "reset-filters-btn",
             "filter-close-on-apply",
             "filter-close-on-outside",
-            "right-panels-coordination",
             "dataset-drawer",
             "dataset-side-tab",
             "dataset-close-on-outside",
@@ -195,17 +195,16 @@ class DashApplicationSmokeTests(unittest.TestCase):
         }
         self.assertNotIn("filters-container", graph_page_ids)
 
-    def test_side_panels_share_unified_slide_panel_class(self):
+    def test_only_dataset_and_filters_use_slide_panels(self):
         panels = {
             component.id: component
             for component in walk_components(app.layout)
             if getattr(component, "id", None) in {
                 "dataset-drawer",
                 "filters-drawer",
-                "drawer-simple",
             }
         }
-        self.assertEqual(set(panels), {"dataset-drawer", "filters-drawer", "drawer-simple"})
+        self.assertEqual(set(panels), {"dataset-drawer", "filters-drawer"})
         for panel in panels.values():
             classes = panel.className.split()
             self.assertIn("slide-panel", classes)
@@ -213,15 +212,13 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("slide-panel--reflow", panels["dataset-drawer"].className.split())
         self.assertIn("slide-panel--right", panels["filters-drawer"].className.split())
         self.assertIn("slide-panel--reflow", panels["filters-drawer"].className.split())
-        self.assertIn("slide-panel--right", panels["drawer-simple"].className.split())
-        self.assertIn("slide-panel--overlay", panels["drawer-simple"].className.split())
-
-        graph_component = next(
+        settings_popup = next(
             component
             for component in walk_components(app.layout)
-            if getattr(component, "id", None) == "graph-component"
+            if getattr(component, "id", None) == "graph-graph-settings-popover"
         )
-        self.assertEqual(graph_component.style["--graph-settings-width"], "340px")
+        self.assertIn("graph-settings-popover", settings_popup.className.split())
+        self.assertNotIn("slide-panel", settings_popup.className.split())
 
 
 class DataStoreRoundTripTests(unittest.TestCase):
@@ -1167,6 +1164,42 @@ class GraphWorkspaceTests(unittest.TestCase):
         self.assertNotIn(self.component.ids["open_settings"], descendant_ids)
         self.assertEqual(self.component.ids["update"], "test-graph-update")
 
+    def test_settings_are_bound_to_the_workspace_instance(self):
+        fields = {
+            field["target"]: dcc.Store(id=f"sales-{field['target']}")
+            for field in DEFAULT_FIELDS
+        }
+        settings_controls = {
+            key: html.Div(id=f"sales-setting-{key}")
+            for key in REQUIRED_CONTROLS
+        }
+        settings = GraphSettingsPanel(settings_controls)
+        workspace = GraphWorkspace(
+            graph_id="sales",
+            chart_type_control=html.Div(id="sales-chart-type"),
+            field_controls=fields,
+            settings_panel=settings,
+        )
+        tree = workspace.render()
+        components = list(walk_components(tree))
+        component_ids = {getattr(component, "id", None) for component in components}
+        workspace_node = next(
+            component for component in components
+            if getattr(component, "id", None) == "sales-workspace"
+        )
+        workspace_props = workspace_node.to_plotly_json()["props"]
+
+        self.assertIn("sales-graph-settings-popover", component_ids)
+        self.assertIn("sales-InputSizePlot", component_ids)
+        self.assertEqual(
+            workspace_props["data-settings-popup-id"],
+            "sales-graph-settings-popover",
+        )
+        self.assertEqual(
+            workspace_props["data-action-open-specific-settings"],
+            workspace.ids["open_settings"],
+        )
+
     def test_clear_action_contains_hard_plotly_recovery(self):
         script = _plotly_recovery_script("test-graph")
 
@@ -1274,31 +1307,33 @@ class GraphSettingsPanelTests(unittest.TestCase):
             for component in self.components
             if component.__class__.__name__ == "TabsPanel"
         }
-        self.assertEqual(panel_values, {"axes", "labels", "legend", "series"})
+        self.assertEqual(panel_values, {"axes", "labels", "legend"})
 
-    def test_settings_panel_is_slide_out_overlay(self):
-        self.assertEqual(getattr(self.panel, "id", None), "drawer-simple")
-        self.assertIn("slide-panel", self.panel.className.split())
-        self.assertIn("slide-panel--overlay", self.panel.className.split())
+    def test_settings_panel_is_local_popover_with_two_modes(self):
+        self.assertEqual(getattr(self.panel, "id", None), "graph-settings-popover")
+        self.assertIn("graph-settings-popover", self.panel.className.split())
+        self.assertNotIn("slide-panel", self.panel.className.split())
         component_ids = {
             getattr(component, "id", None)
             for component in self.components
         }
         for expected in (
-            "drawer-simple-tab",
-            "drawer-simple-open-state",
+            "graph-settings-close",
+            "graph-settings-common",
+            "graph-settings-specific",
+            "graph-settings-specific-points",
+            "graph-settings-specific-bars",
+            "graph-settings-specific-pie",
+            "graph-settings-specific-empty",
             "graph-settings-close-on-outside",
-            "graph-settings-shift-plot",
-            "graph-settings-outside-close-store",
         ):
             self.assertIn(expected, component_ids)
-
-        shift_plot = next(
-            component
-            for component in self.components
-            if getattr(component, "id", None) == "graph-settings-shift-plot"
+        self.assertTrue(
+            any(
+                "graph-settings-drag-handle" in (getattr(component, "className", "") or "")
+                for component in self.components
+            )
         )
-        self.assertFalse(shift_plot.checked)
 
     def test_series_controls_use_compact_defaults(self):
         self.assertEqual(SwitchBubble.label, "Bubbles")
@@ -1327,20 +1362,25 @@ class GraphSettingsPanelTests(unittest.TestCase):
         self.assertTrue(expected_ids.issubset(component_ids))
 
     def test_internal_settings_ids_can_be_namespaced(self):
-        panel = GraphSettingsPanel(
+        settings = GraphSettingsPanel(
             self.controls,
             ids={
-                "drawer-simple": "sales-settings-drawer",
                 "InputSizePlot": "sales-graph-height",
             },
-        ).render()
+        ).bind_namespace("sales")
+        panel = settings.render()
         component_ids = {
             getattr(component, "id", None)
             for component in walk_components(panel)
         }
-        self.assertIn("sales-settings-drawer", component_ids)
+        self.assertIn("sales-graph-settings-popover", component_ids)
         self.assertIn("sales-graph-height", component_ids)
-        self.assertNotIn("drawer-simple", component_ids)
+        self.assertNotIn("graph-settings-popover", component_ids)
+
+    def test_settings_panel_cannot_be_shared_by_different_workspaces(self):
+        settings = GraphSettingsPanel(self.controls).bind_namespace("sales")
+        with self.assertRaises(ValueError):
+            settings.bind_namespace("inventory")
 
     def test_missing_settings_control_is_rejected(self):
         with self.assertRaises(ValueError):

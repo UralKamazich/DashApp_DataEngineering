@@ -11,7 +11,6 @@ import dash_mantine_components as dmc
 
 from dash_app import app
 from filter_panel import FILTERS_PANEL
-from layout import GRAPH_SETTINGS_PANEL
 from utils import classify_simple, create_value_control, read_df_from_store
 
 
@@ -191,72 +190,6 @@ clientside_callback(
     """.replace("__PANEL_CLOSED_CLASS__", FILTERS_PANEL.closed_class),
     Output("filters-drawer-open-state", "data", allow_duplicate=True),
     Input("filters-outside-close-store", "data"),
-    prevent_initial_call=True,
-)
-
-
-clientside_callback(
-    """
-    function (settingsOpen, filtersOpen) {
-        if (settingsOpen) {
-            window.dash_clientside.set_props(
-                "filters-drawer",
-                {className: __FILTERS_SETTINGS_OPEN_CLASS__}
-            );
-            if (filtersOpen) {
-                window.dash_clientside.set_props(
-                    "filters-drawer-open-state",
-                    {data: false}
-                );
-            }
-            return {panel: "settings", timestamp: Date.now()};
-        }
-        if (filtersOpen) {
-            return window.dash_clientside.no_update;
-        }
-        window.dash_clientside.set_props(
-            "filters-drawer",
-            {className: __FILTERS_CLOSED_CLASS__}
-        );
-        return {panel: null, timestamp: Date.now()};
-    }
-    """
-    .replace(
-        "__FILTERS_SETTINGS_OPEN_CLASS__",
-        json.dumps(FILTERS_PANEL.closed_class + " filters-drawer--settings-open"),
-    )
-    .replace("__FILTERS_CLOSED_CLASS__", json.dumps(FILTERS_PANEL.closed_class)),
-    Output("right-panels-coordination", "data"),
-    Input("drawer-simple-open-state", "data"),
-    State("filters-drawer-open-state", "data"),
-    prevent_initial_call=True,
-)
-
-
-clientside_callback(
-    """
-    function (filtersOpen, settingsOpen) {
-        if (!filtersOpen || !settingsOpen) {
-            return window.dash_clientside.no_update;
-        }
-        window.dash_clientside.set_props(
-            "drawer-simple",
-            {className: __SETTINGS_CLOSED_CLASS__}
-        );
-        window.dash_clientside.set_props(
-            "drawer-simple-open-state",
-            {data: false}
-        );
-        return {panel: "filters", timestamp: Date.now()};
-    }
-    """
-    .replace(
-        "__SETTINGS_CLOSED_CLASS__",
-        json.dumps(GRAPH_SETTINGS_PANEL.slide.closed_class),
-    ),
-    Output("right-panels-coordination", "data", allow_duplicate=True),
-    Input("filters-drawer-open-state", "data"),
-    State("drawer-simple-open-state", "data"),
     prevent_initial_call=True,
 )
 
