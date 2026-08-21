@@ -1374,6 +1374,26 @@ class GraphWorkspaceTests(unittest.TestCase):
         self.assertTrue(any("graph-drop-zone--x" in value for value in classes))
         self.assertTrue(any("graph-drop-zone--hover" in value for value in classes))
 
+    def test_z_zone_is_positioned_independently_from_secondary_fields(self):
+        layer = next(
+            component for component in self.components
+            if getattr(component, "className", None) == "graph-drop-layer"
+        )
+        direct_classes = {
+            getattr(component, "className", "") or ""
+            for component in layer.children
+        }
+        self.assertTrue(any("graph-drop-zone--z" in value for value in direct_classes))
+
+        secondary = next(
+            component for component in layer.children
+            if getattr(component, "className", None) == "graph-drop-secondary"
+        )
+        self.assertFalse(any(
+            "graph-drop-zone--z" in (getattr(component, "className", "") or "")
+            for component in walk_components(secondary)
+        ))
+
     def test_overlay_controls_are_outside_plotly_graph(self):
         graph = next(component for component in self.components if getattr(component, "id", None) == "test-graph")
         graph_descendants = {

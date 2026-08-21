@@ -244,14 +244,23 @@ class GraphWorkspace:
         )
 
     def _render_paper(self):
-        secondary = [self._drop_zone(field) for field in self.fields if field["zone"] == "secondary"]
+        z_zones = [self._drop_zone(field) for field in self.fields if field["key"] == "z"]
+        secondary = [
+            self._drop_zone(field)
+            for field in self.fields
+            if field["zone"] == "secondary" and field["key"] != "z"
+        ]
         axes = [self._drop_zone(field) for field in self.fields if field["zone"] != "secondary"]
         field_layer = []
         if self.fields:
             field_layer = [
                 html.Div(
                     className="graph-drop-layer",
-                    children=[*axes, html.Div(secondary, className="graph-drop-secondary")],
+                    children=[
+                        *axes,
+                        *z_zones,
+                        html.Div(secondary, className="graph-drop-secondary"),
+                    ],
                 ),
                 html.Div(
                     list(self.field_controls.values()),
