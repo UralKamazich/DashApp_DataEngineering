@@ -168,6 +168,7 @@ def create_layout():
                         dmc.Button(
                             "Выбрать файл (.xlsx, .pkl)",
                             id="pick-file-btn",
+                            className="dataset-file-picker dataset-file-drop-target",
                             size="xs",
                             variant="outline",
                             color="gray",

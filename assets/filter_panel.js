@@ -15,6 +15,15 @@
     });
   }
 
+  function openFiltersPanel() {
+    const drawer = document.getElementById("filters-drawer");
+    if (!drawer || drawer.classList.contains("open")) return;
+    window.dash_clientside.set_props("filters-drawer", {
+      className: (drawer.className + " open").trim()
+    });
+    window.dash_clientside.set_props("filters-drawer-open-state", {data: true});
+  }
+
   document.addEventListener("dragstart", function (event) {
     const badge = event.target.closest("[data-column-name]");
     if (!badge) return;
@@ -29,6 +38,7 @@
     if (!target || !draggedChannel) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+    if (target.id === "filters-side-tab") openFiltersPanel();
     targets().forEach(function (item) {
       item.classList.toggle("filter-drop-hover", item === target);
     });

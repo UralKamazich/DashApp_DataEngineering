@@ -161,7 +161,7 @@ FILTERS_PANEL = SlidePanel(
     tab_extra_children=[
         html.Span("0", id="filters-side-tab-count", className="filter-side-tab-count"),
     ],
-    extra_tab_classes="filter-side-tab",
+    extra_tab_classes="filter-side-tab filter-drop-target",
     content=_panel_content,
     extra_stores=[dcc.Store(id="filters-outside-close-store", data=False)],
 )

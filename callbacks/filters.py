@@ -11,7 +11,15 @@ import dash_mantine_components as dmc
 
 from dash_app import app
 from filter_panel import FILTERS_PANEL
-from utils import classify_simple, create_value_control, read_df_from_store
+from utils import (
+    FILTER_CATEGORY_ACTION_ALL,
+    FILTER_CATEGORY_ACTION_CLEAR,
+    FILTER_CATEGORY_ACTION_INVERT,
+    FILTER_CATEGORY_ACTION_VALUES,
+    classify_simple,
+    create_value_control,
+    read_df_from_store,
+)
 
 
 TYPE_MARKS = {
@@ -126,6 +134,8 @@ def _default_filter_value(frame, column, operator=None):
 def _clean_filter_state(filters_state):
     clean = {}
     for filter_id, config in (filters_state or {}).items():
+        if (config or {}).get("enabled", True) is False:
+            continue
         column = (config or {}).get("column")
         operator = (config or {}).get("operator")
         value = (config or {}).get("value")
@@ -155,6 +165,7 @@ def _filter_card(filter_id, column, filters_state, frame):
     filter_id = int(filter_id)
     column = str(column) if column else None
     config = (filters_state or {}).get(str(filter_id), {})
+    enabled = bool(config.get("enabled", True))
     current_value = config.get("value") if config.get("column") == column else None
     kind = _column_type(frame, column)
     operator = _normalise_operator(kind, config.get("operator"))
@@ -206,6 +217,24 @@ def _filter_card(filter_id, column, filters_state, frame):
                 create_value_control(filter_id, column, current_value, frame, operator),
                 id={"type": "filter-control", "index": filter_id},
                 className="filter-card-control",
+            ),
+            html.Button(
+                type="button",
+                id={"type": "filter-enabled", "index": filter_id},
+                className=(
+                    "filter-enabled-toggle is-enabled"
+                    if enabled
+                    else "filter-enabled-toggle is-disabled"
+                ),
+                title=(
+                    "Фильтр включён — нажмите, чтобы выключить"
+                    if enabled
+                    else "Фильтр выключен — нажмите, чтобы включить"
+                ),
+                **{
+                    "aria-label": "Переключить состояние фильтра",
+                    "aria-pressed": str(enabled).lower(),
+                },
             ),
         ],
         id=f"filter-card-{filter_id}",
@@ -362,6 +391,7 @@ def manage_filters(
                 "column": column,
                 "operator": operator,
                 "value": (config or {}).get("value"),
+                "enabled": bool((config or {}).get("enabled", True)),
             }
             domain = _filter_domain(frame, column)
             if domain is not None:
@@ -397,6 +427,7 @@ def manage_filters(
             "operator": operator,
             "value": _default_filter_value(frame, column, operator),
             "domain": _filter_domain(frame, column),
+            "enabled": True,
         }
     current.append(_filter_card(new_id, column, draft, frame))
     return current, new_id, draft, no_update, no_update, no_update
@@ -458,11 +489,15 @@ def update_filter_control(column, operator, column_id, filters_state, stored_jso
     Input({"type": "filter-column", "index": ALL}, "value"),
     Input({"type": "filter-operator", "index": ALL}, "value"),
     Input({"type": "filter-value", "index": ALL}, "value"),
+    Input({"type": "filter-category-value", "index": ALL}, "value"),
     Input({"type": "filter-range-value", "index": ALL}, "value"),
+    Input({"type": "filter-enabled", "index": ALL}, "n_clicks"),
     State({"type": "filter-column", "index": ALL}, "id"),
     State({"type": "filter-operator", "index": ALL}, "id"),
     State({"type": "filter-value", "index": ALL}, "id"),
+    State({"type": "filter-category-value", "index": ALL}, "id"),
     State({"type": "filter-range-value", "index": ALL}, "id"),
+    State({"type": "filter-enabled", "index": ALL}, "id"),
     State("filters-state", "data"),
     State("stored-data", "data"),
     State("meta-columns", "data"),
@@ -472,11 +507,15 @@ def update_filters_state(
     columns,
     operators,
     values,
+    category_values,
     range_values,
+    enabled_clicks,
     column_ids,
     operator_ids,
     value_ids,
+    category_value_ids,
     range_value_ids,
+    enabled_ids,
     filters_state,
     stored_json,
     meta,
@@ -493,10 +532,24 @@ def update_filters_state(
         for index, component_id in enumerate(value_ids or [])
         if index < len(values or [])
     }
+    category_values_by_id = {
+        str(component_id.get("index")): [
+            value
+            for value in (category_values[index] or [])
+            if value not in FILTER_CATEGORY_ACTION_VALUES
+        ]
+        for index, component_id in enumerate(category_value_ids or [])
+        if index < len(category_values or [])
+    }
     ranges_by_id = {
         str(component_id.get("index")): range_values[index]
         for index, component_id in enumerate(range_value_ids or [])
         if index < len(range_values or [])
+    }
+    enabled_clicks_by_id = {
+        str(component_id.get("index")): enabled_clicks[index]
+        for index, component_id in enumerate(enabled_ids or [])
+        if index < len(enabled_clicks or [])
     }
     triggered = ctx.triggered_id if isinstance(ctx.triggered_id, dict) else {}
     triggered_type = triggered.get("type")
@@ -530,13 +583,24 @@ def update_filters_state(
             value = None
         elif kind == "numeric" and operator == "between":
             value = ranges_by_id.get(filter_id, previous.get("value"))
+        elif kind == "categorical" and operator in {"in", "not_in"}:
+            value = category_values_by_id.get(filter_id, previous.get("value"))
         else:
             value = values_by_id.get(filter_id, previous.get("value"))
+
+        enabled = bool(previous.get("enabled", True))
+        if (
+            triggered_type == "filter-enabled"
+            and triggered_index == filter_id
+            and enabled_clicks_by_id.get(filter_id)
+        ):
+            enabled = not enabled
 
         config = {
             "column": str(column),
             "operator": operator,
             "value": value,
+            "enabled": enabled,
         }
         domain = _filter_domain(frame, column)
         if domain is not None:
@@ -548,6 +612,62 @@ def update_filters_state(
         for filter_id, config in updated.items()
         if filter_id in live_ids
     }
+
+
+@app.callback(
+    Output({"type": "filter-enabled", "index": MATCH}, "className"),
+    Output({"type": "filter-enabled", "index": MATCH}, "title"),
+    Output({"type": "filter-enabled", "index": MATCH}, "aria-pressed"),
+    Input({"type": "filter-enabled", "index": MATCH}, "n_clicks"),
+    State({"type": "filter-enabled", "index": MATCH}, "className"),
+    prevent_initial_call=True,
+)
+def update_filter_enabled_indicator(n_clicks, current_class):
+    if not n_clicks:
+        raise PreventUpdate
+    enabling = "is-disabled" in (current_class or "")
+    if enabling:
+        return (
+            "filter-enabled-toggle is-enabled",
+            "Фильтр включён — нажмите, чтобы выключить",
+            "true",
+        )
+    return (
+        "filter-enabled-toggle is-disabled",
+        "Фильтр выключен — нажмите, чтобы включить",
+        "false",
+    )
+
+
+@app.callback(
+    Output({"type": "filter-category-value", "index": MATCH}, "value"),
+    Input({"type": "filter-category-value", "index": MATCH}, "value"),
+    State({"type": "filter-category-value", "index": MATCH}, "data"),
+    prevent_initial_call=True,
+)
+def update_category_selection(selected, options):
+    selected = list(selected or [])
+    actions = [value for value in selected if value in FILTER_CATEGORY_ACTION_VALUES]
+    if not actions:
+        raise PreventUpdate
+
+    option_values = []
+    for group in options or []:
+        items = group.get("items", []) if isinstance(group, dict) else []
+        for item in items:
+            value = item.get("value") if isinstance(item, dict) else item
+            if value not in FILTER_CATEGORY_ACTION_VALUES:
+                option_values.append(value)
+
+    action = actions[-1]
+    if action == FILTER_CATEGORY_ACTION_ALL:
+        return option_values
+    if action == FILTER_CATEGORY_ACTION_CLEAR:
+        return []
+    if action == FILTER_CATEGORY_ACTION_INVERT:
+        selected_set = set(selected) - FILTER_CATEGORY_ACTION_VALUES
+        return [value for value in option_values if value not in selected_set]
+    raise PreventUpdate
 
 
 @app.callback(

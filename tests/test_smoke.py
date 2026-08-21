@@ -310,6 +310,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "dataset-close-on-outside",
             "dataset-drawer-open-state",
             "dataset-outside-close-store",
+            "dataset-file-drop-store",
             "columns-sidebar",
             "columns-badges",
         ):
@@ -319,10 +320,23 @@ class DashApplicationSmokeTests(unittest.TestCase):
             component for component in components
             if "filter-drop-target" in (getattr(component, "className", "") or "").split()
         ]
-        self.assertEqual(len(filter_drop_targets), 1)
-        self.assertIn(
-            "filter-panel-paper",
-            filter_drop_targets[0].className.split(),
+        self.assertEqual(len(filter_drop_targets), 2)
+        target_ids = {getattr(component, "id", None) for component in filter_drop_targets}
+        self.assertIn("filters-side-tab", target_ids)
+        self.assertTrue(any(
+            "filter-panel-paper" in component.className.split()
+            for component in filter_drop_targets
+        ))
+
+        dataset_drop_targets = [
+            component for component in components
+            if "dataset-file-drop-target"
+            in (getattr(component, "className", "") or "").split()
+        ]
+        self.assertEqual(len(dataset_drop_targets), 3)
+        self.assertEqual(
+            {getattr(component, "id", None) for component in dataset_drop_targets},
+            {"dataset-side-tab", "columns-sidebar", "pick-file-btn"},
         )
 
         graph_page = next(
@@ -521,6 +535,13 @@ class FilterPanelTests(unittest.TestCase):
             and component.id.get("type") == "filter-operator"
         ]
         self.assertEqual(operator_selects[0].value, "between")
+        enabled_toggles = [
+            component for component in walk_components(card)
+            if isinstance(getattr(component, "id", None), dict)
+            and component.id.get("type") == "filter-enabled"
+        ]
+        self.assertEqual(len(enabled_toggles), 1)
+        self.assertIn("is-enabled", enabled_toggles[0].className.split())
 
         date_control = create_value_control("date", "date", None, self.source)
         category_control = create_value_control("category", "category", None, self.source)
@@ -537,7 +558,14 @@ class FilterPanelTests(unittest.TestCase):
         self.assertTrue(category_select.withCheckIcon)
         self.assertEqual(category_select.checkIconPosition, "left")
         self.assertFalse(category_select.hidePickedOptions)
-        self.assertEqual(category_select.comboboxProps["width"], 220)
+        self.assertEqual(category_select.comboboxProps["width"], 240)
+        self.assertEqual(category_select.id["type"], "filter-category-value")
+        self.assertEqual(category_select.data[0]["group"], "Действия")
+        self.assertEqual(category_select.data[1]["group"], "Значения")
+        self.assertEqual(
+            [item["label"] for item in category_select.data[0]["items"]],
+            ["✓ Выбрать все", "× Снять выбор", "⇄ Инверт."],
+        )
 
     def test_filter_state_is_cleaned_before_apply(self):
         state = {
@@ -561,6 +589,12 @@ class FilterPanelTests(unittest.TestCase):
             },
             "2": {"column": "category", "operator": "is_empty", "value": None},
             "3": {"column": "value", "operator": "gt", "value": 2.0},
+            "4": {
+                "column": "category",
+                "operator": "in",
+                "value": ["A"],
+                "enabled": False,
+            },
         }
         self.assertEqual(
             _clean_filter_state(state),

@@ -34,6 +34,7 @@ def _panel_content():
                 shadow="sm",
                 p="xs",
                 withBorder=True,
+                className="dataset-panel-paper dataset-file-drop-target",
                 style={
                     "overflowY": "auto",
                     "overflowX": "hidden",
@@ -59,8 +60,12 @@ DATASET_PANEL = SlidePanel(
     tab_label="Датасет",
     tab_title="Показать или скрыть датасет",
     tab_style={"top": "10px"},
+    extra_tab_classes="dataset-side-tab dataset-file-drop-target",
     content=_panel_content,
-    extra_stores=[dcc.Store(id="dataset-outside-close-store", data=False)],
+    extra_stores=[
+        dcc.Store(id="dataset-outside-close-store", data=False),
+        dcc.Store(id="dataset-file-drop-store"),
+    ],
 )
 
 

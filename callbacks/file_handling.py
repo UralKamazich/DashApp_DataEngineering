@@ -34,9 +34,17 @@ def _clicked_sheet(n_clicks, ids, triggered_id=None):
     Output("source-file-path", "data"),
     Output("source-file-name", "data"),
     Input("pick-file-btn", "n_clicks"),
+    Input("dataset-file-drop-store", "data"),
     prevent_initial_call=True
 )
-def pick_local_file(n_clicks):
+def pick_local_file(n_clicks, dropped_file):
+    if dash.ctx.triggered_id == "dataset-file-drop-store":
+        path = str((dropped_file or {}).get("path") or "")
+        if not path:
+            raise PreventUpdate
+        name = str((dropped_file or {}).get("name") or os.path.basename(path))
+        return path, name
+
     if not n_clicks:
         raise PreventUpdate
     try:

@@ -21,6 +21,16 @@ from flask import request
 logger = logging.getLogger(__name__)
 
 
+FILTER_CATEGORY_ACTION_ALL = "__dashapp_filter_action_all__"
+FILTER_CATEGORY_ACTION_CLEAR = "__dashapp_filter_action_clear__"
+FILTER_CATEGORY_ACTION_INVERT = "__dashapp_filter_action_invert__"
+FILTER_CATEGORY_ACTION_VALUES = {
+    FILTER_CATEGORY_ACTION_ALL,
+    FILTER_CATEGORY_ACTION_CLEAR,
+    FILTER_CATEGORY_ACTION_INVERT,
+}
+
+
 def _shutdown_server():
     func = request.environ.get("werkzeug.server.shutdown")
     if func:
@@ -512,18 +522,31 @@ def create_value_control(
     unique_values = [str(value) for value in dff[column].dropna().unique().tolist()]
     selected = [str(value) for value in (current_value or [])]
     return dmc.MultiSelect(
-            id={"type": "filter-value", "index": filter_id},
-            data=[{"label": value, "value": value} for value in unique_values],
-            value=selected,
-            searchable=True,
-            clearable=True,
-            hidePickedOptions=False,
-            withCheckIcon=True,
-            checkIconPosition="left",
-            nothingFoundMessage="Значения не найдены",
-            placeholder="Выберите значения",
-            maxDropdownHeight=260,
-            comboboxProps={"withinPortal": True, "zIndex": 10020, "width": 220},
-            size="xs",
-            w="100%",
-        )
+        id={"type": "filter-category-value", "index": filter_id},
+        data=[
+            {
+                "group": "Действия",
+                "items": [
+                    {"label": "✓ Выбрать все", "value": FILTER_CATEGORY_ACTION_ALL},
+                    {"label": "× Снять выбор", "value": FILTER_CATEGORY_ACTION_CLEAR},
+                    {"label": "⇄ Инверт.", "value": FILTER_CATEGORY_ACTION_INVERT},
+                ],
+            },
+            {
+                "group": "Значения",
+                "items": [{"label": value, "value": value} for value in unique_values],
+            },
+        ],
+        value=selected,
+        searchable=True,
+        clearable=True,
+        hidePickedOptions=False,
+        withCheckIcon=True,
+        checkIconPosition="left",
+        nothingFoundMessage="Значения не найдены",
+        placeholder="Выберите значения",
+        maxDropdownHeight=260,
+        comboboxProps={"withinPortal": True, "zIndex": 10020, "width": 240},
+        size="xs",
+        w="100%",
+    )
