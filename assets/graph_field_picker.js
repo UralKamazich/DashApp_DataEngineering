@@ -244,12 +244,20 @@
     picker.style.top = top + "px";
   }
 
+  function pickerPortal(zone) {
+    const fullscreenHost = document.fullscreenElement;
+    if (fullscreenHost?.contains(zone)) return fullscreenHost;
+    return document.body;
+  }
+
   function openPicker(zone, x, y) {
     createPicker();
     activeZone = zone;
     datasetColumns = getDatasetColumns(zone);
 
     const picker = document.getElementById("graph-field-picker");
+    const portal = pickerPortal(zone);
+    if (picker.parentElement !== portal) portal.appendChild(picker);
     picker.querySelector(".field-picker-title").textContent =
       zone.getAttribute("data-default-label") || "Столбец";
     picker.querySelector(".field-picker-search").value = "";

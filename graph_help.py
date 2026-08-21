@@ -8,8 +8,8 @@
   settings — применимые настройки из панели «⚙ Настройки графика»;
   notes    — особенности и ограничения.
 
-Тексты отображаются в модалке по кнопке «?» в тулбаре графика
-(см. GraphWorkspace._help_modal).
+Тексты отображаются в немодальном окне по кнопке «?» в тулбаре графика
+(см. GraphWorkspace._help_window).
 """
 
 from dash import html
@@ -471,19 +471,7 @@ def _list_item(text: str):
 def render_instruction(chart_type):
     """Возвращает (children контейнера справки, заголовок модалки)."""
     info = GRAPH_INSTRUCTIONS.get(chart_type) or GRAPH_INSTRUCTIONS["Scatter"]
-    children = [
-        dmc.Text(info["purpose"], size="sm"),
-        html.Div(
-            [
-                html.Span("⚙", className="graph-help-control-icon"),
-                html.Span(
-                    "Кнопка ⚙ открывает настройки выбранного типа. "
-                    "Общие параметры графика доступны по правому клику.",
-                ),
-            ],
-            className="graph-help-control-hint",
-        ),
-    ]
+    children = [dmc.Text(info["purpose"], size="xs")]
     sections = (
         ("fields", "Поля"),
         ("reading", "Как читать"),
@@ -494,12 +482,12 @@ def render_instruction(chart_type):
         items = info.get(key) or []
         if not items:
             continue
-        children.append(dmc.Text(section_title, fw=700, size="sm", mt="sm"))
+        children.append(dmc.Text(section_title, fw=700, size="xs", mt=7))
         children.append(
             dmc.List(
                 [_list_item(item) for item in items],
-                size="sm",
-                spacing=4,
+                size="xs",
+                spacing=2,
             )
         )
     return children, info["title"]

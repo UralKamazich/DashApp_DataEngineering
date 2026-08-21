@@ -69,14 +69,14 @@ class GraphSettingsPanel:
         if missing:
             raise ValueError(f"Missing graph settings controls: {sorted(missing)}")
 
-        # Mantine renders Select menus in a body-level portal. Its default
-        # layer (300) is below our movable settings window (10020), making a
-        # menu look as though it did not open. Apply the fix to every current
-        # and future combobox control supplied to this panel.
+        # Keep every Select dropdown inside its GraphWorkspace Paper. This is
+        # required by the browser's native fullscreen top layer and also keeps
+        # settings instance-scoped in future multi-graph dashboards.
         for control in controls.values():
             if hasattr(control, "comboboxProps"):
                 combobox_props = dict(getattr(control, "comboboxProps", None) or {})
                 combobox_props["zIndex"] = SETTINGS_COMBOBOX_Z_INDEX
+                combobox_props["withinPortal"] = False
                 control.comboboxProps = combobox_props
 
     def bind_namespace(self, namespace: str):

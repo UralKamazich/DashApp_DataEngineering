@@ -69,6 +69,12 @@
     const menu = document.getElementById("graph-ctx-menu");
     if (!menu) return;
 
+    const fullscreenHost = document.fullscreenElement;
+    const portal = fullscreenHost?.contains(_activeWorkspace)
+      ? fullscreenHost
+      : document.body;
+    if (menu.parentElement !== portal) portal.appendChild(menu);
+
     _menuOrigin = {x: x, y: y};
     const settingsItem = menu.querySelector('[data-action="open-settings"]');
     if (settingsItem) {

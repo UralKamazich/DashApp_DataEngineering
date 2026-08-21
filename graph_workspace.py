@@ -183,6 +183,7 @@ class GraphWorkspace:
             "sync": f"{graph_id}-sync",
             "help": f"{graph_id}-help",
             "help_modal": f"{graph_id}-help-modal",
+            "help_title": f"{graph_id}-help-title",
             "help_type": f"{graph_id}-help-type",
             "help_content": f"{graph_id}-help-content",
             "help_close": f"{graph_id}-help-close",
@@ -280,6 +281,7 @@ class GraphWorkspace:
             "data-action-save-png": self.ids["save_png"],
             "data-action-clear-graph": self.ids["clear"],
             "data-action-help": self.ids["help"],
+            "data-help-window-id": self.ids["help_modal"],
             "data-chart-type-id": self.chart_type_id,
             "data-chart-type-options": json.dumps(
                 self.chart_type_options, ensure_ascii=False
@@ -298,6 +300,55 @@ class GraphWorkspace:
                 "data-action-open-specific-settings": self.ids["open_settings"],
             })
 
+        workspace_content = html.Div(
+            id=self.workspace_id,
+            className="graph-workspace",
+            **workspace_data,
+            children=[
+                # The real Dash control remains mounted as state. Its
+                # compact mirror is injected into Plotly's modebar.
+                html.Div(
+                    self.chart_type_control,
+                    className="graph-modebar-state",
+                    **{"aria-hidden": "true"},
+                ),
+                dcc.Loading(
+                    dcc.Graph(
+                        figure={},
+                        id=self.graph_id,
+                        className="graph-workspace-plot",
+                        config={
+                            "displaylogo": False,
+                            "modeBarButtonsToRemove": [
+                                "zoom2d",
+                                "pan2d",
+                                "zoomIn2d",
+                                "zoomOut2d",
+                                "autoScale2d",
+                                "select2d",
+                                "lasso2d",
+                                "zoom3d",
+                                "pan3d",
+                            ],
+                            "displayModeBar": "hover",
+                            "scrollZoom": True,
+                            "responsive": True,
+                        },
+                        style={"height": "100%", "width": "100%"},
+                    ),
+                    type="default",
+                    className="graph-workspace-spinner",
+                    parent_className="graph-workspace-loading",
+                    parent_style={"height": "100%", "width": "100%"},
+                ),
+                *field_layer,
+            ],
+        )
+        paper_children = [workspace_content]
+        if self.settings_panel is not None:
+            paper_children.append(self.settings_panel.render())
+        paper_children.append(self._help_window())
+
         return dmc.Paper(
             id=self.paper_id,
             className="graph-workspace-shell graph-fullscreen-host",
@@ -307,50 +358,7 @@ class GraphWorkspace:
                 "height": self._pixel_size(self.initial_height, "750px"),
                 "width": self._pixel_size(self.initial_width, "100%"),
             },
-            children=html.Div(
-                id=self.workspace_id,
-                className="graph-workspace",
-                **workspace_data,
-                children=[
-                    # The real Dash control remains mounted as state. Its
-                    # compact mirror is injected into Plotly's modebar.
-                    html.Div(
-                        self.chart_type_control,
-                        className="graph-modebar-state",
-                        **{"aria-hidden": "true"},
-                    ),
-                    dcc.Loading(
-                        dcc.Graph(
-                            figure={},
-                            id=self.graph_id,
-                            className="graph-workspace-plot",
-                            config={
-                                "displaylogo": False,
-                                "modeBarButtonsToRemove": [
-                                    "zoom2d",
-                                    "pan2d",
-                                    "zoomIn2d",
-                                    "zoomOut2d",
-                                    "autoScale2d",
-                                    "select2d",
-                                    "lasso2d",
-                                    "zoom3d",
-                                    "pan3d",
-                                ],
-                                "displayModeBar": "hover",
-                                "scrollZoom": True,
-                                "responsive": True,
-                            },
-                            style={"height": "100%", "width": "100%"},
-                        ),
-                        type="default",
-                        className="graph-workspace-spinner",
-                        parent_className="graph-workspace-loading",
-                        parent_style={"height": "100%", "width": "100%"},
-                    ),
-                    *field_layer,
-                ],
-            ),
+            children=paper_children,
         )
 
     def _color_modal(self):
@@ -377,46 +385,73 @@ class GraphWorkspace:
             ],
         )
 
-    def _help_modal(self):
+    def _help_window(self):
         default_type = self.help_default_type
         content, title = render_instruction(default_type)
-        return dmc.Modal(
+        return html.Section(
             id=self.ids["help_modal"],
-            title=title,
-            opened=False,
-            size="lg",
-            zIndex=1000,
-            centered=True,
-            className="graph-help-modal",
+            className="graph-help-window",
+            role="dialog",
+            **{
+                "aria-hidden": "true",
+                "aria-modal": "false",
+                "aria-labelledby": self.ids["help_title"],
+            },
             children=[
-                dmc.Select(
-                    id=self.ids["help_type"],
-                    label="Тип графика",
-                    data=self.help_options,
-                    value=default_type,
-                    allowDeselect=False,
-                    clearable=False,
-                    comboboxProps={"shadow": "md", "withinPortal": True, "zIndex": 1100},
-                    mb="sm",
+                html.Header(
+                    [
+                        html.Div(
+                            [
+                                dmc.Text("Справка по графику", size="10px", c="dimmed"),
+                                dmc.Text(title, id=self.ids["help_title"], fw=700, size="xs"),
+                            ],
+                            className="graph-help-window-heading",
+                        ),
+                        html.Button(
+                            "×",
+                            type="button",
+                            className="graph-help-window-close",
+                            title="Закрыть справку",
+                            **{"aria-label": "Закрыть справку"},
+                        ),
+                    ],
+                    className="graph-help-window-header",
                 ),
-                dmc.ScrollArea(
-                    dmc.Stack(id=self.ids["help_content"], gap="xs", children=content),
-                    h="min(58dvh, 540px)",
-                    type="auto",
-                    scrollbars="y",
-                    offsetScrollbars="y",
-                    scrollbarSize=8,
-                    className="graph-help-scroll",
-                ),
-                dmc.Group(
-                    dmc.Button(
-                        "Закрыть",
-                        id=self.ids["help_close"],
-                        variant="default",
-                        size="xs",
-                    ),
-                    justify="flex-end",
-                    mt="md",
+                html.Div(
+                    [
+                        dmc.Select(
+                            id=self.ids["help_type"],
+                            label="Тип графика",
+                            data=self.help_options,
+                            value=default_type,
+                            allowDeselect=False,
+                            clearable=False,
+                            size="xs",
+                            comboboxProps={"shadow": "md", "withinPortal": False, "zIndex": 10050},
+                            mb=8,
+                        ),
+                        dmc.ScrollArea(
+                            dmc.Stack(id=self.ids["help_content"], gap="xs", children=content),
+                            h="min(48dvh, 450px)",
+                            type="auto",
+                            scrollbars="y",
+                            offsetScrollbars="y",
+                            scrollbarSize=8,
+                            className="graph-help-scroll",
+                        ),
+                        dmc.Group(
+                            dmc.Button(
+                                "Закрыть",
+                                id=self.ids["help_close"],
+                                variant="default",
+                                size="xs",
+                                className="graph-help-window-close",
+                            ),
+                            justify="flex-end",
+                            mt=8,
+                        ),
+                    ],
+                    className="graph-help-window-body",
                 ),
             ],
         )
@@ -449,11 +484,8 @@ class GraphWorkspace:
     def render(self):
         """Return the complete component tree, not only its Plotly paper."""
         children = [self._render_paper()]
-        if self.settings_panel is not None:
-            children.append(self.settings_panel.render())
         if self.include_color_controls:
             children.append(self._color_modal())
-        children.append(self._help_modal())
         children.append(self._service_components())
         return html.Div(
             children,
@@ -777,7 +809,6 @@ class GraphWorkspace:
 
     def _register_help_callbacks(self, app):
         @app.callback(
-            Output(self.ids["help_modal"], "opened", allow_duplicate=True),
             Output(self.ids["help_type"], "value"),
             Input(self.ids["help"], "n_clicks"),
             State(self.chart_type_id, "value"),
@@ -787,29 +818,15 @@ class GraphWorkspace:
             if not n_clicks:
                 raise PreventUpdate
             known = chart_type if chart_type in GRAPH_INSTRUCTIONS else self.help_default_type
-            return True, known
+            return known
 
         @app.callback(
             Output(self.ids["help_content"], "children"),
-            Output(self.ids["help_modal"], "title"),
+            Output(self.ids["help_title"], "children"),
             Input(self.ids["help_type"], "value"),
         )
         def render_help(chart_type):
             return render_instruction(chart_type)
-
-        app.clientside_callback(
-            """
-            function(nClicks) {
-                if (!nClicks) {
-                    return window.dash_clientside.no_update;
-                }
-                return false;
-            }
-            """,
-            Output(self.ids["help_modal"], "opened", allow_duplicate=True),
-            Input(self.ids["help_close"], "n_clicks"),
-            prevent_initial_call=True,
-        )
 
     def _register_color_callbacks(self, app):
         picker_type = f"{self.graph_id}-color-picker"

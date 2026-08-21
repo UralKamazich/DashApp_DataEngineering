@@ -26,7 +26,7 @@
       button.addEventListener("click", function (event) {
         event.preventDefault();
         event.stopPropagation();
-        onClick(button);
+        onClick(button, event);
       });
     }
     return button;
@@ -122,7 +122,15 @@
 
     var helpId = workspace.getAttribute("data-action-help");
     if (helpId) {
-      group.appendChild(makeIconButton("?", "Справка по типу графика", "modebar-help-custom", function () {
+      group.appendChild(makeIconButton("?", "Справка по типу графика", "modebar-help-custom", function (button, event) {
+        if (window.graphHelpWindow) {
+          var rect = button.getBoundingClientRect();
+          window.graphHelpWindow.open(
+            workspace,
+            event.clientX || rect.left + rect.width / 2,
+            event.clientY || rect.bottom
+          );
+        }
         clickDashAction(helpId);
       }));
     }

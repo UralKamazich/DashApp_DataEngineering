@@ -24,6 +24,11 @@
     display: flex;
 }
 
+.graph-settings-popover:has(.mantine-Popover-dropdown),
+.graph-settings-scroll:has(.mantine-Popover-dropdown) {
+    overflow: visible;
+}
+
 .graph-settings-popover-header {
     display: flex;
     flex: 0 0 auto;

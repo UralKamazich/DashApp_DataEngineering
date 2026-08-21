@@ -104,6 +104,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/context_menu.css": "text/css",
             "/assets/graph_settings.css": "text/css",
             "/assets/graph_settings_popover.js": "text/javascript",
+            "/assets/graph_help_window.js": "text/javascript",
             "/assets/graph_context_menu.js": "text/javascript",
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
@@ -126,12 +127,22 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("aria-controls", script)
         self.assertIn("ownsPortalTarget(popup, event.target)", script)
 
+    def test_field_picker_moves_inside_native_fullscreen_host(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_field_picker.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn("function pickerPortal(zone)", script)
+        self.assertIn("document.fullscreenElement", script)
+        self.assertIn("fullscreenHost?.contains(zone)", script)
+        self.assertIn("portal.appendChild(picker)", script)
+
     def test_graph_context_menu_blocks_right_button_drag_before_plotly(self):
         script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_context_menu.js"
         script = script_path.read_text(encoding="utf-8")
         self.assertIn('e.button !== 2', script)
         self.assertIn('e.stopImmediatePropagation()', script)
         self.assertIn('".graph-workspace-plot"', script)
+        self.assertIn("fullscreenHost?.contains(_activeWorkspace)", script)
+        self.assertIn("portal.appendChild(menu)", script)
         self.assertNotIn('menuItem("save-png"', script)
 
     def test_graph_modebar_owns_compact_workspace_controls(self):
@@ -1533,6 +1544,11 @@ class GraphWorkspaceTests(unittest.TestCase):
         )
         self.assertEqual(paper.style["height"], "750px")
         self.assertEqual(paper.style["width"], "100%")
+        paper_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(paper)
+        }
+        self.assertIn(self.component.ids["help_modal"], paper_ids)
 
         descendant_ids = {
             getattr(component, "id", None)
@@ -1617,6 +1633,16 @@ class GraphWorkspaceTests(unittest.TestCase):
 
         self.assertIn("sales-graph-settings-popover", component_ids)
         self.assertIn("sales-InputSizePlot", component_ids)
+        paper = next(
+            component for component in components
+            if getattr(component, "id", None) == "sales-paper"
+        )
+        paper_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(paper)
+        }
+        self.assertIn("sales-graph-settings-popover", paper_ids)
+        self.assertIn(workspace.ids["help_modal"], paper_ids)
         self.assertEqual(
             workspace_props["data-settings-popup-id"],
             "sales-graph-settings-popover",
@@ -1748,12 +1774,28 @@ class GraphWorkspaceTests(unittest.TestCase):
             any("inventory-dashboard-paper.style" in key for key in test_app.callback_map)
         )
 
-    def test_help_button_and_modal_are_rendered(self):
+    def test_help_button_and_nonmodal_window_are_rendered(self):
         descendant_ids = {
             getattr(component, "id", None) for component in self.components
         }
-        for key in ("help", "help_modal", "help_type", "help_content", "help_close"):
+        for key in ("help", "help_modal", "help_title", "help_type", "help_content", "help_close"):
             self.assertIn(self.component.ids[key], descendant_ids)
+        help_window = next(
+            component for component in self.components
+            if getattr(component, "id", None) == self.component.ids["help_modal"]
+        )
+        props = help_window.to_plotly_json()["props"]
+        self.assertIn("graph-help-window", help_window.className.split())
+        self.assertEqual(props["aria-modal"], "false")
+        self.assertEqual(props["aria-hidden"], "true")
+
+    def test_help_window_is_dragged_and_closed_only_explicitly(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_help_window.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn('event.target.closest(".graph-help-window-close")', script)
+        self.assertIn('document.addEventListener("pointermove"', script)
+        self.assertIn("window.graphHelpWindow", script)
+        self.assertNotIn('document.addEventListener("keydown"', script)
 
 
 class GraphHelpTests(unittest.TestCase):
@@ -1906,6 +1948,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
                     select.comboboxProps.get("zIndex"),
                     SETTINGS_COMBOBOX_Z_INDEX,
                 )
+                self.assertFalse(select.comboboxProps.get("withinPortal"))
 
     def test_settings_panel_keeps_existing_callback_ids(self):
         component_ids = {
