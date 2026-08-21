@@ -535,6 +535,18 @@ html.graph-fullscreen-active body {
     color: #1864ab;
 }
 
+.graph-drop-zone.as-categorical .graph-drop-zone-name::after {
+    content: "Aa";
+    position: relative;
+    top: -3px;
+    margin-left: 3px;
+    color: #845ef7;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
 .graph-zone-clear {
     display: none;
     width: 20px;
@@ -853,23 +865,38 @@ html.graph-fullscreen-active body {
     color: #adb5bd;
 }
 
-.field-picker-order {
+.field-picker-controls-row {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 7px;
+    justify-content: space-between;
+    gap: 12px;
     margin-top: 9px;
 }
 
-.field-picker-order-label {
+.field-picker-order,
+.field-picker-category-mode {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.field-picker-order-label,
+.field-picker-category-label {
     color: #adb5bd;
     font-size: 10px;
     font-weight: 650;
+    white-space: nowrap;
     transition: color 0.1s;
 }
 
-.field-picker-order-label.is-active {
+.field-picker-order-label.is-active,
+.field-picker-category-label.is-active {
     color: #1971c2;
+}
+
+.field-picker-category-mode.is-disabled {
+    opacity: 0.42;
 }
 
 .field-picker-switch {
@@ -886,6 +913,10 @@ html.graph-fullscreen-active body {
 
 .field-picker-switch[aria-checked="true"] {
     background: #339af0;
+}
+
+.field-picker-switch:disabled {
+    cursor: not-allowed;
 }
 
 .field-picker-switch-knob {

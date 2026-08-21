@@ -174,6 +174,7 @@ class GraphWorkspace:
             "change_colors": f"{graph_id}-change-colors",
             "clear": f"{graph_id}-clear",
             "view_revision": f"{graph_id}-view-revision",
+            "field_modes": f"{graph_id}-field-modes",
             "color_modal": f"{graph_id}-color-modal",
             "color_inputs": f"{graph_id}-color-inputs",
             "color_mode": f"{graph_id}-color-mode",
@@ -240,6 +241,7 @@ class GraphWorkspace:
                 "data-drop-target": target_id,
                 "data-drop-mode": field.get("mode", "replace"),
                 "data-default-label": field["label"],
+                "data-field-key": field["key"],
             },
         )
 
@@ -285,6 +287,8 @@ class GraphWorkspace:
             "data-chart-type-value": str(
                 getattr(self.chart_type_control, "value", "") or ""
             ),
+            "data-field-mode-store-id": self.ids["field_modes"],
+            "data-field-modes": "{}",
         }
         if self.include_color_controls:
             workspace_data["data-action-change-colors"] = self.ids["change_colors"]
@@ -420,6 +424,7 @@ class GraphWorkspace:
     def _service_components(self):
         children = [
             dcc.Store(id=self.ids["view_revision"], data=0),
+            dcc.Store(id=self.ids["field_modes"], data={}),
             dcc.Store(id=self.ids["custom_colors"], data={}),
             dcc.Store(id=self.ids["sync"]),
             html.Button("download-html", id=self.ids["download_html"]),
@@ -509,6 +514,7 @@ class GraphWorkspace:
             for field in self.fields
         ]
         outputs.append(Output(self.ids["view_revision"], "data"))
+        outputs.append(Output(self.ids["field_modes"], "data"))
         empty_values = [
             [] if field.get("mode") == "append" else None
             for field in self.fields
@@ -524,6 +530,7 @@ class GraphWorkspace:
 {recovery_script}
                 var values = {json.dumps(empty_values, ensure_ascii=False)};
                 values.push((Number(currentRevision) || 0) + 1);
+                values.push({{}});
                 return values;
             }}
             """,
@@ -538,12 +545,14 @@ class GraphWorkspace:
             return
         targets = [self.field_ids[field["target"]] for field in self.fields]
         inputs = [Input(target, "value") for target in targets]
+        inputs.append(Input(self.ids["field_modes"], "data"))
 
         app.clientside_callback(
             f"""
             function() {{
                 var targets = {json.dumps(targets, ensure_ascii=False)};
                 var values = Array.prototype.slice.call(arguments);
+                var fieldModes = values.pop() || {{}};
                 var byTarget = {{}};
                 targets.forEach(function(target, index) {{ byTarget[target] = values[index]; }});
                 var workspace = document.getElementById({json.dumps(self.workspace_id)});
@@ -554,13 +563,20 @@ class GraphWorkspace:
                     var hasValue = Array.isArray(value) ? value.length > 0 : Boolean(value);
                     var valueElement = zone.querySelector('.graph-drop-zone-value');
                     if (valueElement) {{
-                        valueElement.textContent = Array.isArray(value)
+                        var displayValue = Array.isArray(value)
                             ? (value.join(', ') || 'Не выбрано')
                             : (value || 'Не выбрано');
+                        valueElement.textContent = displayValue;
+                        valueElement.title = displayValue;
                     }}
                     zone.setAttribute('data-current-value', JSON.stringify(value ?? null));
                     zone.classList.toggle('has-value', hasValue);
+                    zone.classList.toggle(
+                        'as-categorical',
+                        Boolean(fieldModes[zone.getAttribute('data-field-key')])
+                    );
                 }});
+                workspace.setAttribute('data-field-modes', JSON.stringify(fieldModes));
                 return Date.now();
             }}
             """,

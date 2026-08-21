@@ -49,6 +49,63 @@ RIDGE_GRID_SIZE = 180
 MAX_RIDGE_GROUPS = 60
 MAX_PIE_SLICES = 30
 
+# Temporary categorical rendering is intentionally bounded. Axis categories
+# are relatively cheap; color groups and facets multiply traces/subplots and
+# therefore use stricter limits.
+TEMPORARY_CATEGORY_LIMITS = {
+    "x": 1500,
+    "y": 1500,
+    "z": 1500,
+    "color": 120,
+    "text": 1500,
+    "facet-row": 24,
+    "facet-col": 24,
+    "hover": 1500,
+}
+
+
+def _temporary_category_frame(source, field_modes, columns_by_field):
+    """Return a shallow display frame with selected roles made categorical.
+
+    Only category labels and integer codes are allocated. ``source`` and its
+    backing arrays are never modified, so filtered/original stores remain the
+    source of truth.
+    """
+    modes = field_modes if isinstance(field_modes, dict) else {}
+    active_fields = {
+        field for field, enabled in modes.items()
+        if enabled and field in TEMPORARY_CATEGORY_LIMITS
+    }
+    requests = {}
+    for field in active_fields:
+        columns = columns_by_field.get(field)
+        if not isinstance(columns, (list, tuple, set)):
+            columns = [columns]
+        for column in columns:
+            if column and column in source.columns:
+                requests.setdefault(column, []).append(field)
+
+    if not requests:
+        return source.copy(deep=False), active_fields, None
+
+    frame = source.copy(deep=False)
+    for column, fields in requests.items():
+        codes, unique_values = pd.factorize(
+            source[column], sort=False, use_na_sentinel=True
+        )
+        limit = min(TEMPORARY_CATEGORY_LIMITS[field] for field in fields)
+        if len(unique_values) > limit:
+            roles = ", ".join(sorted(fields))
+            return None, active_fields, (
+                f"Поле «{column}» содержит {len(unique_values)} уникальных "
+                f"значений. Для временного режима As categorical "
+                f"в поле {roles} допустимо не более {limit}. "
+                "Сузьте данные фильтром или верните Dataset."
+            )
+        labels = [str(value) for value in unique_values]
+        frame[column] = pd.Categorical.from_codes(codes, categories=labels)
+    return frame, active_fields, None
+
 
 def _color_with_alpha(color, alpha=0.34):
     """Return a Plotly/CSS color with alpha when its format is known."""
@@ -555,9 +612,18 @@ def _prepare_hierarchy_frame(plot_df, path, values):
     return frame
 
 
-def _graph_uirevision(chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision=0):
+def _graph_uirevision(
+    chart_type, x_col, y_col, z_col, facet_row, facet_col,
+    view_revision=0, categorical_fields=None,
+):
     """Keep user zoom while the chart keeps the same coordinate system."""
-    parts = (chart_type, x_col, y_col, z_col, facet_row, facet_col, view_revision or 0)
+    categorical_key = ",".join(sorted(
+        field for field, enabled in (categorical_fields or {}).items() if enabled
+    ))
+    parts = (
+        chart_type, x_col, y_col, z_col, facet_row, facet_col,
+        view_revision or 0, categorical_key,
+    )
     return "graph-view:" + "|".join("" if value is None else str(value) for value in parts)
 
 
@@ -588,7 +654,8 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       dropdown_sort_column, axes_category, dropdown_overlay, legend, custom_colors,
                       tick_step_x, tick_step_y, legend_order, legend_custom_order, meta,
                       pie_aggregation="sum",
-                      bar_aggregation="sum"):
+                      bar_aggregation="sum",
+                      categorical_fields=None):
 
     empty = _empty_fig(selected_style)
     try:
@@ -619,20 +686,39 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         facet_row = facet_row if (facet_row and facet_row in dff.columns) else None
         facet_col = facet_col if (facet_col and facet_col in dff.columns) else None
-        text_data = dff[text_col] if (text_col and text_col in dff.columns and not dff.empty) else None
+        plot_df, temporary_category_fields, category_error = _temporary_category_frame(
+            dff,
+            categorical_fields,
+            {
+                "x": x_col,
+                "y": y_col,
+                "z": z_col,
+                "color": color_col,
+                "text": text_col,
+                "facet-row": facet_row,
+                "facet-col": facet_col,
+                "hover": hover_cols or [],
+            },
+        )
+        if category_error:
+            return empty, _make_error_notif(category_error)
+        text_data = (
+            plot_df[text_col]
+            if text_col and text_col in plot_df.columns and not plot_df.empty
+            else None
+        )
 
-        plot_df = dff.copy()
         def _valid(col):
             return bool(col) and (col in plot_df.columns)
         carg = color_col if _valid(color_col) else None
         sarg = size_col  if (bubble and _valid(size_col)) else None
 
         meta = meta or {"numeric": [], "categorical": [], "datetime": []}
-        x_as_text = needs_text_axis(x_col, meta)
-        y_as_text = needs_text_axis(y_col, meta)
-        if x_as_text:
+        x_as_text = needs_text_axis(x_col, meta) or "x" in temporary_category_fields
+        y_as_text = needs_text_axis(y_col, meta) or "y" in temporary_category_fields
+        if x_as_text and "x" not in temporary_category_fields:
             plot_df[x_col] = plot_df[x_col].astype(str)
-        if y_as_text:
+        if y_as_text and "y" not in temporary_category_fields:
             plot_df[y_col] = plot_df[y_col].astype(str)
 
         fig = go.Figure()
@@ -878,7 +964,7 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
             # styling intentionally do not participate in the key.
             uirevision=_graph_uirevision(
                 chart_type, x_col, y_col, z_col, facet_row, facet_col,
-                view_revision,
+                view_revision, categorical_fields,
             ),
         )
 
@@ -939,6 +1025,7 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
     State("meta-columns", "data"),
     Input(GRAPH_WORKSPACE.settings_control_id("pie_aggregation"), "value"),
     Input(GRAPH_WORKSPACE.settings_control_id("bar_aggregation"), "value"),
+    Input(GRAPH_WORKSPACE.ids["field_modes"], "data"),
     prevent_initial_call=True,
 )
 def update_main_graph(*args, **kwargs):

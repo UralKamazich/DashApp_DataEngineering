@@ -29,6 +29,7 @@ from callbacks.graph import (
     build_main_figure,
     _graph_uirevision,
     _primary_axis_errors,
+    _temporary_category_frame,
     update_main_graph,
 )
 from callbacks.pipeline import apply_filters
@@ -139,6 +140,13 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn('"modebar-settings-custom"', script)
         self.assertIn('"modebar-help-custom"', script)
         self.assertIn('reset.insertAdjacentElement("afterend", button)', script)
+
+    def test_field_picker_has_temporary_categorical_switch(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_field_picker.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn("field-picker-category-switch", script)
+        self.assertIn("data-field-mode-store-id", script)
+        self.assertIn("writeFieldMode", script)
 
     def test_graph_fullscreen_control_uses_scoped_host(self):
         script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_fullscreen.js"
@@ -800,6 +808,87 @@ class GraphAxisValidationTests(unittest.TestCase):
             original,
             _graph_uirevision("Scatter", "x", "y", None, None, None, 1),
         )
+        self.assertNotEqual(
+            original,
+            _graph_uirevision(
+                "Scatter", "x", "y", None, None, None, 0, {"x": True}
+            ),
+        )
+
+    def test_temporary_category_frame_is_shallow_and_does_not_mutate_source(self):
+        source = pd.DataFrame({"depth": [100.0, 200.0, 100.0], "value": [1, 2, 3]})
+
+        frame, active, error = _temporary_category_frame(
+            source,
+            {"x": True},
+            {"x": "depth"},
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(active, {"x"})
+        self.assertTrue(isinstance(frame["depth"].dtype, pd.CategoricalDtype))
+        self.assertEqual(list(frame["depth"]), ["100.0", "200.0", "100.0"])
+        self.assertTrue(pd.api.types.is_float_dtype(source["depth"]))
+
+    def test_temporary_category_frame_guards_expensive_group_counts(self):
+        source = pd.DataFrame({"group": range(121)})
+
+        frame, _active, error = _temporary_category_frame(
+            source,
+            {"color": True},
+            {"color": "group"},
+        )
+
+        self.assertIsNone(frame)
+        self.assertIn("121 уникальных", error)
+        self.assertIn("не более 120", error)
+
+    def test_numeric_x_can_render_as_a_temporary_category(self):
+        source = pd.DataFrame({"marker": [10, 20, 10], "value": [1.0, 2.0, 3.0]})
+        figure, notifications = build_main_figure(
+            n_clicks=1,
+            x_col="marker",
+            y_col="value",
+            z_col=None,
+            color_col=None,
+            size_col=None,
+            text_col=None,
+            dropdown_text_pozition="top right",
+            chart_type="Scatter",
+            bubble=False,
+            MaxSizeBubble=30,
+            height=550,
+            width=None,
+            selected_style="plotly",
+            bar_text_auto=True,
+            view_revision=0,
+            filtered_json=source.to_json(orient="split"),
+            hover_cols=None,
+            facet_row=None,
+            facet_col=None,
+            filters_state={},
+            xaxis_font_size=14,
+            yaxis_font_size=14,
+            font_size_ticks=12,
+            title_font_size=16,
+            dropdown_sort_column="trace",
+            axes_category="auto",
+            dropdown_overlay="overlay",
+            legend="top-right-outside",
+            custom_colors=None,
+            tick_step_x=0,
+            tick_step_y=0,
+            legend_order="alphabetical",
+            legend_custom_order="",
+            meta={"numeric": ["marker", "value"], "categorical": [], "datetime": []},
+            pie_aggregation="sum",
+            bar_aggregation="sum",
+            categorical_fields={"x": True},
+        )
+
+        self.assertEqual(notifications, [])
+        self.assertEqual(list(figure.data[0].x), ["10", "20", "10"])
+        self.assertEqual(figure.layout.xaxis.type, "category")
 
     def test_y_only_is_allowed_for_regular_charts(self):
         for chart_type in Y_ONLY_CHART_TYPES:
@@ -1433,6 +1522,7 @@ class GraphWorkspaceTests(unittest.TestCase):
             self.component.ids["save_png"],
             self.component.ids["clear"],
             self.component.ids["view_revision"],
+            self.component.ids["field_modes"],
             self.component.ids["custom_colors"],
             self.component.ids["help"],
         }

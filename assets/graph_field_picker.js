@@ -7,6 +7,9 @@
   let datasetColumns = [];
   let sortColumns = false;
   const dropTargetSelector = ".graph-drop-zone, .correlation-channel-drop";
+  const categoricalFields = new Set([
+    "x", "y", "z", "color", "text", "facet-row", "facet-col", "hover"
+  ]);
 
   function readZoneValue(zone) {
     try {
@@ -21,6 +24,31 @@
     if (!targetId) return;
     zone.setAttribute("data-current-value", JSON.stringify(value));
     window.dash_clientside.set_props(targetId, { value });
+  }
+
+  function readFieldModes(zone) {
+    const workspace = zone?.closest(".graph-workspace");
+    try {
+      return JSON.parse(workspace?.getAttribute("data-field-modes") || "{}");
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function writeFieldMode(zone, asCategorical) {
+    const workspace = zone?.closest(".graph-workspace");
+    const fieldKey = zone?.getAttribute("data-field-key");
+    const storeId = workspace?.getAttribute("data-field-mode-store-id");
+    if (!workspace || !fieldKey || !storeId) return;
+
+    const modes = readFieldModes(zone);
+    if (asCategorical) modes[fieldKey] = true;
+    else delete modes[fieldKey];
+    workspace.setAttribute("data-field-modes", JSON.stringify(modes));
+    zone.classList.toggle("as-categorical", Boolean(asCategorical));
+    if (window.dash_clientside?.set_props) {
+      window.dash_clientside.set_props(storeId, { data: modes });
+    }
   }
 
   function getDatasetColumns(zone) {
@@ -61,12 +89,21 @@
           '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>' +
           '<input class="field-picker-search" type="search" placeholder="Поиск столбца" autocomplete="off" spellcheck="false">' +
         '</label>' +
-        '<div class="field-picker-order">' +
-          '<span class="field-picker-order-label is-active" data-order-label="dataset">Dataset</span>' +
-          '<button type="button" class="field-picker-switch" role="switch" aria-checked="false" aria-label="Сортировка столбцов">' +
-            '<span class="field-picker-switch-knob"></span>' +
-          '</button>' +
-          '<span class="field-picker-order-label" data-order-label="sort">Sort</span>' +
+        '<div class="field-picker-controls-row">' +
+          '<div class="field-picker-order">' +
+            '<span class="field-picker-order-label is-active" data-order-label="dataset">Dataset</span>' +
+            '<button type="button" class="field-picker-switch field-picker-sort-switch" role="switch" aria-checked="false" aria-label="Сортировка столбцов">' +
+              '<span class="field-picker-switch-knob"></span>' +
+            '</button>' +
+            '<span class="field-picker-order-label" data-order-label="sort">Sort</span>' +
+          '</div>' +
+          '<div class="field-picker-category-mode">' +
+            '<span class="field-picker-category-label is-active" data-category-label="dataset">Dataset</span>' +
+            '<button type="button" class="field-picker-switch field-picker-category-switch" role="switch" aria-checked="false" aria-label="Использовать как категорию">' +
+              '<span class="field-picker-switch-knob"></span>' +
+            '</button>' +
+            '<span class="field-picker-category-label" data-category-label="categorical">As categorical</span>' +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<div class="field-picker-list" role="listbox"></div>' +
@@ -74,10 +111,17 @@
 
     picker.querySelector(".field-picker-close").addEventListener("click", closePicker);
     picker.querySelector(".field-picker-search").addEventListener("input", renderColumns);
-    picker.querySelector(".field-picker-switch").addEventListener("click", function () {
+    picker.querySelector(".field-picker-sort-switch").addEventListener("click", function () {
       sortColumns = !sortColumns;
       updateSortControl();
       renderColumns();
+    });
+    picker.querySelector(".field-picker-category-switch").addEventListener("click", function () {
+      if (!activeZone || this.disabled) return;
+      const fieldKey = activeZone.getAttribute("data-field-key");
+      const modes = readFieldModes(activeZone);
+      writeFieldMode(activeZone, !modes[fieldKey]);
+      updateCategoryControl();
     });
     picker.querySelector(".field-picker-list").addEventListener("click", function (event) {
       const option = event.target.closest("[data-column-option]");
@@ -90,10 +134,26 @@
 
   function updateSortControl() {
     const picker = document.getElementById("graph-field-picker");
-    const toggle = picker.querySelector(".field-picker-switch");
+    const toggle = picker.querySelector(".field-picker-sort-switch");
     toggle.setAttribute("aria-checked", String(sortColumns));
     picker.querySelector('[data-order-label="dataset"]').classList.toggle("is-active", !sortColumns);
     picker.querySelector('[data-order-label="sort"]').classList.toggle("is-active", sortColumns);
+  }
+
+  function updateCategoryControl() {
+    const picker = document.getElementById("graph-field-picker");
+    const toggle = picker.querySelector(".field-picker-category-switch");
+    const fieldKey = activeZone?.getAttribute("data-field-key");
+    const supported = categoricalFields.has(fieldKey);
+    const checked = supported && Boolean(readFieldModes(activeZone)[fieldKey]);
+    toggle.disabled = !supported;
+    toggle.setAttribute("aria-checked", String(checked));
+    toggle.title = supported
+      ? "Временно показать значения выбранного поля как категории"
+      : "Категориальный режим неприменим к размеру маркера";
+    picker.querySelector('[data-category-label="dataset"]').classList.toggle("is-active", !checked);
+    picker.querySelector('[data-category-label="categorical"]').classList.toggle("is-active", checked);
+    picker.querySelector(".field-picker-category-mode").classList.toggle("is-disabled", !supported);
   }
 
   function renderColumns() {
@@ -196,6 +256,7 @@
     picker.classList.add("is-open");
     zone.closest(".graph-workspace")?.classList.add("field-picker-open");
     updateSortControl();
+    updateCategoryControl();
     renderColumns();
     positionPicker(x, y);
     picker.querySelector(".field-picker-search").focus({ preventScroll: true });
@@ -211,6 +272,7 @@
   function clearZone(zone) {
     const emptyValue = zone.getAttribute("data-drop-mode") === "append" ? [] : null;
     writeZoneValue(zone, emptyValue);
+    writeFieldMode(zone, false);
     if (zone === activeZone) renderColumns();
   }
 
