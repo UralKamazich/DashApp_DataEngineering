@@ -23,8 +23,7 @@
         '<span class="ctx-header-hint">Экспорт и настройки</span>' +
       '</div>' +
       '<div class="ctx-group" aria-label="Экспорт">' +
-        menuItem("save-png", "image", "Сохранить PNG", "в файл", true) +
-        menuItem("copy-png", "copy", "Копировать PNG", "в буфер") +
+        menuItem("copy-png", "copy", "Копировать PNG", "в буфер", true) +
         menuItem("download-html", "code", "Сохранить HTML", "интерактивный") +
       '</div>' +
       '<div class="ctx-sep"></div>' +
@@ -128,10 +127,6 @@
 
       case "copy-png":
         clickAction("copy-png");
-        break;
-
-      case "save-png":
-        clickAction("save-png");
         break;
 
       case "change-colors":

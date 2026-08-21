@@ -106,6 +106,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/graph_field_picker.js": "text/javascript",
             "/assets/graph_png.js": "text/javascript",
             "/assets/graph_modebar.js": "text/javascript",
+            "/assets/graph_fullscreen.js": "text/javascript",
             "/assets/filter_panel.css": "text/css",
             "/assets/slide_panel.css": "text/css",
             "/assets/filter_panel.js": "text/javascript",
@@ -129,6 +130,23 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn('e.button !== 2', script)
         self.assertIn('e.stopImmediatePropagation()', script)
         self.assertIn('".graph-workspace-plot"', script)
+        self.assertNotIn('menuItem("save-png"', script)
+
+    def test_graph_modebar_owns_compact_workspace_controls(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_modebar.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn('className = "modebar-chart-select"', script)
+        self.assertIn('"modebar-settings-custom"', script)
+        self.assertIn('"modebar-help-custom"', script)
+        self.assertIn('reset.insertAdjacentElement("afterend", button)', script)
+
+    def test_graph_fullscreen_control_uses_scoped_host(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_fullscreen.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn('const HOST = ".graph-fullscreen-host"', script)
+        self.assertIn("host.requestFullscreen", script)
+        self.assertIn("document.exitFullscreen", script)
+        self.assertIn("window.Plotly.Plots.resize", script)
 
     def test_application_branding_uses_current_version_only_in_window_title(self):
         self.assertEqual(APP_VERSION, "2.0.0")
@@ -1403,6 +1421,23 @@ class GraphWorkspaceTests(unittest.TestCase):
         self.assertNotIn(self.component.ids["open_settings"], descendant_ids)
         self.assertNotIn(self.component.ids["change_colors"], descendant_ids)
         self.assertEqual(self.component.ids["update"], "test-graph-update")
+
+        classes = {
+            getattr(component, "className", "") or ""
+            for component in self.components
+        }
+        self.assertNotIn("graph-workspace-toolbar", classes)
+        self.assertIn("graph-modebar-state", classes)
+
+        graph = next(
+            component for component in self.components
+            if getattr(component, "id", None) == "test-graph"
+        )
+        self.assertEqual(graph.config["displayModeBar"], "hover")
+        self.assertTrue({
+            "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d",
+            "select2d", "lasso2d",
+        }.issubset(graph.config["modeBarButtonsToRemove"]))
 
         workspace_node = next(
             component for component in self.components

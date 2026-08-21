@@ -250,7 +250,21 @@ class CorrelationWorkspace:
     def render(self, matrix_block=None):
         """Слот матрицы занимает matrix_block — мультиграфик
         (Scatter Matrix / Parallel Coordinates / Коррелограмма)."""
-        graph_config = {"displaylogo": False, "responsive": True}
+        graph_config = {
+            "displaylogo": False,
+            "displayModeBar": "hover",
+            "modeBarButtonsToRemove": [
+                "zoom2d",
+                "pan2d",
+                "zoomIn2d",
+                "zoomOut2d",
+                "autoScale2d",
+                "select2d",
+                "lasso2d",
+            ],
+            "responsive": True,
+            "scrollZoom": True,
+        }
         columns_drop_target = html.Div(
             [
                 dmc.Group(
@@ -357,9 +371,11 @@ class CorrelationWorkspace:
                                 id=self.ids["bar_primary"],
                                 figure=_empty_analysis_figure(),
                                 config=graph_config,
+                                className="graph-fullscreen-plot",
                             ),
                         ],
                         p="xs", radius="md", withBorder=True, shadow="sm",
+                        className="correlation-rating-card graph-fullscreen-host",
                     ),
                     span=6,
                 ),
@@ -392,9 +408,11 @@ class CorrelationWorkspace:
                                 id=self.ids["bar_secondary"],
                                 figure=_empty_analysis_figure(),
                                 config=graph_config,
+                                className="graph-fullscreen-plot",
                             ),
                         ],
                         p="xs", radius="md", withBorder=True, shadow="sm",
+                        className="correlation-rating-card graph-fullscreen-host",
                     ),
                     span=6,
                 ),

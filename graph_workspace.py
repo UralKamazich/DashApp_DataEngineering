@@ -193,7 +193,17 @@ class GraphWorkspace:
         # воркспейсе (берутся из опций селекта типа графика).
         help_options = GRAPH_HELP_OPTIONS
         control_data = getattr(self.chart_type_control, "data", None)
+        self.chart_type_options = []
         if isinstance(control_data, list) and control_data:
+            self.chart_type_options = [
+                {
+                    "value": str(item.get("value")),
+                    "label": str(item.get("label", item.get("value"))),
+                }
+                if isinstance(item, dict)
+                else {"value": str(item), "label": str(item)}
+                for item in control_data
+            ]
             allowed = {
                 item.get("value") for item in control_data if isinstance(item, dict)
             }
@@ -233,22 +243,6 @@ class GraphWorkspace:
             },
         )
 
-    @staticmethod
-    def _action_button(component_id: str, symbol: str, label: str):
-        return dmc.Tooltip(
-            label=label,
-            withArrow=True,
-            openDelay=300,
-            children=dmc.ActionIcon(
-                html.Span(symbol, className="graph-toolbar-symbol"),
-                id=component_id,
-                variant="subtle",
-                color="gray",
-                size="lg",
-                radius="md",
-            ),
-        )
-
     def _render_paper(self):
         secondary = [self._drop_zone(field) for field in self.fields if field["zone"] == "secondary"]
         axes = [self._drop_zone(field) for field in self.fields if field["zone"] != "secondary"]
@@ -274,6 +268,14 @@ class GraphWorkspace:
             "data-action-copy-png": self.ids["copy_png"],
             "data-action-save-png": self.ids["save_png"],
             "data-action-clear-graph": self.ids["clear"],
+            "data-action-help": self.ids["help"],
+            "data-chart-type-id": self.chart_type_id,
+            "data-chart-type-options": json.dumps(
+                self.chart_type_options, ensure_ascii=False
+            ),
+            "data-chart-type-value": str(
+                getattr(self.chart_type_control, "value", "") or ""
+            ),
         }
         if self.include_color_controls:
             workspace_data["data-action-change-colors"] = self.ids["change_colors"]
@@ -285,7 +287,7 @@ class GraphWorkspace:
 
         return dmc.Paper(
             id=self.paper_id,
-            className="graph-workspace-shell",
+            className="graph-workspace-shell graph-fullscreen-host",
             shadow="md",
             withBorder=True,
             style={
@@ -297,20 +299,12 @@ class GraphWorkspace:
                 className="graph-workspace",
                 **workspace_data,
                 children=[
-                    # Toolbar and drop zones are siblings of dcc.Graph, so PNG
-                    # and HTML export contain the Plotly figure only.
+                    # The real Dash control remains mounted as state. Its
+                    # compact mirror is injected into Plotly's modebar.
                     html.Div(
-                        className="graph-workspace-toolbar",
-                        children=[
-                            html.Div(self.chart_type_control, className="graph-type-control"),
-                            html.Div(className="graph-workspace-toolbar-separator"),
-                            *(
-                                [self._action_button(self.ids["open_settings"], "⚙", "Настройки типа графика")]
-                                if self.settings_panel is not None
-                                else []
-                            ),
-                            self._action_button(self.ids["help"], "?", "Инструкция по типу графика"),
-                        ],
+                        self.chart_type_control,
+                        className="graph-modebar-state",
+                        **{"aria-hidden": "true"},
                     ),
                     dcc.Loading(
                         dcc.Graph(
@@ -319,9 +313,18 @@ class GraphWorkspace:
                             className="graph-workspace-plot",
                             config={
                                 "displaylogo": False,
-                                "modeBarButtonsToRemove": [],
-                                "modeBarButtonsToAdd": ["fullscreen"],
-                                "displayModeBar": True,
+                                "modeBarButtonsToRemove": [
+                                    "zoom2d",
+                                    "pan2d",
+                                    "zoomIn2d",
+                                    "zoomOut2d",
+                                    "autoScale2d",
+                                    "select2d",
+                                    "lasso2d",
+                                    "zoom3d",
+                                    "pan3d",
+                                ],
+                                "displayModeBar": "hover",
                                 "scrollZoom": True,
                                 "responsive": True,
                             },
@@ -415,8 +418,11 @@ class GraphWorkspace:
             html.Button("copy-png", id=self.ids["copy_png"]),
             html.Button("save-png", id=self.ids["save_png"]),
             html.Button("clear-graph", id=self.ids["clear"]),
+            html.Button("help", id=self.ids["help"]),
             dcc.Download(id=self.ids["download_component"]),
         ]
+        if self.settings_panel is not None:
+            children.append(html.Button("open-settings", id=self.ids["open_settings"]))
         if self.include_color_controls:
             children.append(html.Button("change-colors", id=self.ids["change_colors"]))
         return html.Div(
