@@ -11,7 +11,7 @@ import re
 import logging
 import pandas as pd
 import numpy as np
-from dash import callback, Output, Input, State, no_update, ALL, ctx as _ctx
+from dash import callback, Output, Input, State, no_update, ALL
 from dash.exceptions import PreventUpdate
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -19,7 +19,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 
 from dash_app import app
-from utils import read_df_from_store, meta_from_df, _make_error_notif
+from utils import apply_filter_conditions, read_df_from_store, meta_from_df, _make_error_notif
 from callbacks.filters import _clean_filter_state
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
     Output("filtered-data", "data", allow_duplicate=True),
     Output("meta-columns", "data", allow_duplicate=True),
     Input("filters-applied-state", "data"),
-    Input("filter-logic-mode", "value"),
+    Input("filter-applied-logic", "data"),
     State("stored-data", "data"),
     State("meta-columns", "data"),
     prevent_initial_call=True
@@ -42,14 +42,6 @@ def apply_filters(filters_state, logic_mode, stored_json, meta_state):
     if not stored_json:
         raise PreventUpdate
 
-    # Без активных фильтров filtered-data уже равен stored-data — его туда
-    # положили загрузчики файла. Не перезаписываем: иначе каждая загрузка
-    # файла вызывала бы лишнюю перерисовку графика.
-    if not _clean_filter_state(filters_state):
-        trigger = _ctx.triggered_id
-        if trigger != "apply-filters-btn":
-            raise PreventUpdate
-
     try:
         df = read_df_from_store(stored_json, meta_state)
     except Exception:
@@ -58,49 +50,10 @@ def apply_filters(filters_state, logic_mode, stored_json, meta_state):
     if df is None or df.empty:
         raise PreventUpdate
 
-    fs = filters_state if isinstance(filters_state, dict) else {}
+    fs = _clean_filter_state(filters_state)
     meta0 = meta_from_df(df)
 
-    # Применяем фильтры. Карточки можно объединять как через И, так и через ИЛИ.
-    if fs:
-        conditions = []
-        for _, cfg in fs.items():
-            col = (cfg or {}).get("column")
-            val = (cfg or {}).get("value")
-            if not col or val in (None, [], '') or col not in df.columns:
-                continue
-            if col in (meta0.get("numeric") or []):
-                if not isinstance(val, (list, tuple)) or len(val) != 2:
-                    continue
-                lo, hi = val
-                condition = pd.Series(True, index=df.index)
-                if lo is not None:
-                    condition &= pd.to_numeric(df[col], errors="coerce") >= float(lo)
-                if hi is not None:
-                    condition &= pd.to_numeric(df[col], errors="coerce") <= float(hi)
-            elif col in (meta0.get("datetime") or []):
-                if not isinstance(val, (list, tuple)) or len(val) != 2:
-                    continue
-                start, end = val
-                series = pd.to_datetime(df[col], errors="coerce")
-                condition = pd.Series(True, index=df.index)
-                if start:
-                    condition &= series >= pd.Timestamp(start)
-                if end:
-                    condition &= series < pd.Timestamp(end) + pd.Timedelta(days=1)
-            else:
-                vs = val if isinstance(val, list) else [val]
-                condition = df[col].astype("string").isin([str(item) for item in vs])
-            conditions.append(condition.fillna(False))
-
-        if conditions:
-            mask = pd.Series(logic_mode != "or", index=df.index)
-            for condition in conditions:
-                if logic_mode == "or":
-                    mask |= condition
-                else:
-                    mask &= condition
-            df = df.loc[mask]
+    df = apply_filter_conditions(df, fs, meta0, logic_mode or "and")
 
     js = df.to_json(date_format='iso', orient='split')
     meta = meta_from_df(df)

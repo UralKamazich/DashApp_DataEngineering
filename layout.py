@@ -146,6 +146,7 @@ def create_layout():
             dcc.Store(id='filter-count', data=0),
             dcc.Store(id='filters-state', data={}),
             dcc.Store(id='filters-applied-state', data={}),
+            dcc.Store(id='filter-applied-logic', data='and'),
             dcc.Store(id='stored-sheet-names'),
             dcc.Store(id='selected-sheet'),
             dcc.Store(id='sheet-modal-toggle', data=True),

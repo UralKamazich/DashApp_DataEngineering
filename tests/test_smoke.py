@@ -19,6 +19,8 @@ from callbacks.filters import (
     _clean_filter_state,
     _default_filter_value,
     _filter_card,
+    update_filter_draft_status,
+    update_filter_summary,
 )
 from callbacks.graph import (
     MAX_BAR_LABELS,
@@ -54,7 +56,13 @@ from graph_settings import (
     SETTINGS_COMBOBOX_Z_INDEX,
 )
 from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, _plotly_recovery_script
-from utils import _empty_fig, create_value_control, meta_from_df, read_df_from_store
+from utils import (
+    _empty_fig,
+    apply_filter_conditions,
+    create_value_control,
+    meta_from_df,
+    read_df_from_store,
+)
 
 
 def walk_components(root):
@@ -288,8 +296,11 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "filters-outside-close-store",
             "filters-container",
             "filters-applied-state",
+            "filter-applied-logic",
             "filter-logic-mode",
             "apply-filters-btn",
+            "revert-filters-btn",
+            "filter-draft-status",
             "reset-filters-btn",
             "filter-close-on-apply",
             "filter-close-on-outside",
@@ -492,6 +503,13 @@ class FilterPanelTests(unittest.TestCase):
         names = {component.__class__.__name__ for component in walk_components(card)}
         self.assertIn("filter-card filter-card--numeric", classes)
         self.assertIn("RangeSlider", names)
+        self.assertIn("NumberInput", names)
+        operator_selects = [
+            component for component in walk_components(card)
+            if isinstance(getattr(component, "id", None), dict)
+            and component.id.get("type") == "filter-operator"
+        ]
+        self.assertEqual(operator_selects[0].value, "between")
 
         date_control = create_value_control("date", "date", None, self.source)
         category_control = create_value_control("category", "category", None, self.source)
@@ -501,6 +519,13 @@ class FilterPanelTests(unittest.TestCase):
         self.assertIn("MultiSelect", {
             component.__class__.__name__ for component in walk_components(category_control)
         })
+        category_select = next(
+            component for component in walk_components(category_control)
+            if component.__class__.__name__ == "MultiSelect"
+        )
+        self.assertTrue(category_select.withCheckIcon)
+        self.assertEqual(category_select.checkIconPosition, "left")
+        self.assertFalse(category_select.hidePickedOptions)
 
     def test_filter_state_is_cleaned_before_apply(self):
         state = {
@@ -513,6 +538,94 @@ class FilterPanelTests(unittest.TestCase):
             {"1": {"column": "category", "value": ["A"]}},
         )
         self.assertEqual(_default_filter_value(self.source, "value"), [1.0, 4.0])
+
+    def test_clean_filter_state_keeps_operators_and_drops_full_domain(self):
+        state = {
+            "1": {
+                "column": "value",
+                "operator": "between",
+                "value": [1.0, 4.0],
+                "domain": [1.0, 4.0],
+            },
+            "2": {"column": "category", "operator": "is_empty", "value": None},
+            "3": {"column": "value", "operator": "gt", "value": 2.0},
+        }
+        self.assertEqual(
+            _clean_filter_state(state),
+            {
+                "2": {"column": "category", "operator": "is_empty", "value": None},
+                "3": {"column": "value", "operator": "gt", "value": 2.0},
+            },
+        )
+
+    def test_typed_filter_operators(self):
+        filtered = apply_filter_conditions(
+            self.source,
+            {
+                "1": {"column": "value", "operator": "gt", "value": 1.0},
+                "2": {"column": "category", "operator": "contains", "value": "a"},
+            },
+            self.meta,
+            "and",
+        )
+        self.assertEqual(filtered["value"].tolist(), [2.0])
+
+        excluded = apply_filter_conditions(
+            self.source,
+            {"1": {"column": "category", "operator": "not_in", "value": ["A"]}},
+            self.meta,
+            "and",
+        )
+        self.assertEqual(excluded["category"].tolist(), ["B", "C"])
+
+        with_missing = pd.DataFrame({"category": ["A", "B", None, ""]})
+        missing_meta = meta_from_df(with_missing)
+        not_a = apply_filter_conditions(
+            with_missing,
+            {"1": {"column": "category", "operator": "not_in", "value": ["A"]}},
+            missing_meta,
+            "and",
+        )
+        self.assertEqual(not_a["category"].tolist(), ["B"])
+
+    def test_draft_status_tracks_unapplied_operator_and_logic_changes(self):
+        draft = {"1": {"column": "category", "operator": "contains", "value": ""}}
+        status = update_filter_draft_status(draft, {}, "and", "and")
+        self.assertEqual(status[0], "Есть неприменённые изменения")
+        self.assertFalse(status[2])
+        self.assertFalse(status[4])
+
+        logic_status = update_filter_draft_status({}, {}, "or", "and")
+        self.assertEqual(logic_status[0], "Есть неприменённые изменения")
+
+    def test_filter_summary_includes_retained_percentage(self):
+        applied = {"1": {"column": "value", "operator": "gt", "value": 2.0}}
+        filtered = self.source.loc[self.source["value"] > 2].to_json(
+            orient="split", date_format="iso"
+        )
+        summary, count, _ = update_filter_summary(applied, self.payload, filtered)
+        self.assertEqual(summary, "2 из 4 · 50,0%")
+        self.assertEqual(count, "1")
+
+    def test_pipeline_listens_only_to_applied_logic(self):
+        callback = next(
+            value for key, value in app.callback_map.items()
+            if "filtered-data.data" in key
+            and "meta-columns.data" in key
+            and ("filters-applied-state", "data") in {
+                (dependency["id"], dependency["property"])
+                for dependency in value["inputs"]
+            }
+            and ("filter-applied-logic", "data") in {
+                (dependency["id"], dependency["property"])
+                for dependency in value["inputs"]
+            }
+        )
+        inputs = {
+            (dependency["id"], dependency["property"])
+            for dependency in callback["inputs"]
+        }
+        self.assertNotIn(("filter-logic-mode", "value"), inputs)
 
     def test_pipeline_supports_and_or_and_date_ranges(self):
         filters = {

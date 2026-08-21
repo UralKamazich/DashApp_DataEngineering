@@ -23,7 +23,6 @@ def _panel_content():
                                     {"label": "ИЛИ", "value": "or"},
                                 ],
                                 size="xs",
-                                persistence=True,
                             ),
                         ],
                         justify="space-between",
@@ -84,27 +83,50 @@ def _panel_content():
                         ],
                         className="filter-results-summary",
                     ),
-                    dmc.Group(
-                        [
-                            dmc.Button(
-                                "Сбросить",
-                                id="reset-filters-btn",
-                                variant="subtle",
-                                color="gray",
-                                size="xs",
-                                leftSection=DashIconify(icon="tabler:rotate", width=14),
-                            ),
-                            dmc.Button(
-                                "Применить",
-                                id="apply-filters-btn",
-                                size="xs",
-                                leftSection=DashIconify(icon="tabler:check", width=14),
-                            ),
-                        ],
-                        gap="xs",
-                    ),
                 ],
                 className="filter-panel-footer-row",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        "Все изменения применены",
+                        id="filter-draft-status",
+                        className="filter-draft-status",
+                    ),
+                    dmc.Button(
+                        "Вернуть",
+                        id="revert-filters-btn",
+                        variant="subtle",
+                        color="gray",
+                        size="compact-xs",
+                        disabled=True,
+                        leftSection=DashIconify(icon="tabler:arrow-back-up", width=13),
+                    ),
+                ],
+                className="filter-draft-row",
+            ),
+            dmc.Group(
+                [
+                    dmc.Button(
+                        "Сбросить",
+                        id="reset-filters-btn",
+                        variant="light",
+                        color="gray",
+                        size="xs",
+                        leftSection=DashIconify(icon="tabler:rotate", width=14),
+                        className="filter-footer-button",
+                    ),
+                    dmc.Button(
+                        "Применить",
+                        id="apply-filters-btn",
+                        size="xs",
+                        leftSection=DashIconify(icon="tabler:check", width=14),
+                        className="filter-footer-button",
+                    ),
+                ],
+                gap="xs",
+                grow=True,
+                className="filter-footer-actions",
             ),
             dmc.Group(
                 [

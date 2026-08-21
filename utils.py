@@ -198,22 +198,109 @@ def apply_custom_colors_safely(fig, custom_colors):
         return fig  # Возвращаем фигуру без изменений
 
 
-def _apply_filters_once(frame: pd.DataFrame, filters_state: dict, meta: dict) -> pd.DataFrame:
-    """Векторизованное применение фильтров одной маской за один проход."""
+def apply_filter_conditions(
+    frame: pd.DataFrame,
+    filters_state: dict,
+    meta: dict,
+    logic_mode: str = "and",
+) -> pd.DataFrame:
+    """Apply typed filter operators with one combined mask."""
     if frame.empty or not filters_state:
         return frame
-    mask = pd.Series(True, index=frame.index)
+
     numeric_cols = set(meta.get("numeric", []))
+    datetime_cols = set(meta.get("datetime", []))
+    conditions = []
+
     for fdata in filters_state.values():
-        col, val = fdata.get('column'), fdata.get('value')
-        if not col or col not in frame.columns or val in (None, [], ''):
+        col = (fdata or {}).get("column")
+        val = (fdata or {}).get("value")
+        operator = (fdata or {}).get("operator")
+        if not col or col not in frame.columns:
             continue
-        if col in numeric_cols and isinstance(val, list) and len(val) == 2:
-            lo, hi = val
-            mask &= frame[col].between(lo, hi, inclusive="both")
+
+        raw = frame[col]
+        empty = raw.isna() | raw.astype("string").str.strip().eq("")
+        if operator == "is_empty":
+            condition = empty
+        elif operator == "not_empty":
+            condition = ~empty
+        elif col in numeric_cols:
+            series = pd.to_numeric(raw, errors="coerce")
+            operator = operator or "between"
+            if operator == "between" and isinstance(val, (list, tuple)) and len(val) == 2:
+                condition = series.between(float(val[0]), float(val[1]), inclusive="both")
+            elif operator in {"gt", "gte", "lt", "lte", "eq", "ne"} and val not in (None, ""):
+                target = float(val)
+                condition = {
+                    "gt": series > target,
+                    "gte": series >= target,
+                    "lt": series < target,
+                    "lte": series <= target,
+                    "eq": series == target,
+                    "ne": series != target,
+                }[operator]
+            else:
+                continue
+        elif col in datetime_cols:
+            series = pd.to_datetime(raw, errors="coerce")
+            operator = operator or "between"
+            if operator == "between" and isinstance(val, (list, tuple)) and len(val) == 2:
+                start, end = pd.Timestamp(val[0]), pd.Timestamp(val[1])
+                condition = (series >= start) & (series < end + pd.Timedelta(days=1))
+            elif operator in {"before", "after"} and val not in (None, ""):
+                boundary = pd.Timestamp(val)
+                condition = (
+                    series < boundary
+                    if operator == "before"
+                    else series >= boundary + pd.Timedelta(days=1)
+                )
+            else:
+                continue
         else:
-            mask &= frame[col].isin(val) if isinstance(val, list) else (frame[col] == val)
-    return frame[mask]
+            text = raw.astype("string")
+            folded = text.str.casefold()
+            operator = operator or "in"
+            if operator in {"in", "not_in"} and isinstance(val, list) and val:
+                condition = text.isin([str(item) for item in val])
+                if operator == "not_in":
+                    condition = ~condition
+            elif operator in {"contains", "not_contains", "starts_with", "ends_with"} and val not in (None, ""):
+                needle = str(val).casefold()
+                if operator in {"contains", "not_contains"}:
+                    condition = folded.str.contains(needle, regex=False, na=False)
+                    if operator == "not_contains":
+                        condition = ~condition
+                elif operator == "starts_with":
+                    condition = folded.str.startswith(needle, na=False)
+                else:
+                    condition = folded.str.endswith(needle, na=False)
+            elif operator in {"eq", "ne"} and val not in (None, ""):
+                condition = text == str(val)
+                if operator == "ne":
+                    condition = ~condition
+            else:
+                continue
+        if operator not in {"is_empty", "not_empty"}:
+            condition &= ~empty
+        conditions.append(condition.fillna(False))
+
+    if not conditions:
+        return frame
+    if logic_mode == "or":
+        mask = pd.Series(False, index=frame.index)
+        for condition in conditions:
+            mask |= condition
+    else:
+        mask = pd.Series(True, index=frame.index)
+        for condition in conditions:
+            mask &= condition
+    return frame.loc[mask]
+
+
+def _apply_filters_once(frame: pd.DataFrame, filters_state: dict, meta: dict) -> pd.DataFrame:
+    """Backward-compatible AND-only wrapper around the typed evaluator."""
+    return apply_filter_conditions(frame, filters_state, meta, "and")
 
 
 def _empty_fig(template="plotly"):
@@ -295,13 +382,22 @@ def hide_xlabels_on_upper_facets(fig: go.Figure) -> go.Figure:
 
 
 # Обновление контролов фильтра
-def create_value_control(filter_id, column, current_value=None, dff: pd.DataFrame | None = None):
+def create_value_control(
+    filter_id,
+    column,
+    current_value=None,
+    dff: pd.DataFrame | None = None,
+    operator=None,
+):
     """Build a compact type-aware value editor for one filter card."""
     dff = dff if dff is not None else pd.DataFrame()
     if not column or (dff.empty or column not in dff.columns):
         return html.Div("Выберите канал", className="filter-control-empty")
 
     numeric_cols, categorical_cols, datetime_cols = classify_simple(dff)
+
+    if operator in {"is_empty", "not_empty"}:
+        return html.Div("Значение не требуется", className="filter-control-empty")
 
     if column in numeric_cols:
         values = pd.to_numeric(dff[column], errors="coerce").dropna()
@@ -311,32 +407,76 @@ def create_value_control(filter_id, column, current_value=None, dff: pd.DataFram
                 className="filter-control-empty",
             )
         min_val, max_val = float(values.min()), float(values.max())
-        selected = current_value if isinstance(current_value, list) and len(current_value) == 2 else [min_val, max_val]
         span = max_val - min_val
         step = max(span / 250, 1e-9)
 
         def number_label(value):
             return f"{value:,.4g}".replace(",", " ")
 
-        return html.Div(
-            [
-                dmc.Group(
-                    [html.Span(number_label(selected[0])), html.Span(number_label(selected[1]))],
-                    justify="space-between",
-                    className="filter-numeric-bounds",
-                ),
-                dmc.RangeSlider(
-                    id={"type": "filter-value", "index": filter_id},
-                    min=min_val,
-                    max=max_val,
-                    step=step,
-                    value=selected,
-                    minRange=0,
-                    labelAlwaysOn=False,
-                    size="sm",
-                ),
-            ],
-            className="filter-numeric-control",
+        if operator in (None, "between"):
+            selected = (
+                current_value
+                if isinstance(current_value, (list, tuple)) and len(current_value) == 2
+                else [min_val, max_val]
+            )
+            return html.Div(
+                [
+                    html.Div(
+                        [
+                            dmc.NumberInput(
+                                id={"type": "filter-number-min", "index": filter_id},
+                                value=selected[0],
+                                min=min_val,
+                                max=max_val,
+                                step=step,
+                                decimalScale=8,
+                                hideControls=True,
+                                size="xs",
+                                **{"aria-label": "Нижняя граница"},
+                            ),
+                            html.Span("—", className="filter-numeric-separator"),
+                            dmc.NumberInput(
+                                id={"type": "filter-number-max", "index": filter_id},
+                                value=selected[1],
+                                min=min_val,
+                                max=max_val,
+                                step=step,
+                                decimalScale=8,
+                                hideControls=True,
+                                size="xs",
+                                **{"aria-label": "Верхняя граница"},
+                            ),
+                        ],
+                        className="filter-numeric-inputs",
+                    ),
+                    dmc.RangeSlider(
+                        id={"type": "filter-range-value", "index": filter_id},
+                        min=min_val,
+                        max=max_val,
+                        step=step,
+                        value=list(selected),
+                        minRange=0,
+                        labelAlwaysOn=False,
+                        size="sm",
+                    ),
+                    html.Div(
+                        [html.Span(number_label(min_val)), html.Span(number_label(max_val))],
+                        className="filter-numeric-bounds",
+                    ),
+                ],
+                className="filter-numeric-control",
+            )
+
+        selected = current_value if isinstance(current_value, (int, float)) else None
+        return dmc.NumberInput(
+            id={"type": "filter-value", "index": filter_id},
+            value=selected,
+            step=step,
+            decimalScale=8,
+            hideControls=True,
+            size="xs",
+            placeholder="Введите значение",
+            w="100%",
         )
 
     if column in datetime_cols:
@@ -345,13 +485,21 @@ def create_value_control(filter_id, column, current_value=None, dff: pd.DataFram
             return html.Div("В канале нет корректных дат", className="filter-control-empty")
         min_date = values.min().date().isoformat()
         max_date = values.max().date().isoformat()
-        selected = current_value if isinstance(current_value, list) and len(current_value) == 2 else [min_date, max_date]
+        is_range = operator in (None, "between")
+        selected = (
+            current_value
+            if current_value not in (None, "", [])
+            else ([min_date, max_date] if is_range else None)
+        )
         return html.Div(
             [
-                dmc.Text("Диапазон дат", className="filter-date-caption"),
+                dmc.Text(
+                    "Диапазон дат" if is_range else "Дата",
+                    className="filter-date-caption",
+                ),
                 dmc.DatePickerInput(
                     id={"type": "filter-value", "index": filter_id},
-                    type="range",
+                    type="range" if is_range else "default",
                     value=selected,
                     valueFormat="DD.MM.YYYY",
                     placeholder="Выберите диапазон",
@@ -363,6 +511,15 @@ def create_value_control(filter_id, column, current_value=None, dff: pd.DataFram
             className="filter-date-control",
         )
 
+    if operator not in (None, "in", "not_in"):
+        return dmc.TextInput(
+            id={"type": "filter-value", "index": filter_id},
+            value=current_value if isinstance(current_value, str) else "",
+            placeholder="Введите текст",
+            size="xs",
+            w="100%",
+        )
+
     unique_values = [str(value) for value in dff[column].dropna().unique().tolist()]
     selected = [str(value) for value in (current_value or [])]
     return dmc.MultiSelect(
@@ -371,7 +528,9 @@ def create_value_control(filter_id, column, current_value=None, dff: pd.DataFram
             value=selected,
             searchable=True,
             clearable=True,
-            hidePickedOptions=True,
+            hidePickedOptions=False,
+            withCheckIcon=True,
+            checkIconPosition="left",
             nothingFoundMessage="Значения не найдены",
             placeholder="Выберите значения",
             maxDropdownHeight=260,
