@@ -27,22 +27,8 @@ def _panel_content():
                         ],
                         justify="space-between",
                     ),
-                    dmc.Text(
-                        "Перетащите канал из датасета или добавьте условие вручную",
-                        size="xs",
-                        c="dimmed",
-                        mt=3,
-                    ),
                 ],
                 className="filter-panel-intro",
-            ),
-            html.Div(
-                [
-                    DashIconify(icon="tabler:drag-drop", width=18),
-                    html.Span("Перетащить канал сюда"),
-                ],
-                id="filter-drawer-drop-zone",
-                className="filter-drop-target filter-drawer-drop-zone",
             ),
             html.Div(id="filters-container", children=[], className="filter-cards"),
             dmc.Button(
@@ -58,6 +44,7 @@ def _panel_content():
         shadow="sm",
         p="xs",
         withBorder=True,
+        className="filter-panel-paper filter-drop-target",
         style={
             "overflowY": "auto",
             "overflowX": "hidden",

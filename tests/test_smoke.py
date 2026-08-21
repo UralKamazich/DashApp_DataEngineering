@@ -290,6 +290,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
         component_ids = {getattr(component, "id", None) for component in components}
         self.assertNotIn("filters-panel-toggle", component_ids)
         self.assertNotIn("filter-drop-target", component_ids)
+        self.assertNotIn("filter-drawer-drop-zone", component_ids)
         for component_id in (
             "filters-side-tab",
             "filters-drawer",
@@ -313,6 +314,16 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "columns-badges",
         ):
             self.assertIn(component_id, component_ids)
+
+        filter_drop_targets = [
+            component for component in components
+            if "filter-drop-target" in (getattr(component, "className", "") or "").split()
+        ]
+        self.assertEqual(len(filter_drop_targets), 1)
+        self.assertIn(
+            "filter-panel-paper",
+            filter_drop_targets[0].className.split(),
+        )
 
         graph_page = next(
             component for component in components
@@ -526,6 +537,7 @@ class FilterPanelTests(unittest.TestCase):
         self.assertTrue(category_select.withCheckIcon)
         self.assertEqual(category_select.checkIconPosition, "left")
         self.assertFalse(category_select.hidePickedOptions)
+        self.assertEqual(category_select.comboboxProps["width"], 220)
 
     def test_filter_state_is_cleaned_before_apply(self):
         state = {

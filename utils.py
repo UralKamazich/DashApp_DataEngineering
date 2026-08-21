@@ -410,9 +410,6 @@ def create_value_control(
         span = max_val - min_val
         step = max(span / 250, 1e-9)
 
-        def number_label(value):
-            return f"{value:,.4g}".replace(",", " ")
-
         if operator in (None, "between"):
             selected = (
                 current_value
@@ -459,10 +456,6 @@ def create_value_control(
                         labelAlwaysOn=False,
                         size="sm",
                     ),
-                    html.Div(
-                        [html.Span(number_label(min_val)), html.Span(number_label(max_val))],
-                        className="filter-numeric-bounds",
-                    ),
                 ],
                 className="filter-numeric-control",
             )
@@ -493,10 +486,6 @@ def create_value_control(
         )
         return html.Div(
             [
-                dmc.Text(
-                    "Диапазон дат" if is_range else "Дата",
-                    className="filter-date-caption",
-                ),
                 dmc.DatePickerInput(
                     id={"type": "filter-value", "index": filter_id},
                     type="range" if is_range else "default",
@@ -534,6 +523,7 @@ def create_value_control(
             nothingFoundMessage="Значения не найдены",
             placeholder="Выберите значения",
             maxDropdownHeight=260,
+            comboboxProps={"withinPortal": True, "zIndex": 10020, "width": 220},
             size="xs",
             w="100%",
         )
