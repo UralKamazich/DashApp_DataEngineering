@@ -37,6 +37,7 @@ from components import (
     SwitchBubble,
     bar_aggregation_select,
     dropdown_chart_type,
+    graph_render_mode,
     make_column_badge,
     mv_chart_type,
 )
@@ -1288,6 +1289,37 @@ class GraphAxisValidationTests(unittest.TestCase):
             _graph_uirevision("Scatter", "x", "y", None, None, None, 0),
         )
 
+    def test_scatter_can_force_svg_and_apply_marker_size_in_pixels(self):
+        row_count = 1200
+        source = pd.DataFrame({"x": range(row_count), "y": range(row_count)})
+        kwargs = dict(
+            n_clicks=1, x_col="x", y_col="y", z_col=None, color_col=None,
+            size_col=None, text_col=None, dropdown_text_pozition="middle center",
+            chart_type="Scatter", bubble=True, MaxSizeBubble=30, height=550,
+            width=None, selected_style="plotly", bar_text_auto=True,
+            view_revision=0, filtered_json=source.to_json(orient="split"),
+            hover_cols=[], facet_row=None, facet_col=None, filters_state={},
+            xaxis_font_size=14, yaxis_font_size=14, font_size_ticks=12,
+            title_font_size=16, dropdown_sort_column="trace",
+            axes_category="auto", dropdown_overlay="overlay",
+            legend="top-right-outside", custom_colors={}, tick_step_x=0,
+            tick_step_y=0, legend_order="original", legend_custom_order=None,
+            meta=meta_from_df(source), marker_size=9,
+        )
+
+        hybrid_figure, hybrid_notifications = build_main_figure(
+            **kwargs, render_mode="hybrid"
+        )
+        svg_figure, svg_notifications = build_main_figure(
+            **kwargs, render_mode="svg"
+        )
+
+        self.assertEqual(hybrid_notifications, [])
+        self.assertEqual(svg_notifications, [])
+        self.assertEqual(hybrid_figure.data[0].type, "scattergl")
+        self.assertEqual(svg_figure.data[0].type, "scatter")
+        self.assertEqual(svg_figure.data[0].marker.size, 9)
+
     def test_categorical_scatter_axis_uses_svg_and_explicit_axis_type(self):
         row_count = 1200
         source = pd.DataFrame(
@@ -1843,6 +1875,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
         self.assertEqual(SwitchBubble.label, "Bubbles")
         self.assertTrue(SwitchBubble.checked)
         self.assertIsNone(getattr(bar_aggregation_select, "description", None))
+        self.assertEqual(graph_render_mode.value, "hybrid")
 
     def test_every_settings_select_opens_above_the_popover(self):
         settings_popup = next(
@@ -1883,6 +1916,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "InputSizePlot",
             "InputSizePlotW",
             "InputMaxSizeBubble",
+            "InputMarkerSize",
             "font-size-xaxis",
             "font-size-yaxis",
             "font-size-title",
@@ -1894,6 +1928,18 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "test-setting-bar_aggregation",
         }
         self.assertTrue(expected_ids.issubset(component_ids))
+        marker_size = next(
+            component
+            for component in self.components
+            if getattr(component, "id", None) == "InputMarkerSize"
+        )
+        bubble_size = next(
+            component
+            for component in self.components
+            if getattr(component, "id", None) == "InputMaxSizeBubble"
+        )
+        self.assertEqual(marker_size.label, "Размер маркера, px")
+        self.assertEqual(bubble_size.label, "Макс. размер пузыря")
 
     def test_internal_settings_ids_can_be_namespaced(self):
         settings = GraphSettingsPanel(

@@ -16,7 +16,7 @@ from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
-    dropdown_style,
+    dropdown_style, graph_render_mode,
     dropdown_x, dropdown_y, dropdown_z,
     dropdown_color, dropdown_size, dropdown_text,
     dropdown_hover_data, dropdown_corr_columns,
@@ -68,6 +68,7 @@ def make_nav_link(label, href):
 GRAPH_SETTINGS_PANEL = GraphSettingsPanel(
     controls={
         "theme": dropdown_style,
+        "render_mode": graph_render_mode,
         "bubble": SwitchBubble,
         "bar_labels": bar_text_auto_switch,
         "text_position": dropdown_text_pozition,

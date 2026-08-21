@@ -627,6 +627,7 @@ class GraphWorkspace:
 
         defaults = {
             self.settings_control_id("theme"): {"value": "plotly"},
+            self.settings_control_id("render_mode"): {"value": "hybrid"},
             self.settings_id("InputSizePlot"): {"value": 750},
             self.settings_id("InputSizePlotW"): {"value": None},
             self.settings_id("font-size-xaxis"): {"value": 14},
@@ -646,6 +647,7 @@ class GraphWorkspace:
             self.settings_control_id("legend_custom_order"): {"value": ""},
             self.settings_control_id("bubble"): {"checked": True},
             self.settings_id("InputMaxSizeBubble"): {"value": 30},
+            self.settings_id("InputMarkerSize"): {"value": 8},
             self.settings_control_id("bar_labels"): {"checked": True},
         }
 

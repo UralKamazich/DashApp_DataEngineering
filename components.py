@@ -119,6 +119,19 @@ dropdown_style = dmc.Select(
     persistence=True
 )
 
+graph_render_mode = dmc.SegmentedControl(
+    id="graph-render-mode",
+    data=[
+        {"label": "Гибрид", "value": "hybrid"},
+        {"label": "SVG", "value": "svg"},
+    ],
+    value="hybrid",
+    size="xs",
+    fullWidth=True,
+    persistence=True,
+    persistence_type="local",
+)
+
 # =========================
 # Основные дропдауны осей
 # =========================

@@ -48,6 +48,7 @@ HIERARCHY_CHART_TYPES = {"Sunburst", "Treemap"}
 RIDGE_GRID_SIZE = 180
 MAX_RIDGE_GROUPS = 60
 MAX_PIE_SLICES = 30
+POINT_CHART_TYPES = {"Scatter", "3D_Scatter", "Polar"}
 
 # Temporary categorical rendering is intentionally bounded. Axis categories
 # are relatively cheap; color groups and facets multiply traces/subplots and
@@ -62,6 +63,17 @@ TEMPORARY_CATEGORY_LIMITS = {
     "facet-col": 24,
     "hover": 1500,
 }
+
+
+def _marker_size_in_pixels(value):
+    """Normalize a user marker size to Plotly's pixel unit."""
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        size = 8.0
+    if not np.isfinite(size) or size <= 0:
+        size = 8.0
+    return min(size, 200.0)
 
 
 def _temporary_category_frame(source, field_modes, columns_by_field):
@@ -655,7 +667,9 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       tick_step_x, tick_step_y, legend_order, legend_custom_order, meta,
                       pie_aggregation="sum",
                       bar_aggregation="sum",
-                      categorical_fields=None):
+                      categorical_fields=None,
+                      render_mode="hybrid",
+                      marker_size=8):
 
     empty = _empty_fig(selected_style)
     try:
@@ -750,7 +764,7 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 # fully numeric point clouds can still use WebGL automatically.
                 render_mode=(
                     "svg"
-                    if text_data is not None or x_as_text or y_as_text
+                    if render_mode == "svg" or text_data is not None or x_as_text or y_as_text
                     else "auto"
                 ),
             )
@@ -910,6 +924,13 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                 fig.update_traces(contours_coloring="fill", contours_showlines=False)
             hide_xlabels_on_upper_facets(fig)
 
+        # A fixed point size is meaningful only when marker size is not already
+        # encoded by a dataset channel. Plotly uses CSS pixels internally.
+        if chart_type in POINT_CHART_TYPES and not sarg:
+            fig.update_traces(
+                marker_size=_marker_size_in_pixels(marker_size)
+            )
+
         # Пользовательские цвета
         if isinstance(custom_colors, dict) and custom_colors:
             try:
@@ -1026,6 +1047,8 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
     Input(GRAPH_WORKSPACE.settings_control_id("pie_aggregation"), "value"),
     Input(GRAPH_WORKSPACE.settings_control_id("bar_aggregation"), "value"),
     Input(GRAPH_WORKSPACE.ids["field_modes"], "data"),
+    Input(GRAPH_WORKSPACE.settings_control_id("render_mode"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("InputMarkerSize"), "value"),
     prevent_initial_call=True,
 )
 def update_main_graph(*args, **kwargs):

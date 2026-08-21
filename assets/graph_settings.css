@@ -116,6 +116,10 @@
     overscroll-behavior: contain;
 }
 
+.graph-settings-common.graph-settings-scroll {
+    padding: 8px;
+}
+
 .graph-settings-title-icon,
 .graph-settings-section-icon {
     display: grid;
@@ -162,8 +166,32 @@
     box-shadow: 0 4px 14px rgba(40, 55, 90, 0.055);
 }
 
+.graph-settings-render-mode {
+    margin-top: 7px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e6ed;
+}
+
+.graph-settings-popover .graph-settings-quick-theme .mantine-Input-input {
+    min-height: 25px;
+    height: 25px;
+}
+
 .graph-settings-tabs {
     margin-top: 12px;
+}
+
+.graph-settings-common .graph-settings-tabs {
+    margin-top: 8px;
+}
+
+.graph-settings-common .graph-settings-tab-panel {
+    margin-top: 6px;
+    padding: 8px;
+}
+
+.graph-settings-common .graph-settings-section-intro {
+    margin-bottom: 7px;
 }
 
 .graph-settings-tabs-list {
@@ -281,7 +309,7 @@
     display: flex;
     min-height: 48px;
     align-items: center;
-    padding: 14px 4px 0;
+    padding: 18px 4px 0;
 }
 
 .graph-settings-note {

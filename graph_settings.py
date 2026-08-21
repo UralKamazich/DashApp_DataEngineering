@@ -11,6 +11,7 @@ import dash_mantine_components as dmc
 
 REQUIRED_CONTROLS = {
     "theme",
+    "render_mode",
     "bubble",
     "bar_labels",
     "text_position",
@@ -48,6 +49,7 @@ SETTINGS_COMPONENT_IDS = (
     "font-size-title",
     "font-size-ticks",
     "InputMaxSizeBubble",
+    "InputMarkerSize",
 )
 
 SETTINGS_COMBOBOX_Z_INDEX = 10030
@@ -213,13 +215,20 @@ class GraphSettingsPanel:
                         ),
                     ],
                     cols=3,
-                    spacing="xs",
-                    verticalSpacing="xs",
-                    mt="sm",
+                    spacing=6,
+                    verticalSpacing=6,
+                    mt=8,
                     className="graph-settings-quick-grid",
                 ),
+                html.Div(
+                    [
+                        dmc.Text("Рендер", size="10px", fw=600, mb=4),
+                        self.controls["render_mode"],
+                    ],
+                    className="graph-settings-control graph-settings-render-mode",
+                ),
             ],
-            p="xs",
+            p=8,
             radius="md",
             withBorder=True,
             className="graph-settings-quick",
@@ -338,11 +347,23 @@ class GraphSettingsPanel:
                         ),
                         self._number_input(
                             "InputMaxSizeBubble",
-                            "Максимальный размер маркера",
+                            "Макс. размер пузыря",
                             30,
                             min=1,
                             max=100,
                             step=5,
+                        ),
+                        html.Div(
+                            self._number_input(
+                                "InputMarkerSize",
+                                "Размер маркера, px",
+                                8,
+                                min=1,
+                                max=100,
+                                step=1,
+                                decimalScale=1,
+                            ),
+                            className="graph-settings-span-2",
                         ),
                     ],
                     cols=2,
