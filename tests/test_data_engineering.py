@@ -102,12 +102,19 @@ class DatasetRegistryTests(unittest.TestCase):
                 "type": "group_aggregates",
                 "params": {"keys": ["group"], "metrics": ["mean", "count"]},
             },
+            {
+                "type": "clustering",
+                "inputs": ["x", "y"],
+                "outputs": ["cluster"],
+                "params": {"algorithm": "kmeans", "k": 3},
+            },
         ]
         self.assertEqual(
             summarize_transformation_steps(steps),
             [
                 "Биннинг: value → value_bin (4 групп) · после фильтров",
                 "Агрегация: по group · mean, count",
+                "Кластеризация: kmeans · K=3 · x, y → cluster",
             ],
         )
 

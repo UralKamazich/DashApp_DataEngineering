@@ -12,6 +12,7 @@ import dash_mantine_components as dmc
 from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
 from data_engineering_workspace import create_data_engineering_workspace
+from clustering_workspace import create_clustering_workspace
 from dataset_panel import create_dataset_drawer
 from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
@@ -22,7 +23,6 @@ from components import (
     dropdown_color, dropdown_size, dropdown_text,
     dropdown_hover_data, dropdown_corr_columns,
     dropdown_facet_row, dropdown_facet_col,
-    dropdown_cluster_cols,
     agg_keys_select, agg_cols_select, agg_metrics_select,
     agg_exclude_zeros_switch, agg_exclude_empty_switch,
     txtcopy_cols_select, txtcopy_suffix_input, txtcopy_strip_switch,
@@ -153,7 +153,6 @@ def create_layout():
             dcc.Store(id='selected-sheet'),
             dcc.Store(id='sheet-modal-toggle', data=True),
             dcc.Store(id='meta-columns'),
-            dcc.Store(id='cluster-metrics'),
             dcc.Store(id='source-file-path'),
             dcc.Store(id='source-file-name'),
             dcc.Store(id='dataset-registry', data={}),
@@ -245,27 +244,11 @@ def create_layout():
                         children=[create_data_engineering_workspace()],
                     ),
 
-                    html.Div(id="page-clustering", style={"display": "none"}, children=[
-                        dmc.Paper([
-                            dmc.Divider(label="Кластеризация (KMeans)"),
-                            dmc.Text("Кластеризация числовых столбцов с визуализацией PCA.", size="sm"),
-                            dmc.Space(h=8),
-                            dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("Числовые столбцы", c="blue", fw=500, size="sm")), dropdown_cluster_cols], span=8, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("К", c="blue", fw=500, size="sm")),
-                                              dmc.NumberInput(id="cluster-k", value=4, min=2, max=20, step=1, debounce=True)], span=2, style={"minWidth": 0}),
-                                dmc.GridCol([dmc.Button("Кластеризация", id="btn-cluster", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
-                            ]),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-                        html.Div(id="cluster-metrics-section", children=[
-                            dmc.Paper([
-                                dmc.Grid([
-                                    dmc.GridCol([dcc.Graph(id="cluster-elbow-graph", config={'displaylogo': False, 'responsive': True})], span=6),
-                                    dmc.GridCol([dcc.Graph(id="cluster-silhouette-graph", config={'displaylogo': False, 'responsive': True})], span=6),
-                                ])
-                            ], style={**STYLE_CARD, "overflow": "visible", "marginTop": "8px"}, shadow="md", p="md", withBorder=True),
-                        ], style={"display": "none"}),
-                    ]),
+                    html.Div(
+                        id="page-clustering",
+                        style={"display": "none", "minWidth": "0", "width": "100%"},
+                        children=[create_clustering_workspace()],
+                    ),
 
                     html.Div(id="page-ml", style={"display": "none"}, children=[
                         dmc.Paper([

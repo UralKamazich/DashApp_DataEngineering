@@ -17,7 +17,8 @@ DashApp_DataEngineering/
 │   ├── modals.py        # Клиентский колбэк переключения страниц + подсветка nav + открытие Drawer
 │   ├── file_handling.py # Загрузка .xlsx/.pkl, выбор листа, инфо о файле
 │   ├── filters.py       # Управление фильтрами (добавление, удаление, обновление)
-│   ├── pipeline.py      # Конвейер: биннинг, кластеризация (KMeans), агрегаты по группам
+│   ├── pipeline.py      # Применение фильтров к активному dataset
+│   ├── clustering.py    # Расчёт, визуализация и запись кластеризации
 │   ├── data_engineering.py # Текстовые копии столбцов
 │   ├── dropdowns.py     # Обновление опций всех дропдаунов при смене данных
 │   ├── graph.py         # Основной график (update_main_graph) + нижние (update_lower_graphs)
@@ -34,7 +35,7 @@ DashApp_DataEngineering/
 | `/` | График | Оси X/Y/Z, Color, Size, Text, Facet, Hover, Фильтры | Тип графика + кнопки + график |
 | `/correlation` | Коррелограмма | Выбор корреляционных столбцов | Корреляционная матрица + bar-графики |
 | `/data-engineering` | Data Engineering | Биннинг, текстовые копии, агрегаты | График |
-| `/clustering` | Кластеризация | Параметры KMeans | Elbow + Silhouette графики |
+| `/clustering` | Кластеризация | Dataset-aware лаборатория | PCA, подбор K, размеры и профили |
 | `/ml` | ML | Заглушка (в разработке) | — |
 
 ### Что сделано за эту сессию
@@ -50,7 +51,7 @@ DashApp_DataEngineering/
 2. **Страница ML** — наполнить функционалом (регрессия, классификация, подбор параметров)
 3. **Фильтры на странице Корреляции** — сейчас их нет, добавить
 4. **DE-страница**: добавить фильтры для биннинга/агрегатов
-5. **Страница кластеризации**: графики elbow/silhouette в corr-bar-x/y (уже работают через update_lower_graphs)
+5. **Страница кластеризации**: расчёт отделён от записи; результат добавляется в текущий или новый dataset
 
 ### Как запустить
 ```bash
@@ -67,10 +68,10 @@ python run.py
 - `page-graph`, `page-correlation`, `page-data-engineering`, `page-clustering`, `page-ml` — контейнеры страниц
 - `url` — dcc.Location
 - `nav-active-store` — dcc.Store с текущим путём
-- Все старые ID сохранены (dropdown_x, dropdown_y, update-graf, graph, corr-bar-x, corr-bar-y, btn-grouping, btn-cluster, btn-agg, btn-txtcopy и т.д.)
+- Основные совместимые ID сохранены (dropdown_x, dropdown_y, update-graf, graph, btn-grouping, btn-agg, btn-txtcopy и т.д.)
 
 ### Колбэки, требующие осторожности
 - `update_main_graph` (graph.py) — ~300 строк, все типы графиков
-- `pipeline_graf_dataset` (pipeline.py) — биннинг + кластеризация + агрегаты в одном колбэке
+- `callbacks.clustering` — отдельный расчёт и явная запись кластерных каналов в реестр dataset
 - `update_dropdown_options_all` (dropdowns.py) — 15 Outputs
 - `create_text_copies` (data_engineering.py) — текстовые копии

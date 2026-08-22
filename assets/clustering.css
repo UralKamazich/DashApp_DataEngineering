@@ -1,0 +1,132 @@
+.cluster-workspace {
+    display: grid;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 0 2px 10px;
+}
+
+.cluster-routing,
+.cluster-controls,
+.cluster-overview,
+.cluster-analysis-grid > * {
+    box-sizing: border-box;
+    min-width: 0;
+    background: #fff;
+}
+
+.cluster-routing-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    align-items: end;
+}
+
+.cluster-field {
+    min-width: 0;
+}
+
+.cluster-field > .mantine-Text-root:first-child {
+    margin-bottom: 3px;
+}
+
+.cluster-field .mantine-Select-root,
+.cluster-field .mantine-TextInput-root,
+.cluster-field .mantine-NumberInput-root,
+.cluster-field .mantine-MultiSelect-root {
+    width: 100% !important;
+    min-width: 0;
+}
+
+.cluster-main-grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.65fr);
+    gap: 8px;
+    min-width: 0;
+}
+
+.cluster-feature-wrap {
+    margin-top: 8px;
+}
+
+.cluster-feature-drop {
+    padding: 4px 5px 5px;
+}
+
+.cluster-feature-drop .mantine-MultiSelect-input {
+    min-height: 52px !important;
+    height: auto;
+    max-height: 76px;
+    overflow-y: auto;
+}
+
+.cluster-output-column {
+    margin-top: 8px;
+}
+
+.cluster-output-switches label {
+    font-size: 9px;
+}
+
+.cluster-overview {
+    display: flex;
+    flex-direction: column;
+    min-height: 430px;
+}
+
+.cluster-main-graph {
+    flex: 1;
+    min-height: 385px;
+}
+
+.cluster-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
+
+.cluster-metric-card {
+    min-width: 0;
+    background: #fff;
+}
+
+.cluster-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
+
+.cluster-analysis-grid .dash-graph {
+    min-height: 290px;
+}
+
+.cluster-profile-paper {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 1050px) {
+    .cluster-routing-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .cluster-main-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cluster-metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .cluster-routing-grid,
+    .cluster-metrics-grid,
+    .cluster-analysis-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .cluster-profile-paper {
+        grid-column: auto;
+    }
+}

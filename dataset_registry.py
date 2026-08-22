@@ -112,6 +112,17 @@ def summarize_transformation_steps(steps):
             key_text = ", ".join(keys[:2]) or "группам"
             metric_text = ", ".join(metrics[:3]) or "метрики"
             summary = f"Агрегация: по {key_text} · {metric_text}"
+        elif operation == "clustering":
+            algorithm = str(params.get("algorithm") or "kmeans")
+            clusters = params.get("k")
+            target = outputs[0] if outputs else "кластер"
+            feature_text = ", ".join(inputs[:3]) or "признаки"
+            if len(inputs) > 3:
+                feature_text += f" +{len(inputs) - 3}"
+            k_text = f" · K={clusters}" if clusters else ""
+            summary = (
+                f"Кластеризация: {algorithm}{k_text} · {feature_text} → {target}"
+            )
         else:
             summary = str(step.get("label") or "Преобразование")
 
@@ -154,6 +165,7 @@ def suggest_dataset_name(registry, queued_steps, scope="base"):
         "binning": "Биннинг",
         "text_copy": "Текст",
         "group_aggregates": "Агрегат",
+        "clustering": "Кластеризация",
     }
     methods = []
     for step in queued_steps or []:

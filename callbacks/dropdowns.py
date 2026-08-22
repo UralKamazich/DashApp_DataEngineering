@@ -27,7 +27,6 @@ def _select_options(columns):
         Output("dropdown_text", "options"),
 
         Output("bin-column", "options"),
-        Output("cluster-cols",  "data"),
         Output("agg-keys", "data"),
         Output("agg-cols", "data"),
         Output("txtcopy-cols", "data"),
@@ -39,11 +38,10 @@ def _select_options(columns):
 def update_dropdown_options_all(filtered_json, meta):
     empty_axes = [[]] * 10
     empty_bin_options = []
-    empty_cluster_opts = []
     empty_agg_data = []
     if not filtered_json:
         return (*empty_axes,
-                empty_bin_options, empty_cluster_opts,
+                empty_bin_options,
                 empty_agg_data, empty_agg_data, empty_agg_data)
 
     if isinstance(meta, dict) and meta.get("columns") is not None:
@@ -56,11 +54,11 @@ def update_dropdown_options_all(filtered_json, meta):
             dff = read_df_from_store(filtered_json, meta)
         except Exception:
             return (*empty_axes,
-                    empty_bin_options, empty_cluster_opts,
+                    empty_bin_options,
                     empty_agg_data, empty_agg_data, empty_agg_data)
         if dff is None or dff.empty:
             return (*empty_axes,
-                    empty_bin_options, empty_cluster_opts,
+                    empty_bin_options,
                     empty_agg_data, empty_agg_data, empty_agg_data)
         numeric_cols, categorical_cols, _datetime_cols = classify_simple(dff)
         all_cols = [str(c) for c in dff.columns]
@@ -71,8 +69,6 @@ def update_dropdown_options_all(filtered_json, meta):
     facet_options= [{"label": "Нет", "value": "Нет"}] + all_options
 
     bin_options     = _select_options(numeric_cols)
-    cluster_options = _select_options(numeric_cols)
-
     return [
         all_options,      # X
         all_options,      # Y
@@ -85,7 +81,6 @@ def update_dropdown_options_all(filtered_json, meta):
         facet_options,    # Facet col
         all_options,      # Text
         bin_options,      # bin-column.options
-        cluster_options,  # cluster-cols.options
         all_options,      # agg-keys.data
         all_options,      # agg-cols.data
         all_options,      # txtcopy-cols.data

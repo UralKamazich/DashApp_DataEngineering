@@ -209,7 +209,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             ("..graph.figure...", ("filtered-data", "data")),
             ("mv-graph.figure", ("filtered-data", "data")),
             ("correlation-bar-primary.figure", ("filtered-data", "data")),
-            ("cluster-elbow-graph.figure", ("cluster-metrics", "data")),
+            ("cluster-projection-graph.figure", ("cluster-analysis", "data")),
         )
         for marker, source_input in output_markers:
             callback = next(
@@ -225,6 +225,26 @@ class DashApplicationSmokeTests(unittest.TestCase):
             }
             with self.subTest(output=marker):
                 self.assertIn(("dropdown_style", "value"), inputs)
+
+    def test_clustering_is_dataset_aware_and_requires_explicit_commit(self):
+        components = {
+            getattr(component, "id", None): component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None)
+        }
+        for component_id in (
+            "cluster-input-dataset",
+            "cluster-input-scope",
+            "cluster-output-mode",
+            "cluster-run",
+            "cluster-commit",
+            "cluster-projection-graph",
+            "cluster-diagnostics-graph",
+            "cluster-sizes-graph",
+            "cluster-profile-graph",
+        ):
+            self.assertIn(component_id, components)
+        self.assertTrue(components["cluster-commit"].disabled)
 
     def test_correlation_is_a_separate_analysis_page(self):
         chart_values = {item["value"] for item in dropdown_chart_type.data}
