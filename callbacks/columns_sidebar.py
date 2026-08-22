@@ -17,12 +17,14 @@ from components import make_column_badge
 @app.callback(
     Output("columns-badges", "children"),
     Output("columns-sidebar", "style"),
-    Input("stored-data", "data"),
+    Input("active-dataset-data", "data"),
     Input("filtered-data", "data"),
     State("meta-columns", "data"),
+    State("dataset-registry", "data"),
+    State("active-dataset-id", "data"),
     prevent_initial_call=False,
 )
-def update_column_badges(stored_json, filtered_json, meta):
+def update_column_badges(active_json, filtered_json, meta, registry=None, active_id=None):
     """Обновляет плашки колонок в левом сайдбаре."""
     sidebar_style = {
         "overflowY": "auto",
@@ -33,7 +35,7 @@ def update_column_badges(stored_json, filtered_json, meta):
     }
 
     badges = []
-    has_data = bool(filtered_json or stored_json)
+    has_data = bool(filtered_json or active_json)
     if has_data and isinstance(meta, dict) and meta.get("columns") is not None:
         columns = [str(column) for column in (meta.get("columns") or [])]
         num = [str(column) for column in (meta.get("numeric") or [])]
@@ -45,8 +47,8 @@ def update_column_badges(stored_json, filtered_json, meta):
         try:
             if filtered_json:
                 df_to_show = read_df_from_store(filtered_json, meta)
-            elif stored_json:
-                df_to_show = read_df_from_store(stored_json, meta)
+            elif active_json:
+                df_to_show = read_df_from_store(active_json, meta)
         except Exception:
             pass
         if df_to_show is None or df_to_show.empty:
@@ -62,8 +64,19 @@ def update_column_badges(stored_json, filtered_json, meta):
             all_types[str(c)] = "categorical"
         for c in dt:
             all_types[str(c)] = "datetime"
+        record = (registry or {}).get(str(active_id or ""), {})
+        derived_columns = {
+            str(output)
+            for step in (record.get("steps") or [])
+            for output in (step.get("outputs") or [])
+        }
         badges = [
-            make_column_badge(c, all_types.get(c, "categorical"))
+            make_column_badge(
+                c,
+                all_types.get(c, "categorical"),
+                derived=c in derived_columns,
+                dataset_id=active_id,
+            )
             for c in columns
         ]
 

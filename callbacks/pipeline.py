@@ -3,15 +3,15 @@
 Callbacks: конвейер данных — фильтрация, биннинг, кластеризация, агрегаты.
 
 Разделено на два независимых колбэка:
-  1. apply_filters — stored-data + применённые фильтры → filtered-data
-  2. run_de_operations — DE-кнопки + filtered-data → filtered-data + новые колонки
+  1. apply_filters — active-dataset-data + применённые фильтры → filtered-data
+  2. run_de_operations — кластеризация текущей фильтрованной выборки
 """
 
 import re
 import logging
 import pandas as pd
 import numpy as np
-from dash import callback, Output, Input, State, no_update, ALL
+from dash import callback, Output, Input, State, no_update, ALL, ctx
 from dash.exceptions import PreventUpdate
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -26,24 +26,24 @@ logger = logging.getLogger(__name__)
 
 
 # =========================
-# Фильтрация: stored-data + применённые фильтры → filtered-data
+# Фильтрация: активный dataset + применённые фильтры → filtered-data
 # =========================
 @app.callback(
     Output("filtered-data", "data", allow_duplicate=True),
     Output("meta-columns", "data", allow_duplicate=True),
     Input("filters-applied-state", "data"),
     Input("filter-applied-logic", "data"),
-    State("stored-data", "data"),
+    Input("active-dataset-data", "data"),
     State("meta-columns", "data"),
     prevent_initial_call=True
 )
-def apply_filters(filters_state, logic_mode, stored_json, meta_state):
-    """Применяет фильтры к исходному датасету → filtered-data (чистый, без DE-колонок)."""
-    if not stored_json:
+def apply_filters(filters_state, logic_mode, active_json, meta_state):
+    """Применяет фильтры к выбранному рабочему dataset."""
+    if not active_json:
         raise PreventUpdate
 
     try:
-        df = read_df_from_store(stored_json, meta_state)
+        df = read_df_from_store(active_json, meta_state)
     except Exception:
         raise PreventUpdate
 
@@ -115,9 +115,9 @@ def compute_cluster_metrics(filtered_json, cluster_cols, meta):
     Output("notifications-container", "sendNotifications", allow_duplicate=True),
     Output("de-agg-status", "children", allow_duplicate=True),
 
-    Input("btn-grouping", "n_clicks"),
     Input("btn-cluster",  "n_clicks"),
-    Input("btn-agg",      "n_clicks"),
+    State("btn-grouping", "n_clicks"),
+    State("btn-agg",      "n_clicks"),
 
     State("bin-column", "value"),
     State("bin-method", "value"),
@@ -137,7 +137,7 @@ def compute_cluster_metrics(filtered_json, cluster_cols, meta):
     prevent_initial_call=True
 )
 def run_de_operations(
-    n_group_btn, n_cluster_btn, n_agg_btn,
+    n_cluster_btn, n_group_btn, n_agg_btn,
     bin_col, bin_method, bin_k,
     cluster_cols, cluster_k,
     agg_keys, agg_cols, agg_metrics, agg_exclude_zeros, agg_exclude_empty,
@@ -146,6 +146,13 @@ def run_de_operations(
     """Биннинг, кластеризация, агрегаты: добавляют новые колонки в filtered-data."""
     notifications = []
     status_msg = no_update
+    trig = ctx.triggered_id
+
+    # Feature-engineering buttons are handled by the dataset-aware callback in
+    # callbacks.data_engineering.  Avoid even deserializing a large dataset in
+    # this legacy clustering callback for those actions.
+    if trig in {"btn-grouping", "btn-agg"}:
+        raise PreventUpdate
 
     if not filtered_json:
         raise PreventUpdate
@@ -165,8 +172,6 @@ def run_de_operations(
             _make_error_notif("Data Engineering: датасет пуст."),
             no_update,
         )
-
-    trig = _ctx.triggered_id
 
     # --- БИННИНГ ---
     if trig == "btn-grouping":

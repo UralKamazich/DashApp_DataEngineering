@@ -191,6 +191,10 @@ class GraphSettingsPanel:
                 dmc.SimpleGrid(
                     [
                         html.Div(
+                            self.controls["dataset"],
+                            className="graph-settings-control graph-settings-dataset",
+                        ) if "dataset" in self.controls else None,
+                        html.Div(
                             self.controls["theme"],
                             className="graph-settings-control graph-settings-quick-theme",
                         ),
@@ -214,7 +218,7 @@ class GraphSettingsPanel:
                             placeholder="Авто",
                         ),
                     ],
-                    cols=3,
+                    cols=2,
                     spacing=6,
                     verticalSpacing=6,
                     mt=8,

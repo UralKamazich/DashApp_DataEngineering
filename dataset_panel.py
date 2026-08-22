@@ -21,6 +21,12 @@ def _panel_content():
 
     return [
         html.Div(
+            [
+                dmc.Text("Нет данных", id="active-dataset-panel-label", size="xs", fw=650),
+            ],
+            className="dataset-panel-head",
+        ),
+        html.Div(
             dmc.Paper(
                 id="columns-sidebar",
                 children=[
@@ -70,4 +76,6 @@ DATASET_PANEL = SlidePanel(
 
 
 def create_dataset_drawer():
-    return DATASET_PANEL.render()
+    drawer = DATASET_PANEL.render()
+    drawer.children.append(html.Div(id="dataset-tabs-rail", className="dataset-tabs-rail"))
+    return drawer

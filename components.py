@@ -21,7 +21,13 @@ COLUMN_TYPE_LABELS = {
 }
 
 
-def make_column_badge(col_name: str, col_type: str) -> html.Div:
+def make_column_badge(
+    col_name: str,
+    col_type: str,
+    *,
+    derived: bool = False,
+    dataset_id: str | None = None,
+) -> html.Div:
     """Compact draggable dataset channel with a restrained type marker."""
     type_mark, type_name = COLUMN_TYPE_LABELS.get(col_type, ("…", "Другой тип"))
     return html.Div(
@@ -33,6 +39,11 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
                         className=f"column-type-marker column-type-marker--{col_type}",
                         **{"aria-hidden": "true"},
                     ),
+                    html.Sup(
+                        "fx",
+                        className="column-derived-marker",
+                        title="Создан в Data Engineering",
+                    ) if derived else None,
                     html.Span(str(col_name), className="column-channel-name"),
                     html.Span(
                         className="column-drag-handle",
@@ -41,7 +52,7 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
                 ],
                 className="column-channel-row",
             ),
-            label=f"{col_name} · {type_name}",
+            label=f"{col_name} · {type_name}" + (" · производный канал" if derived else ""),
             openDelay=350,
             withArrow=True,
         ),
@@ -51,6 +62,8 @@ def make_column_badge(col_name: str, col_type: str) -> html.Div:
         **{
             "data-column-name": str(col_name),
             "data-column-type": col_type,
+            "data-dataset-id": str(dataset_id or ""),
+            "data-derived": "true" if derived else "false",
         },
     )
 
@@ -108,6 +121,17 @@ def create_multiselect(id, options, value=None, searchable=True, clearable=True,
 # =========================
 # Стиль графика
 # =========================
+graph_dataset_select = dmc.Select(
+    id="graph-dataset-select",
+    label="Датасет",
+    data=[],
+    value="source",
+    allowDeselect=False,
+    searchable=True,
+    size="xs",
+    comboboxProps={"shadow": "md"},
+)
+
 dropdown_style = dmc.Select(
     id="dropdown_style",
     label="Тема",
@@ -230,7 +254,7 @@ agg_metrics_select = dmc.CheckboxGroup(
 
 agg_exclude_zeros_switch = dmc.Switch(
     id="agg-exclude-zeros",
-    label="Исключать нули из расчётов",
+    label="Нули не учитывать",
     checked=False,
     onLabel="Да",
     offLabel="Нет",
@@ -239,7 +263,7 @@ agg_exclude_zeros_switch = dmc.Switch(
 
 agg_exclude_empty_switch = dmc.Switch(
     id="agg-exclude-empty",
-    label="Исключать пустые (NaN) из расчётов",
+    label="NaN не учитывать",
     checked=True,
     onLabel="Да",
     offLabel="Нет",

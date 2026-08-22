@@ -324,6 +324,8 @@ clientside_callback(
     Output("filter-logic-mode", "value"),
     Output("filter-applied-logic", "data"),
     Input("stored-data", "data"),
+    Input("active-dataset-id", "data"),
+    Input("active-dataset-data", "data"),
     Input("add-filter-btn", "n_clicks"),
     Input({"type": "remove-filter", "index": ALL}, "n_clicks"),
     Input("reset-filters-btn", "n_clicks"),
@@ -341,6 +343,8 @@ clientside_callback(
 )
 def manage_filters(
     stored_json,
+    _active_dataset_id,
+    active_json,
     _add_clicks,
     _remove_clicks,
     _reset_clicks,
@@ -376,7 +380,19 @@ def manage_filters(
     if trigger == "reset-filters-btn":
         return [], 0, {}, {}, "and", "and"
 
-    frame = _source_frame(stored_json, meta)
+    frame = _source_frame(active_json or stored_json, meta)
+
+    if trigger == "active-dataset-id" or trigger == "active-dataset-data":
+        cards = []
+        restored = {}
+        for filter_id, config in draft.items():
+            column = str((config or {}).get("column") or "")
+            if not column or column not in frame.columns:
+                continue
+            restored[str(filter_id)] = dict(config or {})
+            cards.append(_filter_card(filter_id, column, restored, frame))
+        counter = max((int(filter_id) for filter_id in restored), default=0)
+        return cards, counter, no_update, no_update, no_update, no_update
 
     if trigger == "revert-filters-btn":
         restored = {}
@@ -441,12 +457,12 @@ def manage_filters(
     Input({"type": "filter-column", "index": MATCH}, "value"),
     State({"type": "filter-column", "index": MATCH}, "id"),
     State("filters-state", "data"),
-    State("stored-data", "data"),
+    State("active-dataset-data", "data"),
     State("meta-columns", "data"),
     prevent_initial_call=True,
 )
-def update_filter_definition(column, column_id, filters_state, stored_json, meta):
-    frame = _source_frame(stored_json, meta)
+def update_filter_definition(column, column_id, filters_state, active_json, meta):
+    frame = _source_frame(active_json, meta)
     filter_id = str(column_id["index"])
     config = (filters_state or {}).get(filter_id, {})
     kind = _column_type(frame, column)
@@ -468,12 +484,12 @@ def update_filter_definition(column, column_id, filters_state, stored_json, meta
     Input({"type": "filter-operator", "index": MATCH}, "value"),
     State({"type": "filter-column", "index": MATCH}, "id"),
     State("filters-state", "data"),
-    State("stored-data", "data"),
+    State("active-dataset-data", "data"),
     State("meta-columns", "data"),
     prevent_initial_call=True,
 )
-def update_filter_control(column, operator, column_id, filters_state, stored_json, meta):
-    frame = _source_frame(stored_json, meta)
+def update_filter_control(column, operator, column_id, filters_state, active_json, meta):
+    frame = _source_frame(active_json, meta)
     filter_id = str(column_id["index"])
     config = (filters_state or {}).get(filter_id, {})
     same_definition = (
@@ -499,7 +515,7 @@ def update_filter_control(column, operator, column_id, filters_state, stored_jso
     State({"type": "filter-range-value", "index": ALL}, "id"),
     State({"type": "filter-enabled", "index": ALL}, "id"),
     State("filters-state", "data"),
-    State("stored-data", "data"),
+    State("active-dataset-data", "data"),
     State("meta-columns", "data"),
     prevent_initial_call=True,
 )
@@ -517,11 +533,11 @@ def update_filters_state(
     range_value_ids,
     enabled_ids,
     filters_state,
-    stored_json,
+    active_json,
     meta,
 ):
     updated = dict(filters_state or {})
-    frame = _source_frame(stored_json, meta)
+    frame = _source_frame(active_json, meta)
     operators_by_id = {
         str(component_id.get("index")): operators[index]
         for index, component_id in enumerate(operator_ids or [])
@@ -726,12 +742,12 @@ def update_filter_draft_status(draft, applied, draft_logic, applied_logic):
     Output("filters-side-tab-count", "children"),
     Output("filters-side-tab", "className"),
     Input("filters-applied-state", "data"),
-    Input("stored-data", "data"),
+    Input("active-dataset-data", "data"),
     Input("filtered-data", "data"),
 )
-def update_filter_summary(applied, stored_json, filtered_json):
+def update_filter_summary(applied, active_json, filtered_json):
     count = len(_clean_filter_state(applied))
-    source_rows = _serialized_row_count(stored_json)
+    source_rows = _serialized_row_count(active_json)
     filtered_rows = _serialized_row_count(filtered_json)
     tab_class = FILTERS_PANEL.tab_class
     if count:

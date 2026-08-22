@@ -210,6 +210,16 @@
     color: #d9480f;
 }
 
+#columns-sidebar .column-derived-marker {
+    flex: 0 0 auto;
+    margin-left: -2px;
+    color: #7048e8;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.4px;
+}
+
 #columns-sidebar .column-channel-name {
     min-width: 0;
     flex: 1 1 auto;

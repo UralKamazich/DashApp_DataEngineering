@@ -182,6 +182,11 @@
     height: 25px;
 }
 
+.graph-settings-popover .graph-settings-dataset .mantine-Input-input {
+    min-height: 25px;
+    height: 25px;
+}
+
 .graph-settings-tabs {
     margin-top: 12px;
 }
@@ -370,10 +375,6 @@
 @container graph-settings (max-width: 360px) {
     .graph-settings-quick-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    }
-
-    .graph-settings-quick-theme {
-        grid-column: span 2;
     }
 
     .graph-settings-tabs-list button {

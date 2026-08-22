@@ -11,12 +11,13 @@ import dash_mantine_components as dmc
 
 from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
+from data_engineering_workspace import create_data_engineering_workspace
 from dataset_panel import create_dataset_drawer
 from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from components import (
-    dropdown_style, graph_render_mode,
+    dropdown_style, graph_render_mode, graph_dataset_select,
     dropdown_x, dropdown_y, dropdown_z,
     dropdown_color, dropdown_size, dropdown_text,
     dropdown_hover_data, dropdown_corr_columns,
@@ -67,6 +68,7 @@ def make_nav_link(label, href):
 
 GRAPH_SETTINGS_PANEL = GraphSettingsPanel(
     controls={
+        "dataset": graph_dataset_select,
         "theme": dropdown_style,
         "render_mode": graph_render_mode,
         "bubble": SwitchBubble,
@@ -154,6 +156,11 @@ def create_layout():
             dcc.Store(id='cluster-metrics'),
             dcc.Store(id='source-file-path'),
             dcc.Store(id='source-file-name'),
+            dcc.Store(id='dataset-registry', data={}),
+            dcc.Store(id='active-dataset-id'),
+            dcc.Store(id='active-dataset-data'),
+            dcc.Store(id='de-draft-pipeline', data={"input_id": None, "scope": "base", "steps": []}),
+            dcc.Store(id='de-auto-output-name'),
 
             dmc.NotificationContainer(id="notifications-container"),
 
@@ -226,53 +233,17 @@ def create_layout():
                         correlation_workspace,
                     ]),
 
-                    html.Div(id="page-data-engineering", style={"display": "none"}, children=[
-                        dmc.Paper([
-                            dmc.Divider(label="Группировка численного столбца (биннинг)"),
-                            dmc.Grid([
-                                dmc.GridCol([html.Center(dmc.Text("Столбец для биннинга", c="blue", fw=500, size="sm")), bin_column_select], span=8, style={"minWidth": 0}),
-                                dmc.GridCol([html.Center(dmc.Text("Число групп", c="blue", fw=500, size="sm")), bin_k], span=2, style={"minWidth": 0}),
-                                dmc.GridCol([dmc.Button("Группировка", id="btn-grouping", size="xs")], span=2, style={"minWidth": 0, "marginTop": 23}),
-                            ]),
-                            dmc.Grid([
-                                dmc.GridCol([dmc.Text("Метод", c="blue", fw=500, size="sm"), bin_method], span=6, style={"minWidth": 0}),
-                                dmc.GridCol([dmc.Text("Метки", c="blue", fw=500, size="sm"), bin_label_style], span=6, style={"minWidth": 0}),
-                            ]),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-
-                        dmc.Paper([
-                            dmc.Divider(label="Текстовые копии"),
-                            dmc.Space(h=8),
-                            dmc.Grid([
-                                dmc.GridCol([dmc.Text("Столбец(ы)", c="blue", fw=500, size="sm"), txtcopy_cols_select], span=8, style={"minWidth": 0}),
-                                dmc.GridCol([txtcopy_suffix_input], span=4, style={"minWidth": 0}),
-                            ]),
-                            dmc.Space(h=8),
-                            dmc.Group([txtcopy_strip_switch], gap="xl"),
-                            dmc.Space(h=10),
-                            dmc.Group([dmc.Button("Создать текстовую копию", id="btn-txtcopy", size="sm", variant="light")], justify="flex-end"),
-                            dmc.Space(h=6),
-                            dmc.Text(id="de-txt-status", size="sm", c="dimmed"),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-
-                        dmc.Paper([
-                            dmc.Divider(label="Расчёт агрегатов по группам"),
-                            dmc.Text("Ключи, столбцы и метрики — новые колонки в конец датасета.", size="sm"),
-                            dmc.Space(h=10),
-                            dmc.Grid([
-                                dmc.GridCol([dmc.Text("Ключ(и)", c="blue", fw=500, size="sm"), agg_keys_select], span=6, style={"minWidth": 0}),
-                                dmc.GridCol([dmc.Text("Столбцы", c="blue", fw=500, size="sm"), agg_cols_select], span=6, style={"minWidth": 0}),
-                            ]),
-                            dmc.Space(h=8),
-                            agg_metrics_select,
-                            dmc.Space(h=10),
-                            dmc.Group([agg_exclude_zeros_switch, agg_exclude_empty_switch], gap="xl"),
-                            dmc.Space(h=10),
-                            dmc.Group([dmc.Button("Рассчитать", id="btn-agg", size="sm")], justify="flex-end"),
-                            dmc.Space(h=6),
-                            dmc.Text(id="de-agg-status", size="sm", c="dimmed"),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-                    ]),
+                    html.Div(
+                        id="page-data-engineering",
+                        style={
+                            "display": "none",
+                            "width": "100%",
+                            "maxWidth": "100%",
+                            "minWidth": "0",
+                            "overflowX": "hidden",
+                        },
+                        children=[create_data_engineering_workspace()],
+                    ),
 
                     html.Div(id="page-clustering", style={"display": "none"}, children=[
                         dmc.Paper([

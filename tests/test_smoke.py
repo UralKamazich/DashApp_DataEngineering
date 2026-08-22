@@ -2090,6 +2090,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
             if component.__class__.__name__ == "Select"
         }
         expected_ids = {
+            "graph-dataset-select",
             "dropdown_style",
             "dropdown_text_pozition",
             "dropdown_axes_category",
