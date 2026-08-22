@@ -82,6 +82,45 @@ def dataset_options(registry):
     ]
 
 
+def summarize_transformation_steps(steps):
+    """Return short human-readable descriptions of committed transformations."""
+    summaries = []
+    for step in steps or []:
+        step = step or {}
+        operation = step.get("type") or step.get("operation")
+        params = step.get("params") or {}
+        inputs = [str(value) for value in (step.get("inputs") or [])]
+        outputs = [str(value) for value in (step.get("outputs") or [])]
+
+        if operation == "binning":
+            source = inputs[0] if inputs else "канал"
+            target = outputs[0] if outputs else "новый канал"
+            groups = params.get("groups")
+            detail = f" ({groups} групп)" if groups else ""
+            summary = f"Биннинг: {source} → {target}{detail}"
+        elif operation == "text_copy":
+            source = ", ".join(inputs[:2]) or "каналы"
+            if len(inputs) > 2:
+                source += f" +{len(inputs) - 2}"
+            target = ", ".join(outputs[:2]) or "текстовые копии"
+            if len(outputs) > 2:
+                target += f" +{len(outputs) - 2}"
+            summary = f"Текст: {source} → {target}"
+        elif operation == "group_aggregates":
+            keys = [str(value) for value in (params.get("keys") or [])]
+            metrics = [str(value) for value in (params.get("metrics") or [])]
+            key_text = ", ".join(keys[:2]) or "группам"
+            metric_text = ", ".join(metrics[:3]) or "метрики"
+            summary = f"Агрегация: по {key_text} · {metric_text}"
+        else:
+            summary = str(step.get("label") or "Преобразование")
+
+        if step.get("scope") == "filtered":
+            summary += " · после фильтров"
+        summaries.append(summary)
+    return summaries
+
+
 def get_record(registry, dataset_id):
     return (registry or {}).get(str(dataset_id or ""))
 

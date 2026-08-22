@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dash import ALL, Input, Output, State, ctx, html, no_update
 from dash.exceptions import PreventUpdate
+import dash_mantine_components as dmc
 
 from dash_app import app
 from dataset_registry import (
@@ -14,6 +15,7 @@ from dataset_registry import (
     get_record,
     payload_for_record,
     save_runtime_state,
+    summarize_transformation_steps,
 )
 from utils import meta_from_df, read_df_from_store
 
@@ -55,10 +57,12 @@ def render_dataset_controls(registry, active_id, graph_options, de_options):
         return [], "Нет данных", [], []
     active_id = active_id if active_id in valid_ids else options[0]["value"]
     rail = []
-    for index, (dataset_id, record) in enumerate((registry or {}).items()):
+    derived_index = 0
+    for dataset_id, record in (registry or {}).items():
         if dataset_id == SOURCE_DATASET_ID:
             continue
-        short = f"D{index}"
+        derived_index += 1
+        short = f"D{derived_index}"
         is_derived = dataset_id != SOURCE_DATASET_ID
         is_active = dataset_id == active_id
         classes = ["dataset-rail-tab"]
@@ -67,16 +71,52 @@ def render_dataset_controls(registry, active_id, graph_options, de_options):
         if is_active:
             classes.append("is-active")
         name = str(record.get("name") or dataset_id)
+        summaries = summarize_transformation_steps(record.get("steps"))
+        visible_summaries = summaries[-5:]
+        hidden_count = max(0, len(summaries) - len(visible_summaries))
+        tooltip_content = html.Div(
+            [
+                html.Div(name, className="dataset-rail-tooltip-name"),
+                html.Div(
+                    [
+                        *(
+                            [
+                                html.Div(
+                                    f"{len(summaries) - len(visible_summaries) + position}. {summary}",
+                                    className="dataset-rail-tooltip-step",
+                                )
+                                for position, summary in enumerate(visible_summaries, 1)
+                            ]
+                            if visible_summaries
+                            else [html.Div("Без преобразований", className="dataset-rail-tooltip-step")]
+                        ),
+                        html.Div(
+                            f"Ещё преобразований: {hidden_count}",
+                            className="dataset-rail-tooltip-more",
+                        ) if hidden_count else None,
+                    ],
+                    className="dataset-rail-tooltip-steps",
+                ),
+            ],
+            className="dataset-rail-tooltip-content",
+        )
         rail.append(
-            html.Button(
-                [
-                    html.Span(short, className="dataset-rail-tab-short"),
-                    html.Span(name, className="dataset-rail-tab-name"),
-                ],
-                id={"type": "dataset-rail-tab", "index": dataset_id},
-                className=" ".join(classes),
-                title=(f"Исходный dataset · {name}" if not is_derived else name),
-                type="button",
+            dmc.Tooltip(
+                html.Button(
+                    short,
+                    id={"type": "dataset-rail-tab", "index": dataset_id},
+                    className=" ".join(classes),
+                    type="button",
+                    **{"aria-label": f"Открыть dataset {short}: {name}"},
+                ),
+                label=tooltip_content,
+                position="right",
+                openDelay=250,
+                withArrow=True,
+                multiline=True,
+                maw=360,
+                withinPortal=True,
+                boxWrapperProps={"style": {"width": "32px"}},
             )
         )
     active_record = get_record(registry, active_id) or {}

@@ -177,7 +177,7 @@ def create_data_engineering_workspace():
                                         {"label": "В текущий", "value": "current"},
                                         {"label": "Новый dataset", "value": "new"},
                                     ],
-                                    value="current",
+                                    value="new",
                                     size="xs",
                                     fullWidth=True,
                                 ),

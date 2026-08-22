@@ -10,6 +10,7 @@ from dataset_registry import (
     payload_for_record,
     save_runtime_state,
     suggest_dataset_name,
+    summarize_transformation_steps,
 )
 from engineering_ops import (
     apply_binning,
@@ -87,6 +88,28 @@ class DatasetRegistryTests(unittest.TestCase):
             output_name="Первый",
         )
         self.assertTrue(suggest_dataset_name(derived, queued, "base").endswith("_2"))
+
+    def test_transformation_summary_uses_committed_step_details(self):
+        steps = [
+            {
+                "type": "binning",
+                "inputs": ["value"],
+                "outputs": ["value_bin"],
+                "params": {"groups": 4},
+                "scope": "filtered",
+            },
+            {
+                "type": "group_aggregates",
+                "params": {"keys": ["group"], "metrics": ["mean", "count"]},
+            },
+        ]
+        self.assertEqual(
+            summarize_transformation_steps(steps),
+            [
+                "Биннинг: value → value_bin (4 групп) · после фильтров",
+                "Агрегация: по group · mean, count",
+            ],
+        )
 
 
 class EngineeringOperationTests(unittest.TestCase):

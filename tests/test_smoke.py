@@ -195,6 +195,15 @@ class DashApplicationSmokeTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertTrue((assets / filename).is_file())
 
+    def test_data_engineering_defaults_to_an_editable_new_dataset(self):
+        components = {
+            getattr(component, "id", None): component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None) in {"de-output-mode", "de-output-name"}
+        }
+        self.assertEqual(components["de-output-mode"].value, "new")
+        self.assertFalse(getattr(components["de-output-name"], "disabled", False))
+
     def test_every_plot_group_reacts_to_theme_changes(self):
         output_markers = (
             ("..graph.figure...", ("filtered-data", "data")),
