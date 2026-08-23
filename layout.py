@@ -13,6 +13,7 @@ from config import APP_NAME, STYLE_CARD
 from correlation_workspace import CorrelationWorkspace
 from data_engineering_workspace import create_data_engineering_workspace
 from clustering_workspace import create_clustering_workspace
+from ml_workspace import create_ml_workspace
 from dataset_panel import create_dataset_drawer
 from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
@@ -250,15 +251,11 @@ def create_layout():
                         children=[create_clustering_workspace()],
                     ),
 
-                    html.Div(id="page-ml", style={"display": "none"}, children=[
-                        dmc.Paper([
-                            dmc.Text("Machine Learning", fw=600, size="lg"),
-                            dmc.Space(h=8),
-                            dmc.Text("Раздел машинного обучения — в разработке.", size="md", c="dimmed"),
-                            dmc.Space(h=16),
-                            dmc.Text("Здесь будут: регрессия, классификация, подбор параметров, предсказания.", size="sm", c="dimmed"),
-                        ], style=STYLE_CARD, shadow="md", p="md", withBorder=True),
-                    ]),
+                    html.Div(
+                        id="page-ml",
+                        style={"display": "none", "minWidth": "0", "width": "100%"},
+                        children=[create_ml_workspace()],
+                    ),
                 ]),  # конец правой панели
 
                 # ---------- ВЫКАТНАЯ ПАНЕЛЬ ФИЛЬТРОВ (справа) ----------

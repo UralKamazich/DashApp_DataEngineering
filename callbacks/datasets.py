@@ -68,6 +68,12 @@ def render_dataset_controls(registry, active_id, graph_options, de_options):
         classes = ["dataset-rail-tab"]
         if is_derived:
             classes.append("is-derived")
+        if any(
+            (step or {}).get("type") == "catboost_regression"
+            or (step or {}).get("operation") == "catboost_regression"
+            for step in (record.get("steps") or [])
+        ):
+            classes.append("is-ml")
         if is_active:
             classes.append("is-active")
         name = str(record.get("name") or dataset_id)

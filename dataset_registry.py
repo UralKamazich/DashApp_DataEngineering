@@ -4,11 +4,16 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from uuid import uuid4
 
 
 SOURCE_DATASET_ID = "source"
 _PAYLOAD_CACHE: dict[str, str] = {}
+
+
+def _created_at():
+    return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _store_payload(payload):
@@ -65,6 +70,7 @@ def create_source_registry(payload, meta, source_name=None):
         "id": SOURCE_DATASET_ID,
         "name": source_name or "Исходный",
         "kind": "source",
+        "created_at": _created_at(),
         "parent_id": None,
         "data_ref": data_reference,
         "filtered_ref": data_reference,
@@ -123,6 +129,11 @@ def summarize_transformation_steps(steps):
             summary = (
                 f"Кластеризация: {algorithm}{k_text} · {feature_text} → {target}"
             )
+        elif operation == "catboost_regression":
+            target = str(params.get("target") or (inputs[0] if inputs else "цель"))
+            feature_count = len(params.get("features") or inputs[1:])
+            outputs_text = ", ".join(outputs[:2]) or "прогноз"
+            summary = f"CatBoost: {target} · {feature_count} признаков → {outputs_text}"
         else:
             summary = str(step.get("label") or "Преобразование")
 
@@ -166,6 +177,7 @@ def suggest_dataset_name(registry, queued_steps, scope="base"):
         "text_copy": "Текст",
         "group_aggregates": "Агрегат",
         "clustering": "Кластеризация",
+        "catboost_regression": "CatBoost",
     }
     methods = []
     for step in queued_steps or []:
@@ -212,6 +224,7 @@ def commit_result(
             "id": dataset_id,
             "name": (output_name or "").strip() or default_name,
             "kind": "derived",
+            "created_at": _created_at(),
             "parent_id": str(input_id),
             "data_ref": _store_payload(payload),
             "filtered_ref": None,

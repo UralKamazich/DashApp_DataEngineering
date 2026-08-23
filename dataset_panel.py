@@ -96,6 +96,7 @@ DATASET_PANEL = SlidePanel(
         dcc.Store(id="dataset-outside-close-store", data=False),
         dcc.Store(id="dataset-file-drop-store"),
         dcc.Store(id="dataset-virtual-window", data={"start": 0, "size": 48}),
+        dcc.Input(id="dataset-export-request", value="", type="text", style={"display": "none"}),
     ],
 )
 
@@ -103,4 +104,18 @@ DATASET_PANEL = SlidePanel(
 def create_dataset_drawer():
     drawer = DATASET_PANEL.render()
     drawer.children.append(html.Div(id="dataset-tabs-rail", className="dataset-tabs-rail"))
+    drawer.children.append(
+        html.Div(
+            html.Button(
+                "Выгрузить в Excel",
+                type="button",
+                id="dataset-context-export",
+                className="dataset-context-menu-item",
+            ),
+            id="dataset-context-menu",
+            className="dataset-context-menu",
+            role="menu",
+            **{"aria-hidden": "true"},
+        )
+    )
     return drawer

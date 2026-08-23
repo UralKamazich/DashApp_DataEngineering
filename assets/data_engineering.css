@@ -240,6 +240,19 @@
     border-color: #1971c2;
 }
 
+.dataset-rail-tab.is-ml {
+    color: #5f3dc4;
+    background: #f3f0ff;
+    border-color: #b197fc;
+}
+
+.dataset-rail-tab.is-ml:hover,
+.dataset-rail-tab.is-ml.is-active {
+    color: #ffffff;
+    background: #7048e8;
+    border-color: #7048e8;
+}
+
 .dataset-rail-tooltip-content {
     max-width: 340px;
     padding: 2px 1px;

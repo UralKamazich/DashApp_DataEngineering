@@ -3,6 +3,7 @@
 Callbacks: сохранение текущего датасета в Excel.
 """
 
+import json
 import re
 import uuid
 from pathlib import Path
@@ -11,7 +12,59 @@ from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
+from dataset_export import export_frame_to_excel
+from dataset_registry import SOURCE_DATASET_ID, get_record, payload_for_record
 from utils import _make_error_notif, read_df_from_store
+
+
+def _export_ok(path):
+    return [{
+        "id": str(uuid.uuid4()),
+        "title": "Excel сохранён",
+        "message": f"Файл сохранён рядом с исходником: {path}",
+        "color": "green",
+        "loading": False,
+        "action": "show",
+        "autoClose": 7000,
+    }]
+
+
+@app.callback(
+    Output("notifications-container", "sendNotifications", allow_duplicate=True),
+    Input("dataset-export-request", "value"),
+    State("dataset-registry", "data"),
+    State("source-file-path", "data"),
+    State("source-file-name", "data"),
+    prevent_initial_call=True,
+)
+def export_registered_dataset(request, registry, source_path, source_name):
+    try:
+        payload = json.loads(request or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise PreventUpdate
+    dataset_id = str(payload.get("dataset_id") or "")
+    record = get_record(registry, dataset_id)
+    if not record:
+        return _make_error_notif("Dataset для выгрузки не найден.")
+    stored = payload_for_record(record)
+    if not stored:
+        return _make_error_notif("Содержимое dataset недоступно.")
+    try:
+        frame = read_df_from_store(stored, record.get("meta") or {})
+        dataset_name = (
+            "Исходный" if dataset_id == SOURCE_DATASET_ID
+            else str(record.get("name") or dataset_id)
+        )
+        path = export_frame_to_excel(
+            frame,
+            source_path=source_path,
+            source_name=source_name,
+            dataset_name=dataset_name,
+            created_at=record.get("created_at"),
+        )
+    except Exception as error:
+        return _make_error_notif(f"Ошибка сохранения Excel: {error}")
+    return _export_ok(path)
 
 
 # Сохранить текущий датасет в Excel

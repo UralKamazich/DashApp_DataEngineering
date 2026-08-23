@@ -36,4 +36,4 @@ MULTIVARIATE_WORKSPACE.register_callbacks(app)
 # =========================
 # Регистрация callbacks
 # =========================
-from callbacks import modals, file_handling, filters, pipeline, data_engineering, clustering, dropdowns, graph, download, columns_sidebar, dataset_panel, datasets, multivariate
+from callbacks import modals, file_handling, filters, pipeline, data_engineering, clustering, ml, dropdowns, graph, download, columns_sidebar, dataset_panel, datasets, multivariate
