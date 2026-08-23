@@ -1,0 +1,385 @@
+.graph-workspace-component {
+    min-width: 0;
+}
+
+.graph-settings-popover {
+    position: fixed;
+    z-index: 10020;
+    display: none;
+    width: min(340px, calc(100vw - 16px));
+    max-height: min(720px, calc(100vh - 16px));
+    box-sizing: border-box;
+    flex-direction: column;
+    overflow: hidden;
+    color: #212529;
+    background: #f6f8fb;
+    border: 1px solid #d9dfeb;
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(28, 39, 60, 0.24), 0 3px 10px rgba(28, 39, 60, 0.12);
+    container-name: graph-settings;
+    container-type: inline-size;
+}
+
+.graph-settings-popover.is-open {
+    display: flex;
+}
+
+.graph-settings-popover:has(.mantine-Popover-dropdown),
+.graph-settings-scroll:has(.mantine-Popover-dropdown) {
+    overflow: visible;
+}
+
+.graph-settings-popover-header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 49px;
+    padding: 9px 10px 8px 12px;
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid #e1e6ee;
+    user-select: none;
+}
+
+.graph-settings-heading-wrap {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 7px;
+}
+
+.graph-settings-drag-handle {
+    display: none;
+    width: 18px;
+    height: 28px;
+    flex: 0 0 auto;
+    place-items: center;
+    color: #98a2b3;
+    font: 700 17px/1 Arial, sans-serif;
+}
+
+.graph-settings-popover--common .graph-settings-popover-header {
+    cursor: grab;
+    touch-action: none;
+}
+
+.graph-settings-popover--common .graph-settings-drag-handle {
+    display: grid;
+}
+
+.graph-settings-popover--common.is-dragging,
+.graph-settings-popover--common.is-dragging .graph-settings-popover-header {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.graph-settings-heading {
+    display: none;
+}
+
+.graph-settings-popover--common .graph-settings-heading--common,
+.graph-settings-popover--specific .graph-settings-heading--specific {
+    display: block;
+}
+
+.graph-settings-popover-close {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    color: #667085;
+    font: 400 22px/1 Arial, sans-serif;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.graph-settings-popover-close:hover {
+    color: #1f2937;
+    background: #eef1f6;
+}
+
+.graph-settings-common,
+.graph-settings-specific {
+    display: none;
+}
+
+.graph-settings-popover--common .graph-settings-common,
+.graph-settings-popover--specific .graph-settings-specific {
+    display: block;
+}
+
+.graph-settings-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.graph-settings-common.graph-settings-scroll {
+    padding: 8px;
+}
+
+.graph-settings-title-icon,
+.graph-settings-section-icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    color: #3b5bdb;
+    background: #edf2ff;
+    border-radius: 7px;
+}
+
+.graph-settings-icon {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    font-family: Arial, sans-serif;
+    font-style: normal;
+    font-weight: 650;
+    line-height: 1;
+}
+
+.graph-settings-icon--type,
+.graph-settings-icon--info {
+    font-family: Georgia, serif;
+    font-weight: 700;
+}
+
+.graph-settings-icon--zap {
+    font-size: 11px !important;
+}
+
+.graph-settings-title-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.graph-settings-section-icon {
+    width: 26px;
+    height: 26px;
+}
+
+.graph-settings-quick {
+    background: linear-gradient(135deg, #ffffff 0%, #f6f8ff 100%);
+    border-color: #dfe5f2;
+    box-shadow: 0 4px 14px rgba(40, 55, 90, 0.055);
+}
+
+.graph-settings-render-mode {
+    margin-top: 7px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e6ed;
+}
+
+.graph-settings-popover .graph-settings-quick-theme .mantine-Input-input {
+    min-height: 25px;
+    height: 25px;
+}
+
+.graph-settings-popover .graph-settings-dataset .mantine-Input-input {
+    min-height: 25px;
+    height: 25px;
+}
+
+.graph-settings-tabs {
+    margin-top: 12px;
+}
+
+.graph-settings-common .graph-settings-tabs {
+    margin-top: 8px;
+}
+
+.graph-settings-common .graph-settings-tab-panel {
+    margin-top: 6px;
+    padding: 8px;
+}
+
+.graph-settings-common .graph-settings-section-intro {
+    margin-bottom: 7px;
+}
+
+.graph-settings-tabs-list {
+    position: sticky;
+    top: -10px;
+    z-index: 4;
+    padding: 4px;
+    background: rgba(237, 241, 247, 0.96);
+    border: 1px solid #dfe4ec;
+    border-radius: 9px;
+    backdrop-filter: blur(10px);
+}
+
+.graph-settings-tabs-list::before {
+    display: none;
+}
+
+.graph-settings-tabs-list button {
+    min-height: 30px;
+    padding: 4px 7px;
+    color: #667085;
+    font-size: 11px;
+    font-weight: 600;
+    border: 0;
+    border-radius: 7px;
+    transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.graph-settings-tabs-list button[data-active] {
+    color: #273b87;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(35, 50, 90, 0.12);
+}
+
+.graph-settings-tab-panel,
+.graph-settings-specific-group {
+    margin-top: 8px;
+    padding: 10px;
+    background: #ffffff;
+    border: 1px solid #e2e6ed;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(40, 55, 90, 0.045);
+}
+
+.graph-settings-specific-group:first-child {
+    margin-top: 0;
+}
+
+.graph-settings-specific-empty {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 26px 18px;
+    color: #667085;
+    text-align: center;
+    background: #ffffff;
+    border: 1px dashed #d8dee9;
+    border-radius: 10px;
+}
+
+.graph-settings-section-intro {
+    margin-bottom: 10px;
+}
+
+.graph-settings-grid {
+    align-items: start;
+}
+
+.graph-settings-span-2 {
+    grid-column: span 2;
+}
+
+.graph-settings-control {
+    min-width: 0;
+}
+
+.graph-settings-popover .mantine-InputWrapper-label {
+    margin-bottom: 3px;
+    color: #344054;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.graph-settings-popover .mantine-Input-input {
+    min-height: 28px;
+    font-size: 11px;
+    border-color: #d8dee9;
+    background: #fbfcfe;
+}
+
+.graph-settings-popover .mantine-Input-input:focus,
+.graph-settings-popover .mantine-Input-input:focus-within {
+    border-color: #748ffc;
+    background: #ffffff;
+}
+
+.graph-settings-popover .mantine-SegmentedControl-root {
+    font-size: 11px;
+}
+
+.graph-settings-feature-card {
+    min-height: 0;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border: 1px solid #e4e8ef;
+    border-radius: 8px;
+}
+
+.graph-settings-feature-card .mantine-Switch-root {
+    margin-bottom: 6px;
+}
+
+.graph-settings-bubbles {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    padding: 18px 4px 0;
+}
+
+.graph-settings-note {
+    font-size: 10px;
+}
+
+.graph-settings-footer {
+    z-index: 6;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid #e1e6ee;
+    backdrop-filter: blur(12px);
+}
+
+.graph-settings-footer-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.graph-settings-footer-options {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-top: 5px;
+    border-top: 1px dashed #e1e6ee;
+}
+
+.graph-settings-auto-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #2f9e44;
+}
+
+@media (max-width: 420px) {
+    .graph-settings-quick-grid,
+    .graph-settings-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .graph-settings-span-2,
+    .graph-settings-quick-theme {
+        grid-column: auto;
+    }
+}
+
+@container graph-settings (max-width: 360px) {
+    .graph-settings-quick-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .graph-settings-tabs-list button {
+        gap: 4px;
+        padding-inline: 5px;
+        font-size: 10px;
+    }
+}

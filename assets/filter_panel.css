@@ -1,0 +1,322 @@
+.filter-panel-paper.filter-drop-target {
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.filter-panel-paper.filter-drop-hover {
+    background: rgba(231, 245, 255, 0.72);
+    box-shadow: inset 0 0 0 2px #228be6, 0 2px 10px rgba(34, 139, 230, 0.16);
+}
+
+.filter-side-tab.filter-dnd-active {
+    background: #1971c2;
+    box-shadow: -4px 2px 16px rgba(25, 113, 194, 0.4);
+}
+
+.filter-side-tab.filter-drop-hover {
+    background: #0b7285;
+    box-shadow: -4px 2px 18px rgba(11, 114, 133, 0.55);
+}
+
+/* Механика выезжания и ярлычок — в slide_panel.css; здесь только содержимое. */
+
+.filter-side-tab.has-active-filters {
+    background: #1971c2;
+}
+
+.filter-side-tab-count {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 9px;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.filter-side-tab.has-active-filters .filter-side-tab-count {
+    color: #1971c2;
+    background: #ffffff;
+}
+
+.filter-panel-columns {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 8px;
+    background: #f8f9fa;
+}
+
+.filter-panel-intro {
+    padding: 0 1px 6px;
+}
+
+.filter-cards {
+    display: grid;
+    gap: 5px;
+}
+
+.filter-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    column-gap: 5px;
+    row-gap: 5px;
+    padding: 6px;
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 7px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035);
+}
+
+.filter-enabled-toggle {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.filter-enabled-toggle::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 7px;
+    height: 7px;
+    background: #2f9e44;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(47, 158, 68, 0.72);
+    transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.filter-enabled-toggle:hover::before,
+.filter-enabled-toggle:focus-visible::before {
+    transform: scale(1.2);
+}
+
+.filter-enabled-toggle.is-disabled {
+    background: transparent;
+    box-shadow: none;
+}
+
+.filter-enabled-toggle.is-disabled::before {
+    background: #e03131;
+    box-shadow: 0 0 5px rgba(224, 49, 49, 0.68);
+}
+
+.filter-card:has(.filter-enabled-toggle.is-disabled) > :not(.filter-enabled-toggle) {
+    opacity: 0.52;
+}
+
+.filter-card-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.filter-card-column {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.filter-card-column [data-combined-clear-section="true"] {
+    gap: 0 !important;
+    padding-inline-end: 4px !important;
+}
+
+.filter-card-column .mantine-InputClearButton-root {
+    --cb-size: 18px !important;
+    --cb-icon-size: 10px;
+    min-width: 18px;
+}
+
+.filter-card-column .mantine-ComboboxChevron-chevron {
+    --combobox-chevron-size: 12px;
+}
+
+.mantine-MultiSelect-option[value^="__dashapp_filter_action_"] {
+    justify-content: center;
+    min-width: 0;
+    min-height: 22px;
+    padding: 0 2px;
+    color: #52606d;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0;
+    font-size: 9px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.mantine-MultiSelect-option[value^="__dashapp_filter_action_"]:hover,
+.mantine-MultiSelect-option[value^="__dashapp_filter_action_"][data-combobox-selected] {
+    color: #1864ab;
+    background: #e7f5ff;
+}
+
+.mantine-MultiSelect-group:has(
+    .mantine-MultiSelect-option[value^="__dashapp_filter_action_"]
+) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    padding: 4px 6px 5px;
+}
+
+.mantine-MultiSelect-group:has(
+    .mantine-MultiSelect-option[value^="__dashapp_filter_action_"]
+) > .mantine-MultiSelect-groupLabel {
+    grid-column: 1 / -1;
+    display: none;
+}
+
+.mantine-MultiSelect-group:has(
+    .mantine-MultiSelect-option[value^="__dashapp_filter_action_"]
+) > .mantine-MultiSelect-option + .mantine-MultiSelect-option {
+    border-left: 0;
+}
+
+.mantine-MultiSelect-option[value="__dashapp_filter_action_all__"] {
+    border-radius: 5px 0 0 5px;
+}
+
+.mantine-MultiSelect-option[value="__dashapp_filter_action_invert__"] {
+    border-radius: 0 5px 5px 0;
+}
+
+.filter-card-operator {
+    min-width: 0;
+    align-self: start;
+}
+
+.filter-type-marker {
+    position: relative;
+    top: -4px;
+    min-width: 10px;
+    flex: 0 0 auto;
+    font: 800 7px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.04em;
+    text-align: right;
+}
+
+.filter-type-marker--numeric { color: #1971c2; }
+.filter-type-marker--categorical { color: #2b8a3e; }
+.filter-type-marker--datetime { color: #d9480f; }
+.filter-type-marker--unknown { color: #868e96; }
+
+.filter-card-control {
+    min-width: 0;
+    align-self: start;
+}
+
+.filter-card .mantine-Input-input {
+    min-height: 26px;
+    height: 26px;
+    padding-inline: 7px;
+    font-size: 10px;
+}
+
+.filter-card .mantine-MultiSelect-input {
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+
+.filter-card .mantine-Pill-root {
+    max-width: 72px;
+    height: 19px;
+    padding-inline: 5px;
+    font-size: 9px;
+}
+
+.filter-card-header > .mantine-ActionIcon-root {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+}
+
+.filter-control-empty {
+    overflow: hidden;
+    padding: 6px 2px 0;
+    color: #adb5bd;
+    font-size: 9px;
+    line-height: 1.15;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-numeric-inputs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 3px;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.filter-numeric-separator {
+    color: #adb5bd;
+    font-size: 10px;
+}
+
+.filter-panel-footer {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #ffffff;
+    border-top: 1px solid #e9ecef;
+    box-shadow: 0 -5px 18px rgba(0, 0, 0, 0.035);
+}
+
+.filter-panel-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+}
+
+.filter-draft-row {
+    display: flex;
+    min-height: 24px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.filter-draft-status {
+    color: #868e96;
+    font-size: 9px;
+    line-height: 1.25;
+}
+
+.filter-draft-status.is-dirty {
+    color: #d9480f;
+    font-weight: 600;
+}
+
+.filter-footer-actions,
+.filter-footer-button {
+    min-width: 0;
+}
+
+.filter-panel-options {
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px dashed #dee2e6;
+}
+
+.filter-results-summary {
+    min-width: 0;
+}

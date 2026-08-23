@@ -1,0 +1,22 @@
+.ml-workspace { padding: 8px; min-width: 0; width: 100%; box-sizing: border-box; }
+.ml-routing { margin-bottom: 8px; }
+.ml-main-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 8px; align-items: start; }
+.ml-controls, .ml-output, .ml-results { min-width: 0; }
+.ml-field { min-width: 0; }
+.ml-features-drop { margin-top: 7px; padding: 5px; border: 1px dashed var(--mantine-color-gray-4); border-radius: 6px; }
+.ml-features-drop.drag-over { border-color: var(--mantine-primary-color-filled); background: color-mix(in srgb, var(--mantine-primary-color-filled) 8%, transparent); }
+.ml-advanced { margin-top: 7px; font-size: 10px; color: var(--mantine-color-dimmed); }
+.ml-advanced summary { cursor: pointer; font-weight: 650; }
+.ml-metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.ml-metric-card { min-width: 0; }
+.ml-metric-value { font-size: 19px; line-height: 1.2; font-weight: 750; font-variant-numeric: tabular-nums; }
+.ml-results .js-plotly-plot { min-height: 390px; }
+.ml-log { white-space: pre-wrap; max-height: 430px; overflow: auto; margin: 0; padding: 10px; font-size: 10px; line-height: 1.45; }
+@media (max-width: 1080px) {
+  .ml-main-grid { grid-template-columns: 1fr; }
+  .ml-routing-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 720px) {
+  .ml-metrics-grid { grid-template-columns: repeat(2, minmax(90px, 1fr)); }
+  .ml-routing-grid, .ml-param-grid { grid-template-columns: 1fr !important; }
+}

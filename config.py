@@ -9,6 +9,9 @@ import plotly.io as pio
 # =========================
 # Константы и настройки
 # =========================
+APP_NAME = "DataAnalize"
+APP_VERSION = "2.0.0"
+APP_TITLE = f"{APP_NAME} v{APP_VERSION} by Muslimov Ural"
 COLOR_THRESHOLD = 10
 MAX_FILTERS = 10
 PORT = 8090

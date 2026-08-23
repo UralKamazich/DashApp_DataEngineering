@@ -1,0 +1,98 @@
+.graph-help-window {
+  position: fixed;
+  z-index: 10040;
+  display: none;
+  width: min(540px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  box-sizing: border-box;
+  flex-direction: column;
+  color: var(--mantine-color-text, #212529);
+  background: var(--mantine-color-body, #fff);
+  border: 1px solid var(--mantine-color-gray-3, #dee2e6);
+  border-radius: 12px;
+  box-shadow: 0 18px 54px rgba(28, 39, 60, 0.24), 0 4px 14px rgba(28, 39, 60, 0.12);
+}
+
+.graph-help-window.is-open {
+  display: flex;
+}
+
+.graph-help-window-header {
+  display: flex;
+  min-height: 46px;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px 6px 10px;
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom: 1px solid var(--mantine-color-gray-3, #dee2e6);
+  border-radius: 12px 12px 0 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.graph-help-window.is-dragging,
+.graph-help-window.is-dragging .graph-help-window-header {
+  cursor: grabbing;
+}
+
+.graph-help-window-heading {
+  min-width: 0;
+}
+
+.graph-help-window-close {
+  flex: 0 0 auto;
+}
+
+.graph-help-window-header .graph-help-window-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  color: #667085;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font: 400 20px/1 Arial, sans-serif;
+}
+
+.graph-help-window-header .graph-help-window-close:hover,
+.graph-help-window-header .graph-help-window-close:focus-visible {
+  color: #1f2937;
+  background: #eef1f6;
+  outline: none;
+}
+
+.graph-help-window-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 9px 10px 10px;
+  font-size: 11px;
+  line-height: 1.32;
+}
+
+.graph-help-scroll {
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.graph-help-scroll .mantine-List-item + .mantine-List-item {
+  margin-top: 1px;
+}
+
+.graph-help-window .mantine-List-root,
+.graph-help-window .mantine-Text-root {
+  line-height: 1.32;
+}
+
+@media (max-height: 680px) {
+  .graph-help-window-body {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+}

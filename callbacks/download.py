@@ -1,46 +1,70 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks: скачивание HTML, Excel, clientside PNG.
+Callbacks: сохранение текущего датасета в Excel.
 """
 
+import json
 import re
-import os
 import uuid
 from pathlib import Path
 import pandas as pd
-import plotly.graph_objects as go
 from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
+from dataset_export import export_frame_to_excel
+from dataset_registry import SOURCE_DATASET_ID, get_record, payload_for_record
 from utils import _make_error_notif, read_df_from_store
 
 
-# Скачивание HTML
+def _export_ok(path):
+    return [{
+        "id": str(uuid.uuid4()),
+        "title": "Excel сохранён",
+        "message": f"Файл сохранён рядом с исходником: {path}",
+        "color": "green",
+        "loading": False,
+        "action": "show",
+        "autoClose": 7000,
+    }]
+
+
 @app.callback(
-    Output("download-file", "data"),
-    Output('notifications-container', 'sendNotifications', allow_duplicate=True),
-    Input("download-button", "n_clicks"),
-    State("graph", "figure"),
-    State("dropdown_x", "value"),
-    State("dropdown_y", "value"),
-    State("segmented", "value"),
-    prevent_initial_call=True
+    Output("notifications-container", "sendNotifications", allow_duplicate=True),
+    Input("dataset-export-request", "value"),
+    State("dataset-registry", "data"),
+    State("source-file-path", "data"),
+    State("source-file-name", "data"),
+    prevent_initial_call=True,
 )
-def download_html(n_clicks, figure, dropdown_x, dropdown_y, segmentedcontrol_value):
-    if not n_clicks or not figure:
-        raise PreventUpdate
+def export_registered_dataset(request, registry, source_path, source_name):
     try:
-        fig = go.Figure(figure)
-        filename = (
-            f'{dropdown_x} vs {dropdown_y} {segmentedcontrol_value}.html'
-            if all([dropdown_x, dropdown_y, segmentedcontrol_value]) else "graph.html"
+        payload = json.loads(request or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise PreventUpdate
+    dataset_id = str(payload.get("dataset_id") or "")
+    record = get_record(registry, dataset_id)
+    if not record:
+        return _make_error_notif("Dataset для выгрузки не найден.")
+    stored = payload_for_record(record)
+    if not stored:
+        return _make_error_notif("Содержимое dataset недоступно.")
+    try:
+        frame = read_df_from_store(stored, record.get("meta") or {})
+        dataset_name = (
+            "Исходный" if dataset_id == SOURCE_DATASET_ID
+            else str(record.get("name") or dataset_id)
         )
-        html_content = fig.to_html(include_plotlyjs='cdn')
-        return {"content": html_content, "filename": filename, "type": "text/html"}, []
-    except Exception as e:
-        notif = _make_error_notif(f"Ошибка скачивания: {str(e)}")
-        return no_update, notif
+        path = export_frame_to_excel(
+            frame,
+            source_path=source_path,
+            source_name=source_name,
+            dataset_name=dataset_name,
+            created_at=record.get("created_at"),
+        )
+    except Exception as error:
+        return _make_error_notif(f"Ошибка сохранения Excel: {error}")
+    return _export_ok(path)
 
 
 # Сохранить текущий датасет в Excel
@@ -100,101 +124,3 @@ def download_excel_dataset(n_clicks, filtered_json, source_path, source_name, sh
         return no_update, ok
     except Exception as e:
         return no_update, _make_error_notif(f"Ошибка сохранения Excel: {e}")
-
-
-# Clientside callback для копирования PNG
-app.clientside_callback(
-    """
-    function(n_clicks, figure) {
-        if (!n_clicks || !figure) {
-            throw window.dash_clientside.PreventUpdate;
-        }
-
-        // dataURL -> Blob без fetch (чтобы не терять user-gesture)
-        function dataURLtoBlob(dataURL) {
-            const [header, data] = dataURL.split(',');
-            const mime = (header.match(/:(.*?);/) || [,'image/png'])[1];
-            const binary = atob(data);
-            const array = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-            return new Blob([array], { type: mime });
-        }
-
-        try {
-            const host = document.getElementById('graph');
-            const gd = host && host.getElementsByClassName('js-plotly-plot')[0];
-            if (!gd) return 'График не найден в DOM.';
-
-            // === WYSIWYG размеры: берём реальные видимые пиксели SVG ===
-            const svg = gd.querySelector('svg.main-svg') || gd.querySelector('svg');
-            let width, height;
-            if (svg) {
-                const r = svg.getBoundingClientRect(); // учитывает любые CSS-скейлы/zoom
-                width  = Math.max(1, Math.round(r.width));
-                height = Math.max(1, Math.round(r.height));
-            } else {
-                // фоллбэк, если svg не найден
-                const r = gd.getBoundingClientRect();
-                width  = Math.max(1, Math.round(r.width));
-                height = Math.max(1, Math.round(r.height));
-            }
-
-            // Рисуем PNG ровно под видимые размеры (scale:1 для точного соответствия)
-            return window.Plotly.toImage(gd, {
-                format: 'png',
-                width:  width,
-                height: height,
-                scale:  1
-            })
-            .then((dataUrl) => {
-                // Пытаемся записать в буфер в рамках того же клика
-                if (window.isSecureContext && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
-                    try {
-                        const blob = dataURLtoBlob(dataUrl);
-                        const item = new ClipboardItem({ [blob.type]: blob });
-                        return navigator.clipboard.write([item]).then(
-                            () => {
-                                // Параллельно сохраняем файл
-                                const a = document.createElement('a');
-                                a.href = dataUrl;
-                                a.download = 'plotly_graph.png';
-                                document.body.appendChild(a); a.click(); a.remove();
-                                return 'PNG (как на экране) скопирован в буфер и сохранён как файл.';
-                            },
-                            (e) => {
-                                console.warn('Clipboard write failed:', e);
-                                const a = document.createElement('a');
-                                a.href = dataUrl;
-                                a.download = 'plotly_graph.png';
-                                document.body.appendChild(a); a.click(); a.remove();
-                                return 'Буфер недоступен — PNG (как на экране) сохранён как файл.';
-                            }
-                        );
-                    } catch (e) {
-                        console.warn('Clipboard exception:', e);
-                    }
-                }
-
-                // Фоллбэк: только файл (например, не secure-контекст)
-                const a = document.createElement('a');
-                a.href = dataUrl;
-                a.download = 'plotly_graph.png';
-                document.body.appendChild(a); a.click(); a.remove();
-                return 'Копирование в буфер недоступно — PNG (как на экране) сохранён как файл.';
-            })
-            .catch((err) => {
-                console.error('toImage error:', err);
-                return 'Ошибка генерации PNG. См. консоль.';
-            });
-
-        } catch (err) {
-            console.error('Ошибка:', err);
-            return 'Ошибка копирования/сохранения. См. консоль.';
-        }
-    }
-    """,
-    Output("notifications-container", "sendNotifications", allow_duplicate=True),
-    Input("copy-png-button", "n_clicks"),
-    State("graph", "figure"),
-    prevent_initial_call=True
-)

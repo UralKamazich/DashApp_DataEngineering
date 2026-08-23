@@ -5,6 +5,7 @@
 
 import dash
 from dash import Dash, _dash_renderer
+from config import APP_TITLE
 _dash_renderer._set_react_version("18.2.0")
 
 # Кастомный index_string для добавления глобальных стилей
@@ -45,7 +46,7 @@ CUSTOM_INDEX_STRING = """
 app = Dash(
     __name__,
     suppress_callback_exceptions=True,
-    title="DataAnalize ver.1.0.27 collapsed panel by Muslimov Ural",
+    title=APP_TITLE,
     index_string=CUSTOM_INDEX_STRING,
 )
 server = app.server

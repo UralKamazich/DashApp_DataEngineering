@@ -4,62 +4,244 @@
     display: none;
     position: fixed;
     z-index: 10000;
-    min-width: 210px;
-    background: #2C2E33;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 4px 0;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    width: 268px;
+    overflow: hidden;
+    color: #25262b;
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(134, 142, 150, 0.28);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 14px 42px rgba(0, 0, 0, 0.18), 0 3px 10px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(14px);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 13px;
-    color: #e0e0e0;
     user-select: none;
+    transform-origin: top left;
+    animation: graph-context-menu-in 110ms ease-out;
+}
+
+@keyframes graph-context-menu-in {
+    from { opacity: 0; transform: translateY(-3px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+#graph-ctx-menu .ctx-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 7px 9px 8px;
+}
+
+#graph-ctx-menu .ctx-header-title {
+    color: #212529;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#graph-ctx-menu .ctx-header-hint {
+    color: #868e96;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+#graph-ctx-menu .ctx-group {
+    display: grid;
+    gap: 2px;
 }
 
 #graph-ctx-menu .ctx-item {
-    padding: 8px 14px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 9px;
+    color: #343a40;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 8px;
-    transition: background 0.1s;
+    gap: 9px;
+    font: inherit;
+    text-align: left;
+    transition: color 0.1s, background-color 0.1s, transform 0.1s;
 }
 
 #graph-ctx-menu .ctx-item:hover {
-    background: rgba(255, 255, 255, 0.1);
+    color: #1864ab;
+    background: #f1f3f5;
 }
 
 #graph-ctx-menu .ctx-item:active {
-    background: rgba(255, 255, 255, 0.15);
+    background: #e9ecef;
+    transform: scale(0.99);
+}
+
+#graph-ctx-menu .ctx-item:focus-visible {
+    outline: 2px solid #74c0fc;
+    outline-offset: -2px;
+}
+
+#graph-ctx-menu .ctx-item--primary {
+    color: #1864ab;
+    background: #e7f5ff;
+}
+
+#graph-ctx-menu .ctx-item--primary:hover {
+    background: #d0ebff;
 }
 
 #graph-ctx-menu .ctx-icon {
-    font-size: 15px;
-    width: 20px;
-    text-align: center;
-    flex-shrink: 0;
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+}
+
+#graph-ctx-menu .ctx-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#graph-ctx-menu .ctx-label {
+    min-width: 0;
+    flex: 1 1 auto;
+    font-weight: 550;
+}
+
+#graph-ctx-menu .ctx-note {
+    flex: 0 0 auto;
+    color: #868e96;
+    font-size: 10px;
+    font-weight: 500;
 }
 
 #graph-ctx-menu .ctx-sep {
     height: 1px;
-    background: #444;
-    margin: 4px 8px;
+    background: #e9ecef;
+    margin: 5px 8px;
 }
 
-/* ===== Сайдбар колонок — обрезка длинных названий ===== */
+/* ===== Сайдбар каналов датасета ===== */
 
-#columns-sidebar .mantine-Badge-root {
+#columns-badges {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+}
+
+#columns-badges .column-badge {
+    box-sizing: border-box;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
+    cursor: grab;
+    user-select: none;
+}
+
+/* Keep both the lightweight badge shell and its row inside the sidebar. */
+#columns-badges .column-badge > div {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
+}
+
+#columns-sidebar .column-channel-row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 27px;
+    padding: 3px 5px;
     overflow: hidden;
+    color: #343a40;
+    background: #ffffff;
+    border: 1px solid #edf0f2;
+    border-radius: 6px;
+    transition: color 0.12s, background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+#columns-sidebar .column-badge:hover .column-channel-row {
+    color: #1864ab;
+    background: #f8f9fa;
+    border-color: #ced4da;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+#columns-sidebar .column-badge:active .column-channel-row {
+    cursor: grabbing;
+    background: #f1f3f5;
+    box-shadow: none;
+}
+
+#columns-sidebar .column-type-marker {
+    position: relative;
+    top: -4px;
+    display: inline-block;
+    min-width: 9px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: 800 6.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.04em;
+    text-align: right;
+}
+
+#columns-sidebar .column-type-marker--numeric {
+    color: #1971c2;
+}
+
+#columns-sidebar .column-type-marker--categorical {
+    color: #2b8a3e;
+}
+
+#columns-sidebar .column-type-marker--datetime {
+    color: #d9480f;
+}
+
+#columns-sidebar .column-derived-marker {
+    flex: 0 0 auto;
+    margin-left: -2px;
+    color: #7048e8;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.4px;
+}
+
+#columns-sidebar .column-channel-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    color: inherit;
+    font: 500 10px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-#columns-sidebar .mantine-Badge-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: block;
+#columns-sidebar .column-drag-handle {
+    width: 10px;
+    height: 14px;
+    flex: 0 0 10px;
+    opacity: 0.42;
+    background-image: radial-gradient(circle, #868e96 1px, transparent 1.25px);
+    background-position: 0 0;
+    background-size: 5px 5px;
+    transition: opacity 0.12s;
+}
+
+#columns-sidebar .column-badge:hover .column-drag-handle {
+    opacity: 0.8;
 }
 
 /* ===== Закладки датасета — стиль настоящих закладок ===== */
@@ -90,36 +272,779 @@
     border-color: #555;
 }
 
-/* ===== Drop-зоны графика ===== */
+/* ===== GraphWorkspace ===== */
 
-/* Базовое состояние дроп-зон */
-[data-drop-target] {
-    cursor: copy;
-    transition: background-color 0.15s, border 0.15s, box-shadow 0.15s;
+.graph-workspace-shell {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 
-/* Текст внутри зон — усечение */
-[data-drop-target] > span {
+.graph-fullscreen-host:fullscreen,
+.graph-fullscreen-host.graph-fullscreen-fallback {
+    box-sizing: border-box !important;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    max-height: none !important;
+    margin: 0 !important;
+    background: var(--mantine-color-body, #fff);
+    border-radius: 0 !important;
+}
+
+.graph-fullscreen-host:fullscreen {
+    overflow: hidden;
+}
+
+.graph-fullscreen-host.graph-fullscreen-fallback {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 3000 !important;
+}
+
+html.graph-fullscreen-active,
+html.graph-fullscreen-active body {
+    overflow: hidden !important;
+}
+
+.graph-workspace-shell:fullscreen,
+.graph-workspace-shell.graph-fullscreen-fallback {
+    padding: 0 !important;
+}
+
+.graph-workspace-shell:fullscreen > .graph-workspace,
+.graph-workspace-shell.graph-fullscreen-fallback > .graph-workspace {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.correlation-rating-card:fullscreen,
+.correlation-rating-card.graph-fullscreen-fallback {
+    display: flex;
+    flex-direction: column;
+    padding: 12px !important;
+}
+
+.correlation-rating-card:fullscreen > .graph-fullscreen-plot,
+.correlation-rating-card.graph-fullscreen-fallback > .graph-fullscreen-plot {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto !important;
+}
+
+.correlation-rating-card:fullscreen .graph-fullscreen-plot .js-plotly-plot,
+.correlation-rating-card:fullscreen .graph-fullscreen-plot .plot-container,
+.correlation-rating-card:fullscreen .graph-fullscreen-plot .svg-container,
+.correlation-rating-card.graph-fullscreen-fallback .graph-fullscreen-plot .js-plotly-plot,
+.correlation-rating-card.graph-fullscreen-fallback .graph-fullscreen-plot .plot-container,
+.correlation-rating-card.graph-fullscreen-fallback .graph-fullscreen-plot .svg-container {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.graph-workspace {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--mantine-color-body, #fff);
+}
+
+.graph-workspace-loading,
+.graph-workspace-loading > div,
+.graph-workspace-plot,
+.graph-workspace-plot .js-plotly-plot,
+.graph-workspace-plot .plot-container {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Кастомные кнопки в modebar Plotly (assets/graph_modebar.js).
+   Plotly встраивает свой CSS после ассетов и задаёт ".modebar-group a"
+   display:grid (блочный) — поэтому повышаем специфичность и делаем
+   кнопки inline-уровня, чтобы они встали в один ряд с родными. */
+.modebar .modebar-btn.modebar-btn-custom {
+    box-sizing: border-box;
+    display: inline-block !important;
+    width: 24px !important;
+    height: 22px !important;
+    padding: 3px 4px !important;
+    background: transparent !important;
+    border: 0 !important;
+    cursor: pointer;
+    vertical-align: top !important;
+}
+
+.modebar .modebar-group-workspace {
+    display: inline-flex !important;
+    align-items: flex-start;
+    height: 22px;
+}
+
+.modebar-chart-select {
+    box-sizing: border-box;
+    width: 128px;
+    height: 22px;
+    margin: 0 3px 0 0;
+    padding: 0 20px 0 4px;
+    overflow: hidden;
+    color: rgba(0, 31, 95, 0.62);
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    outline: 0;
+    cursor: pointer;
+    font: 600 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modebar-chart-select:hover,
+.modebar-chart-select:focus-visible {
+    color: rgba(0, 31, 95, 0.86);
+    background: rgba(232, 240, 248, 0.72);
+}
+
+.modebar-btn-custom .modebar-custom-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    color: rgba(0, 31, 95, 0.3);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    transform: translateY(-2px);
+}
+
+.modebar-btn-custom:hover .modebar-custom-icon {
+    color: rgba(0, 31, 95, 0.7);
+}
+
+.modebar-settings-custom .modebar-custom-icon,
+.modebar-refresh-custom .modebar-custom-icon,
+.modebar-copy-custom .modebar-custom-icon {
+    font-size: 18px;
+}
+
+.modebar-settings-custom .modebar-custom-icon,
+.modebar-refresh-custom .modebar-custom-icon {
+    font-size: 20px;
+}
+
+.modebar-fullscreen-custom[aria-pressed="true"] .modebar-custom-icon {
+    color: #1971c2;
+}
+
+/* Пока курсор вне графика, на экране остаётся только сама визуализация. */
+.graph-fullscreen-host .modebar {
+    opacity: 0 !important;
+    pointer-events: none;
+    transition: opacity 0.12s ease !important;
+}
+
+.graph-fullscreen-host:hover .modebar,
+.graph-fullscreen-host:focus-within .modebar {
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+
+/* Настоящие dropdown остаются состоянием Dash, но не занимают место. */
+.graph-field-state,
+.graph-modebar-state {
+    display: none;
+}
+
+/* Слой сам не блокирует Plotly; события получают только видимые зоны. */
+.graph-drop-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.14s ease;
+}
+
+.graph-workspace:hover .graph-drop-layer,
+.graph-workspace.field-picker-open .graph-drop-layer,
+.graph-workspace.dnd-active .graph-drop-layer {
+    visibility: visible;
+    opacity: 0.86;
+}
+
+.graph-workspace.dnd-active .graph-drop-layer {
+    opacity: 1;
+}
+
+.graph-drop-zone {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 96px;
+    min-height: 42px;
+    padding: 7px 10px;
+    overflow: visible;
+    color: #1971c2;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px dashed rgba(34, 139, 230, 0.7);
+    border-radius: 9px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    pointer-events: none;
+    user-select: none;
+    transform: translateZ(0);
+    transition: background-color 0.12s, box-shadow 0.12s, transform 0.12s;
+}
+
+.graph-workspace:hover .graph-drop-zone,
+.graph-workspace.field-picker-open .graph-drop-zone,
+.graph-workspace.dnd-active .graph-drop-zone {
+    pointer-events: auto;
+    cursor: context-menu;
+}
+
+.graph-workspace.dnd-active .graph-drop-zone {
+    cursor: copy;
+}
+
+.graph-drop-zone-name {
+    position: absolute;
+    top: -7px;
+    left: 9px;
+    z-index: 1;
+    flex: 0 0 auto;
+    padding: 0 4px;
+    color: #1971c2;
+    background: rgba(255, 255, 255, 0.98);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 13px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.graph-drop-zone-value {
+    min-width: 0;
+    overflow: hidden;
+    color: #5c6770;
+    font-size: 11px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.graph-drop-zone.has-value .graph-drop-zone-value {
+    color: #1864ab;
+}
+
+.graph-drop-zone.as-categorical .graph-drop-zone-name::after {
+    content: "Aa";
+    position: relative;
+    top: -3px;
+    margin-left: 3px;
+    color: #845ef7;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.graph-zone-clear {
+    display: none;
+    width: 20px;
+    height: 20px;
+    margin-left: auto;
+    padding: 0;
+    flex: 0 0 20px;
+    align-items: center;
+    justify-content: center;
+    color: #74808b;
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font: 600 17px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.graph-drop-zone.has-value .graph-zone-clear {
+    display: inline-flex;
+}
+
+.graph-zone-clear:hover,
+.graph-zone-clear:focus-visible {
+    color: #c92a2a;
+    background: #fff0f0;
+    outline: none;
+}
+
+.graph-workspace.dnd-active .graph-zone-clear {
+    display: none;
+}
+
+.graph-drop-zone.zone-hover {
+    background: #e7f5ff;
+    box-shadow: 0 0 0 2px #228be6, 0 8px 24px rgba(34, 139, 230, 0.22);
+    transform: scale(1.02);
+}
+
+/* Компактный выбор каналов на странице корреляций. */
+.correlation-channel-drop {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 4px 6px 5px;
+    border: 1px dashed transparent;
+    border-radius: 8px;
+    transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.correlation-channel-drop.dnd-active {
+    background: rgba(231, 245, 255, 0.72);
+    border-color: rgba(34, 139, 230, 0.65);
+}
+
+.correlation-channel-drop.zone-hover {
+    background: #e7f5ff;
+    border-color: #228be6;
+    box-shadow: 0 0 0 2px rgba(34, 139, 230, 0.22);
+}
+
+.correlation-channel-drop.zone-rejected {
+    background: #fff5f5;
+    border-color: #fa5252;
+    cursor: not-allowed;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-input {
+    box-sizing: border-box;
+    min-height: 34px !important;
+    height: 34px;
+    overflow: hidden;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-pillsList {
+    height: 32px;
+    flex-wrap: nowrap;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-pillsList::-webkit-scrollbar {
+    display: none;
+}
+
+.correlation-channel-drop .mantine-MultiSelect-inputField {
+    min-width: 76px;
+    flex: 0 0 76px;
+}
+
+.correlation-rating-target {
+    width: min(58%, 260px);
+    min-width: 170px;
+}
+
+.graph-drop-zone--axis-x {
+    position: absolute;
+    right: 12%;
+    bottom: 14px;
+    left: 12%;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 0;
+}
+
+.graph-drop-zone--axis-x .graph-drop-zone-name {
+    justify-self: center;
+}
+
+.graph-drop-zone--axis-x .graph-drop-zone-value {
+    grid-column: 2;
+    max-width: 100%;
+    justify-self: center;
+    text-align: center;
+}
+
+.graph-drop-zone--axis-x .graph-zone-clear {
+    grid-column: 3;
+    margin-left: 0;
+    justify-self: center;
+}
+
+.graph-drop-zone--axis-y {
+    position: absolute;
+    top: 25%;
+    bottom: 25%;
+    left: 12px;
+    width: 42px;
+    min-width: 42px;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.graph-drop-zone--axis-y .graph-drop-zone-value {
+    max-height: 150px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+}
+
+.graph-drop-secondary {
+    position: absolute;
+    top: 62px;
+    left: 50%;
+    display: flex;
+    width: min(880px, calc(100% - 150px));
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 7px;
+    transform: translateX(-50%);
+}
+
+.graph-drop-zone--secondary {
+    min-height: 30px;
+    height: 30px;
+    padding: 4px 8px;
+    max-width: 150px;
+    border-radius: 7px;
+}
+
+.graph-drop-zone--secondary .graph-drop-zone-name {
+    top: -6px;
+    left: 7px;
+    font-size: 9px;
+    line-height: 11px;
+}
+
+.graph-drop-zone--secondary .graph-drop-zone-value {
+    font-size: 10px;
+}
+
+.graph-drop-zone--secondary .graph-zone-clear {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+    font-size: 15px;
+}
+
+.graph-drop-zone--z {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    width: 42px;
+    min-width: 42px;
+    max-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding-right: 6px;
+    padding-left: 6px;
+}
+
+.graph-drop-zone--hover {
+    max-width: min(520px, calc(100vw - 190px));
+    flex: 0 1 auto;
+}
+
+/* ===== Выбор столбца для зоны ===== */
+
+#graph-field-picker {
+    display: none;
+    position: fixed;
+    z-index: 10030;
+    box-sizing: border-box;
+    width: 320px;
+    max-height: min(520px, calc(100vh - 16px));
+    overflow: hidden;
+    color: #25262b;
+    background: rgba(255, 255, 255, 0.985);
+    border: 1px solid rgba(134, 142, 150, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(14px);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    animation: graph-field-picker-in 100ms ease-out;
+}
+
+#graph-field-picker.is-open {
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes graph-field-picker-in {
+    from { opacity: 0; transform: translateX(-3px) scale(0.99); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.field-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 10px;
+}
+
+.field-picker-kicker {
+    margin-bottom: 2px;
+    color: #868e96;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.field-picker-title {
+    color: #212529;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.field-picker-close {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    color: #868e96;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    font: 500 22px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.field-picker-close:hover,
+.field-picker-close:focus-visible {
+    color: #343a40;
+    background: #f1f3f5;
+    outline: none;
+}
+
+.field-picker-tools {
+    padding: 0 12px 10px;
+}
+
+.field-picker-search-wrap {
+    display: flex;
+    height: 36px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.field-picker-search-wrap:focus-within {
+    background: #fff;
+    border-color: #74c0fc;
+    box-shadow: 0 0 0 2px rgba(34, 139, 230, 0.12);
+}
+
+.field-picker-search-wrap svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    fill: none;
+    stroke: #868e96;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+.field-picker-search {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    color: #343a40;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.field-picker-search::placeholder {
+    color: #adb5bd;
+}
+
+.field-picker-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 9px;
+}
+
+.field-picker-order,
+.field-picker-category-mode {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.field-picker-order-label,
+.field-picker-category-label {
+    color: #adb5bd;
+    font-size: 10px;
+    font-weight: 650;
+    white-space: nowrap;
+    transition: color 0.1s;
+}
+
+.field-picker-order-label.is-active,
+.field-picker-category-label.is-active {
+    color: #1971c2;
+}
+
+.field-picker-category-mode.is-disabled {
+    opacity: 0.42;
+}
+
+.field-picker-switch {
+    position: relative;
+    width: 30px;
+    height: 17px;
+    padding: 0;
+    background: #ced4da;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.12s;
+}
+
+.field-picker-switch[aria-checked="true"] {
+    background: #339af0;
+}
+
+.field-picker-switch:disabled {
+    cursor: not-allowed;
+}
+
+.field-picker-switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 13px;
+    height: 13px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+    transition: transform 0.12s;
+}
+
+.field-picker-switch[aria-checked="true"] .field-picker-switch-knob {
+    transform: translateX(13px);
+}
+
+.field-picker-list {
+    min-height: 54px;
+    overflow-y: auto;
+    padding: 4px 8px 8px;
+    border-top: 1px solid #f1f3f5;
+}
+
+.field-picker-option {
+    display: flex;
+    width: 100%;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    color: #495057;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    font: 500 12px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-align: left;
+}
+
+.field-picker-option:hover,
+.field-picker-option:focus-visible {
+    color: #1864ab;
+    background: #f1f3f5;
+    outline: none;
+}
+
+.field-picker-option[aria-selected="true"] {
+    color: #1864ab;
+    background: #e7f5ff;
+    font-weight: 650;
+}
+
+.field-picker-option-name {
+    min-width: 0;
+    flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 100%;
 }
 
-/* При наведении на график — зоны видимы, но не перехватывают мышь */
-.graph-hover .graph-drop-zone {
+.field-picker-option-check {
+    visibility: hidden;
+    flex: 0 0 auto;
+    color: #228be6;
+    font-size: 13px;
+}
+
+.field-picker-option[aria-selected="true"] .field-picker-option-check {
+    visibility: visible;
+}
+
+.field-picker-empty {
+    padding: 22px 10px;
+    color: #868e96;
+    font-size: 12px;
+    text-align: center;
+}
+
+.field-picker-footer {
+    padding: 8px 12px 10px;
+    color: #adb5bd;
+    background: #fafafa;
+    border-top: 1px solid #f1f3f5;
+    font-size: 9px;
+    text-align: center;
+}
+
+.column-badge--dragging {
+    opacity: 0.42;
+}
+
+.column-drag-preview {
+    position: fixed;
+    top: -1000px;
+    left: -1000px;
+    z-index: 100000;
+    max-width: 220px;
+    padding: 7px 11px;
+    overflow: hidden;
+    color: #1864ab;
+    background: #e7f5ff;
+    border: 1px solid #74c0fc;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     pointer-events: none;
 }
 
-/* При перетаскивании — зоны активны */
-.drag-active .graph-drop-zone {
-    pointer-events: auto !important;
-    cursor: copy;
-}
+@media (max-width: 1000px) {
+    .graph-drop-secondary {
+        width: calc(100% - 90px);
+    }
 
-/* Подсветка зоны при наведении бейджа */
-.drag-active .graph-drop-zone.zone-hover {
-    background-color: rgba(33, 150, 243, 0.25) !important;
-    border: 3px solid rgba(33, 150, 243, 0.85) !important;
-    box-shadow: 0 0 8px rgba(33, 150, 243, 0.3) !important;
+    .graph-drop-zone--secondary {
+        min-width: 82px;
+        padding: 6px 8px;
+    }
 }

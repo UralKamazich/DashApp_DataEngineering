@@ -1,6 +1,6 @@
 {
   "name": "dataanalize-desktop",
-  "version": "1.0.27",
+  "version": "2.0.0",
   "description": "DataAnalize Desktop Application - Dash Data Engineering Tool",
   "main": "electron/main.js",
   "scripts": {

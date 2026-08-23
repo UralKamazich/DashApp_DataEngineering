@@ -12,35 +12,55 @@ from config import PLOTLY_STYLES, COLOR_THRESHOLD
 
 
 # =========================
-# Цвета плашек для типов колонок
+# Маркеры типов каналов
 # =========================
-COLUMN_TYPE_COLORS = {
-    "numeric": "#2196F3",      # синий
-    "categorical": "#4CAF50",  # зелёный
-    "datetime": "#795548",     # коричневый
+COLUMN_TYPE_LABELS = {
+    "numeric": ("123", "Числовой"),
+    "categorical": ("Aa", "Категориальный"),
+    "datetime": ("dt", "Дата и время"),
 }
 
 
-def make_column_badge(col_name: str, col_type: str) -> html.Div:
-    """Плашка-бейдж: название колонки, цвет по типу (c drag-and-drop)."""
-    color = COLUMN_TYPE_COLORS.get(col_type, "#9E9E9E")
+def make_column_badge(
+    col_name: str,
+    col_type: str,
+    *,
+    derived: bool = False,
+    dataset_id: str | None = None,
+) -> html.Div:
+    """Compact draggable dataset channel with a restrained type marker."""
+    type_mark, type_name = COLUMN_TYPE_LABELS.get(col_type, ("…", "Другой тип"))
     return html.Div(
-        dmc.Tooltip(
-            dmc.Badge(
-                col_name,
-                color=color,
-                variant="light",
-                size="sm",
-                fullWidth=True,
-                style={"marginBottom": "3px", "textAlign": "left", "fontWeight": 400, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"},
-            ),
-            label=str(col_name),
-            openDelay=200,
-            withArrow=True,
+        html.Div(
+            [
+                html.Sup(
+                    type_mark,
+                    className=f"column-type-marker column-type-marker--{col_type}",
+                    **{"aria-hidden": "true"},
+                ),
+                html.Sup(
+                    "fx",
+                    className="column-derived-marker",
+                    title="Создан в Data Engineering",
+                ) if derived else None,
+                html.Span(str(col_name), className="column-channel-name"),
+                html.Span(
+                    className="column-drag-handle",
+                    **{"aria-hidden": "true"},
+                ),
+            ],
+            className="column-channel-row",
         ),
+        className=f"column-badge column-badge--{col_type}",
         draggable="true",
-        **{"data-column-name": str(col_name)},
-        style={"cursor": "grab", "marginBottom": "2px", "maxWidth": "100%", "overflow": "hidden"},
+        title=f"{col_name} · {type_name}" + (" · производный канал" if derived else ""),
+        **{"aria-label": f"Перетащить канал «{col_name}»"},
+        **{
+            "data-column-name": str(col_name),
+            "data-column-type": col_type,
+            "data-dataset-id": str(dataset_id or ""),
+            "data-derived": "true" if derived else "false",
+        },
     )
 
 
@@ -97,15 +117,39 @@ def create_multiselect(id, options, value=None, searchable=True, clearable=True,
 # =========================
 # Стиль графика
 # =========================
+graph_dataset_select = dmc.Select(
+    id="graph-dataset-select",
+    label="Датасет",
+    data=[],
+    value="source",
+    allowDeselect=False,
+    searchable=True,
+    size="xs",
+    comboboxProps={"shadow": "md"},
+)
+
 dropdown_style = dmc.Select(
     id="dropdown_style",
-    label="Стиль графика",
+    label="Тема",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     data=[{"label": style.capitalize(), "value": style} for style in PLOTLY_STYLES],
     value="plotly",
     clearable=False,
     persistence=True
+)
+
+graph_render_mode = dmc.SegmentedControl(
+    id="graph-render-mode",
+    data=[
+        {"label": "Гибрид", "value": "hybrid"},
+        {"label": "SVG", "value": "svg"},
+    ],
+    value="hybrid",
+    size="xs",
+    fullWidth=True,
+    persistence=True,
+    persistence_type="local",
 )
 
 # =========================
@@ -122,6 +166,27 @@ dropdown_facet_col = create_dropdown("dropdown_facet_col", [], None, clearable=T
 
 dropdown_hover_data = create_multiselect("dropdown_hover_data", [], value=[], clearable=True)
 dropdown_corr_columns = create_multiselect("dropdown_corr_columns", [], value=[], clearable=True)
+dropdown_corr_columns.className = "correlation-channels-select"
+dropdown_corr_columns.style = {
+    **dropdown_corr_columns.style,
+    "width": "100%",
+    "maxWidth": "100%",
+}
+
+mv_chart_type = dmc.Select(
+    id="mv-chart-type",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
+    data=[
+        {"value": "Correlogram", "label": "Коррелограмма"},
+        {"value": "ScatterMatrix", "label": "Scatter Matrix"},
+        {"value": "Parcoords", "label": "Parallel Coordinates"},
+    ],
+    value="Correlogram",
+    clearable=False,
+    persistence=True,
+    style={"width": "200px", "fontSize": "13px"},
+)
 
 # =========================
 # Cluster / Data Engineering колонки
@@ -185,7 +250,7 @@ agg_metrics_select = dmc.CheckboxGroup(
 
 agg_exclude_zeros_switch = dmc.Switch(
     id="agg-exclude-zeros",
-    label="Исключать нули из расчётов",
+    label="Нули не учитывать",
     checked=False,
     onLabel="Да",
     offLabel="Нет",
@@ -194,7 +259,7 @@ agg_exclude_zeros_switch = dmc.Switch(
 
 agg_exclude_empty_switch = dmc.Switch(
     id="agg-exclude-empty",
-    label="Исключать пустые (NaN) из расчётов",
+    label="NaN не учитывать",
     checked=True,
     onLabel="Да",
     offLabel="Нет",
@@ -232,11 +297,6 @@ txtcopy_strip_switch = dmc.Switch(
     size="md"
 )
 
-# =========================
-# Кнопки и элементы управления
-# =========================
-add_filter_button = dmc.Button("Добавить фильтр", id="add-filter-btn", size="xs", variant="outline", leftSection=html.Div("+"))
-
 dropdown_chart_type = dmc.Select(
     id="segmented",
     allowDeselect=False,
@@ -250,11 +310,8 @@ dropdown_chart_type = dmc.Select(
         {"value": "Polar", "label": "Треугольный график"},
         {"value": "Hist", "label": "Гистограмма"},
         {"value": "Pie", "label": "Круговая диаграмма"},
-        {"value": "Correlation", "label": "Коррелограмма"},
         {"value": "Violin", "label": "Violin"},
         {"value": "Ridge", "label": "Ridge Plot"},
-        {"value": "ScatterMatrix",   "label": "Scatter Matrix"},
-        {"value": "Parcoords",       "label": "Parallel Coordinates"},
         {"value": "Sunburst",        "label": "Sunburst"},
         {"value": "Treemap",         "label": "Treemap"},
         {"value": "DensityHeat",     "label": "Density Heatmap"},
@@ -266,68 +323,20 @@ dropdown_chart_type = dmc.Select(
     style={"width": "165px", "fontSize": "13px"}
 )
 
-SwitchBubble = dmc.Switch(id="SwitchBubble", size="xs", radius="sm", label="Bubble", checked=False)
-
-update_graf = dmc.Tooltip(
-    label="Обновить / Отобразить график",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="update-graf",                 # тот же ID — логика не меняется
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="lucide:refresh-ccw", width=18)
-    )
+SwitchBubble = dmc.Switch(
+    id="SwitchBubble",
+    size="xs",
+    radius="sm",
+    label="Bubbles",
+    checked=True,
 )
-
-download_button = dmc.Tooltip(
-    label="Сохранить в HTML",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="download-button",            # тот же ID
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="tabler:file-type-html", width=18)
-    )
-)
-
-DownloadFile = dcc.Download(id="download-file")
-
-excel_download_button = dmc.Tooltip(
-    label="Сохранить датасет в Excel",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="download-excel-button",
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="vscode-icons:file-type-excel2", width=18)
-    )
-)
-
-DownloadExcel = dcc.Download(id="download-excel")
-
-copy_button = dmc.Tooltip(
-    label="Копировать как PNG",
-    withArrow=True,
-    children=dmc.ActionIcon(
-        id="copy-png-button",            # тот же ID
-        variant="light",
-        size="xl",
-        radius="xl",
-        children=DashIconify(icon="lucide:image-down", width=18)
-    )
-)
-
-copy_trigger = dcc.Clipboard(id="clipboard", style={"display": "none"})
 
 # =========================
 # Вспомогательные дропдауны настроек
 # =========================
 dropdown_text_pozition = dmc.Select(
     id="dropdown_text_pozition",
-    label="Положение подписи",
+    label="Положение подписей",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="middle center",
@@ -337,7 +346,7 @@ dropdown_text_pozition = dmc.Select(
 )
 dropdown_category_ascending = dmc.Select(
     id="dropdown_category_ascending",
-    label="Сортировка категорий (оси)",
+    label="Порядок категорий",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="total ascending",
@@ -351,7 +360,7 @@ dropdown_category_ascending = dmc.Select(
 )
 dropdown_axes_category = dmc.Select(
     id="dropdown_axes_category",
-    label="Ось сортировки (катег.)",
+    label="Сортировать по оси",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="auto",               # было "y"
@@ -360,16 +369,31 @@ dropdown_axes_category = dmc.Select(
 )
 dropdown_overlay = dmc.Select(
     id="dropdown_overlay",
-    label="Наложение в гистограмме",
+    label="Режим столбцов",
     value="overlay",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     data=["overlay", "stack", "relative", "group"],
     clearable=False, persistence=True
 )
+dropdown_pie_aggregation = dmc.Select(
+    id="dropdown_pie_aggregation",
+    label="Круговая: агрегация",
+    description="Для пары категория + число",
+    value="sum",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
+    data=[
+        {"value": "sum", "label": "Сумма"},
+        {"value": "mean", "label": "Среднее"},
+        {"value": "count", "label": "Количество"},
+    ],
+    clearable=False,
+    persistence=True,
+)
 dropdown_legend = dmc.Select(
     id="dropdown_legend",
-    label="Расположение легенды",
+    label="Положение",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     data=[
@@ -385,7 +409,7 @@ dropdown_legend = dmc.Select(
 # Порядок легенды + пользовательский список
 dropdown_legend_order = dmc.Select(
     id="dropdown_legend_order",
-    label="Сортировка легенды",
+    label="Порядок",
     allowDeselect=False,
     comboboxProps={"shadow": "md"},
     value="alphabetical",
@@ -399,7 +423,7 @@ dropdown_legend_order = dmc.Select(
 )
 input_legend_custom_order = dmc.TextInput(
     id="input_legend_custom_order",
-    label="Порядок легенды (через запятую)",
+    label="Свой порядок (через запятую)",
     placeholder="Пример: A, C, B",
     persistence=True,
 )
@@ -425,9 +449,25 @@ bin_label_style = dmc.SegmentedControl(
 # Переключатель подписей на графиках Bar
 bar_text_auto_switch = dmc.Switch(
     id="bar-text-auto",
-    label="Подписи значений на столбцах (Bar)",
+    label="Значения на столбцах",
     checked=True,
     onLabel="Вкл",
     offLabel="Выкл",
     size="md"
+)
+
+bar_aggregation_select = dmc.Select(
+    id="bar-aggregation",
+    label="Bar: агрегация",
+    value="sum",
+    allowDeselect=False,
+    comboboxProps={"shadow": "md"},
+    data=[
+        {"value": "none", "label": "Без агрегации (как есть)"},
+        {"value": "sum", "label": "Сумма"},
+        {"value": "mean", "label": "Среднее"},
+        {"value": "count", "label": "Количество строк"},
+    ],
+    clearable=False,
+    persistence=True,
 )
