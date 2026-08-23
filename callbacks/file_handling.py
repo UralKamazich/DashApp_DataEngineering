@@ -113,7 +113,11 @@ def on_excel_upload(local_path, local_name):
             if len(sheets) == 1:
                 meta = meta_from_df(df)
                 js = df.to_json(date_format='iso', orient='split')
-                return "", dash.no_update, sheets, sheet_name, js, js, meta, []
+                # filtered-data has a single owner: callbacks.pipeline.  It will
+                # receive active-dataset-data after the source registry is
+                # initialized.  Publishing the same payload here used to start
+                # the expensive UI cascade twice for wide workbooks.
+                return "", dash.no_update, sheets, sheet_name, js, dash.no_update, meta, []
 
             # несколько листов — показываем модалку выбора
             modal = dmc.Modal(
@@ -264,7 +268,9 @@ def load_selected_sheet(n_clicks, ids, local_path):
         meta = meta_from_df(df)
         js = df.to_json(date_format='iso', orient='split')
 
-        return js, "", False, js, meta, []
+        # Let callbacks.pipeline publish filtered-data once the active dataset
+        # has been initialized.
+        return js, "", False, dash.no_update, meta, []
     except Exception as e:
         notif = _make_error_notif(f"Ошибка загрузки листа: {str(e)}")
         return dash.no_update, html.Div(f"Ошибка: {e}", style={'color': 'red'}), False, dash.no_update, dash.no_update, notif

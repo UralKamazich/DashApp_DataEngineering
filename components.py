@@ -31,34 +31,30 @@ def make_column_badge(
     """Compact draggable dataset channel with a restrained type marker."""
     type_mark, type_name = COLUMN_TYPE_LABELS.get(col_type, ("…", "Другой тип"))
     return html.Div(
-        dmc.Tooltip(
-            html.Div(
-                [
-                    html.Sup(
-                        type_mark,
-                        className=f"column-type-marker column-type-marker--{col_type}",
-                        **{"aria-hidden": "true"},
-                    ),
-                    html.Sup(
-                        "fx",
-                        className="column-derived-marker",
-                        title="Создан в Data Engineering",
-                    ) if derived else None,
-                    html.Span(str(col_name), className="column-channel-name"),
-                    html.Span(
-                        className="column-drag-handle",
-                        **{"aria-hidden": "true"},
-                    ),
-                ],
-                className="column-channel-row",
-            ),
-            label=f"{col_name} · {type_name}" + (" · производный канал" if derived else ""),
-            openDelay=350,
-            withArrow=True,
+        html.Div(
+            [
+                html.Sup(
+                    type_mark,
+                    className=f"column-type-marker column-type-marker--{col_type}",
+                    **{"aria-hidden": "true"},
+                ),
+                html.Sup(
+                    "fx",
+                    className="column-derived-marker",
+                    title="Создан в Data Engineering",
+                ) if derived else None,
+                html.Span(str(col_name), className="column-channel-name"),
+                html.Span(
+                    className="column-drag-handle",
+                    **{"aria-hidden": "true"},
+                ),
+            ],
+            className="column-channel-row",
         ),
         className=f"column-badge column-badge--{col_type}",
         draggable="true",
-        title=f"Перетащить канал «{col_name}»",
+        title=f"{col_name} · {type_name}" + (" · производный канал" if derived else ""),
+        **{"aria-label": f"Перетащить канал «{col_name}»"},
         **{
             "data-column-name": str(col_name),
             "data-column-type": col_type,

@@ -12,16 +12,25 @@
       document.querySelector(HOST + "." + FALLBACK);
   }
 
-  function resizePlots(host) {
+  function fitPlotsToHost(host) {
     if (!host) return;
+    const token = (host.__graphFullscreenFitToken || 0) + 1;
+    host.__graphFullscreenFitToken = token;
     const resize = function () {
-      window.dispatchEvent(new Event("resize"));
-      if (!window.Plotly?.Plots?.resize) return;
+      if (host.__graphFullscreenFitToken !== token || activeHost() !== host) return;
+      if (!window.Plotly?.relayout) return;
       host.querySelectorAll(".js-plotly-plot").forEach(function (plot) {
+        const wrapper = plot.closest(".graph-fullscreen-plot") || plot.parentElement;
+        const bounds = wrapper?.getBoundingClientRect?.();
+        if (!bounds?.width || !bounds?.height) return;
         try {
-          window.Plotly.Plots.resize(plot);
+          window.Plotly.relayout(plot, {
+            width: Math.round(bounds.width),
+            height: Math.round(bounds.height),
+            autosize: false,
+          });
         } catch (error) {
-          console.warn("[graph-fullscreen] resize failed:", error);
+          console.warn("[graph-fullscreen] fit failed:", error);
         }
       });
     };
@@ -36,29 +45,52 @@
     host.__graphFullscreenPlotSizes = Array.from(
       host.querySelectorAll(".js-plotly-plot")
     ).map(function (plot) {
+      const wrapper = plot.closest(".graph-fullscreen-plot") || plot.parentElement;
+      const plotBounds = plot.getBoundingClientRect();
+      const wrapperBounds = wrapper?.getBoundingClientRect?.();
       return {
         plot: plot,
-        height: plot.layout?.height ?? null,
+        wrapper: wrapper,
+        height: plot.layout?.height ?? Math.round(plotBounds.height),
         width: plot.layout?.width ?? null,
+        autosize: plot.layout?.autosize ?? null,
+        wrapperHeight: Math.round(wrapperBounds?.height || plotBounds.height),
+        wrapperStyleHeight: wrapper?.style?.height || "",
       };
     });
   }
 
   function restorePlotSizes(host) {
     const states = host?.__graphFullscreenPlotSizes || [];
-    states.forEach(function (state) {
-      if (!window.Plotly?.relayout || !state.plot?.isConnected) return;
-      const update = {
-        height: state.height,
-        width: state.width,
-      };
-      try {
-        window.Plotly.relayout(state.plot, update);
-      } catch (error) {
-        console.warn("[graph-fullscreen] restore failed:", error);
-      }
-    });
+    if (host) host.__graphFullscreenFitToken = (host.__graphFullscreenFitToken || 0) + 1;
     if (host) delete host.__graphFullscreenPlotSizes;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        states.forEach(function (state) {
+          if (!window.Plotly?.relayout || !state.plot?.isConnected) return;
+          if (state.wrapper?.isConnected && state.wrapperHeight) {
+            state.wrapper.style.height = state.wrapperHeight + "px";
+          }
+          const update = {
+            height: state.height,
+            width: state.width,
+            autosize: state.autosize ?? state.width === null,
+          };
+          try {
+            Promise.resolve(window.Plotly.relayout(state.plot, update)).finally(function () {
+              if (state.wrapper?.isConnected) {
+                state.wrapper.style.height = state.wrapperStyleHeight;
+              }
+            });
+          } catch (error) {
+            if (state.wrapper?.isConnected) {
+              state.wrapper.style.height = state.wrapperStyleHeight;
+            }
+            console.warn("[graph-fullscreen] restore failed:", error);
+          }
+        });
+      });
+    });
   }
 
   function syncButtons() {
@@ -80,7 +112,6 @@
     document.documentElement.classList.remove("graph-fullscreen-active");
     restorePlotSizes(host);
     syncButtons();
-    resizePlots(host);
     lastHost = null;
   }
 
@@ -108,7 +139,7 @@
       host.classList.add(FALLBACK);
       document.documentElement.classList.add("graph-fullscreen-active");
       syncButtons();
-      resizePlots(host);
+      fitPlotsToHost(host);
     }
   }
 
@@ -125,7 +156,7 @@
     const host = current || lastHost;
     if (!current) restorePlotSizes(host);
     syncButtons();
-    resizePlots(host);
+    if (current) fitPlotsToHost(host);
     if (!current) lastHost = null;
   });
 

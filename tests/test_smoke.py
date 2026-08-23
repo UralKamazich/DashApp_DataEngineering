@@ -10,7 +10,7 @@ from dash import Dash, Input, dcc, html, no_update
 import dash_mantine_components as dmc
 
 from app import app
-from callbacks.columns_sidebar import update_column_badges
+from callbacks.columns_sidebar import VIRTUALIZATION_THRESHOLD, update_column_badges
 from callbacks.dropdowns import _select_options, update_dropdown_options_all
 from callbacks.file_handling import _clicked_sheet, on_excel_upload
 from callbacks.modals import _normalize_main_chart_type
@@ -121,6 +121,8 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/filter_panel.css": "text/css",
             "/assets/slide_panel.css": "text/css",
             "/assets/filter_panel.js": "text/javascript",
+            "/assets/clustering.css": "text/css",
+            "/assets/dataset_virtual_list.js": "text/javascript",
         }
         for path, content_type in assets.items():
             with self.subTest(path=path):
@@ -168,13 +170,55 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("data-field-mode-store-id", script)
         self.assertIn("writeFieldMode", script)
 
+    def test_clustering_help_windows_open_by_button_and_close_only_explicitly(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_help_window.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn("[data-help-window-target]", script)
+        self.assertIn("function openWindow", script)
+        self.assertNotIn('event.key === "Escape"', script)
+
+        clustering_page = next(
+            component for component in walk_components(app.layout)
+            if getattr(component, "id", None) == "page-clustering"
+        )
+        expected_help_ids = {
+            "cluster-help-routing",
+            "cluster-help-parameters",
+            "cluster-help-pca",
+            "cluster-help-silhouette",
+            "cluster-help-davies",
+            "cluster-help-calinski",
+            "cluster-help-recommended_k",
+            "cluster-help-diagnostics",
+            "cluster-help-sizes",
+            "cluster-help-profiles",
+        }
+        component_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(clustering_page)
+        }
+        self.assertTrue(expected_help_ids.issubset(component_ids))
+
+        targets = set()
+        for component in walk_components(clustering_page):
+            props = component.to_plotly_json().get("props", {})
+            target = props.get("data-help-window-target")
+            if target:
+                targets.add(target)
+        self.assertEqual(targets, expected_help_ids)
+
     def test_graph_fullscreen_control_uses_scoped_host(self):
         script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_fullscreen.js"
         script = script_path.read_text(encoding="utf-8")
         self.assertIn('const HOST = ".graph-fullscreen-host"', script)
         self.assertIn("host.requestFullscreen", script)
         self.assertIn("document.exitFullscreen", script)
-        self.assertIn("window.Plotly.Plots.resize", script)
+        self.assertIn("fitPlotsToHost", script)
+        self.assertIn("window.Plotly.relayout", script)
+        self.assertIn("autosize: state.autosize", script)
+        self.assertIn("plot.getBoundingClientRect()", script)
+        self.assertIn("wrapperHeight", script)
+        self.assertNotIn('window.dispatchEvent(new Event("resize"))', script)
 
     def test_application_branding_uses_current_version_only_in_window_title(self):
         self.assertEqual(APP_VERSION, "2.0.0")
@@ -496,11 +540,55 @@ class DropdownOptionTests(unittest.TestCase):
             "callbacks.columns_sidebar.read_df_from_store",
             side_effect=AssertionError("dataset should not be deserialized"),
         ):
-            badges, _style = update_column_badges(payload, payload, meta)
+            badges, catalog, status = update_column_badges(
+                payload,
+                True,
+                {"start": 0, "size": 48},
+                meta,
+            )
         self.assertEqual(
             [badge.to_plotly_json()["props"]["data-column-name"] for badge in badges],
             ["value", "category"],
         )
+        self.assertEqual(json.loads(catalog), ["value", "category"])
+        self.assertEqual(status, "")
+
+    def test_wide_dataset_badges_are_windowed_only_when_enabled(self):
+        columns = [f"channel_{index}" for index in range(VIRTUALIZATION_THRESHOLD + 5)]
+        source = pd.DataFrame([range(len(columns))], columns=columns)
+        meta = meta_from_df(source)
+        payload = source.to_json(orient="split")
+
+        windowed, catalog, status = update_column_badges(
+            payload,
+            True,
+            {"start": 10, "size": 24},
+            meta,
+        )
+        visible = [
+            child.to_plotly_json()["props"].get("data-column-name")
+            for child in windowed
+            if child.to_plotly_json()["props"].get("data-column-name")
+        ]
+        self.assertEqual(visible, columns[10:34])
+        self.assertEqual(json.loads(catalog), columns)
+        self.assertIn(str(len(columns)), status)
+
+        full, _catalog, status = update_column_badges(
+            payload,
+            False,
+            {"start": 10, "size": 24},
+            meta,
+        )
+        self.assertEqual(len(full), len(columns))
+        self.assertEqual(status, "")
+
+    def test_disabled_virtualization_stops_scroll_window_publication(self):
+        script_path = Path(__file__).resolve().parents[1] / "assets" / "dataset_virtual_list.js"
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn("function virtualizationEnabled(sidebar)", script)
+        self.assertIn('data-virtualization-enabled', script)
+        self.assertIn("if (!virtualizationEnabled(sidebar))", script)
 
 
 class ExcelLoadingTests(unittest.TestCase):
@@ -519,7 +607,7 @@ class ExcelLoadingTests(unittest.TestCase):
         workbook.parse.assert_called_once_with("Data")
         self.assertEqual(result[2], ["Data"])
         self.assertEqual(result[3], "Data")
-        self.assertEqual(result[4], result[5])
+        self.assertIs(result[5], no_update)
         self.assertEqual(result[6]["row_count"], 2)
 
     def test_triggered_sheet_wins_when_other_buttons_were_clicked_before(self):
@@ -722,6 +810,27 @@ class FilterPanelTests(unittest.TestCase):
         )
         date_frame = read_df_from_store(date_payload, self.meta)
         self.assertEqual(date_frame["value"].tolist(), [2.0, 3.0])
+
+    def test_pipeline_restores_base_metadata_after_filter_reset(self):
+        filtered_payload, filtered_meta = apply_filters(
+            {"1": {"column": "category", "value": ["B"]}},
+            "and",
+            self.payload,
+            self.meta,
+        )
+        self.assertEqual(filtered_meta["row_count"], 1)
+
+        reset_payload, reset_meta = apply_filters(
+            {},
+            "and",
+            self.payload,
+            filtered_meta,
+            {"source": {"meta": self.meta}},
+            "source",
+        )
+        self.assertEqual(len(read_df_from_store(reset_payload, reset_meta)), 4)
+        self.assertEqual(reset_meta["row_count"], 4)
+        self.assertEqual(reset_meta["column_count"], len(self.source.columns))
 
 
 class CorrelationAnalysisTests(unittest.TestCase):

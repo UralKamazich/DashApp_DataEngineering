@@ -113,7 +113,7 @@ def _prepare_matrix(frame, features, missing_policy, scaling):
     matrix = prepared.to_numpy(dtype=float, copy=True)
     if transformer is not None:
         matrix = transformer.fit_transform(matrix)
-    return prepared.index, used, constant, matrix
+    return prepared.index, used, constant, prepared, matrix
 
 
 def _model(algorithm, k, row_count, random_state):
@@ -240,7 +240,7 @@ def run_clustering(
     except (TypeError, ValueError) as error:
         raise ValueError("K должно быть целым числом.") from error
 
-    valid_index, used, constant, matrix = _prepare_matrix(
+    valid_index, used, constant, prepared_values, matrix = _prepare_matrix(
         frame, features, missing_policy, scaling
     )
     if k < 2:
@@ -290,7 +290,11 @@ def run_clustering(
 
     metrics = _quality_metrics(matrix, labels, fitted.inertia_, int(random_state))
     diagnostics = _diagnostics(matrix, algorithm, int(random_state))
-    profile = pd.DataFrame(matrix, columns=used).assign(_cluster=labels + 1)
+    # Profiles answer "how does this cluster differ from the whole sample?".
+    # Always standardize them independently of the model scaler so columns
+    # with different physical units remain comparable in one heatmap.
+    profile_matrix = StandardScaler().fit_transform(prepared_values.to_numpy(dtype=float))
+    profile = pd.DataFrame(profile_matrix, columns=used).assign(_cluster=labels + 1)
     profile = profile.groupby("_cluster", sort=True).mean()
     projection_idx = _sample_indices(len(matrix), MAX_PROJECTION_POINTS, int(random_state))
     sizes = pd.Series(labels + 1).value_counts().sort_index()

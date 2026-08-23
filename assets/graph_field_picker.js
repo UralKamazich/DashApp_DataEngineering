@@ -52,6 +52,17 @@
   }
 
   function getDatasetColumns(zone) {
+    const catalog = document.getElementById("dataset-column-catalog");
+    if (catalog && catalog.textContent) {
+      try {
+        const columns = JSON.parse(catalog.textContent);
+        if (Array.isArray(columns)) {
+          return columns.map(String);
+        }
+      } catch (_error) {
+        // Compatibility fallback: collect the currently rendered badges.
+      }
+    }
     const workspace = zone && zone.closest(".graph-workspace");
     const containerId = workspace && workspace.getAttribute("data-columns-container-id");
     const container = (containerId && document.getElementById(containerId)) || document;

@@ -105,6 +105,20 @@ class ClusteringEngineTests(unittest.TestCase):
         self.assertIs(cached_result(reference), result)
         self.assertEqual(cached_result(reference).signature, signature)
 
+    def test_profile_heatmap_is_standardized_independently_of_model_scaling(self):
+        result = run_clustering(
+            self.frame,
+            features=["x", "y"],
+            k=2,
+            scaling="minmax",
+            include_id=False,
+            include_distance=False,
+            include_pca=False,
+        )
+        values = np.asarray(result.analysis["profile"]["values"], dtype=float)
+        self.assertLess(values.min(), 0)
+        self.assertGreater(values.max(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

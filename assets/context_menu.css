@@ -144,8 +144,7 @@
     user-select: none;
 }
 
-/* dmc.Tooltip adds a fit-content wrapper around its child. It must follow the
-   sidebar width, otherwise the right edge of the pill gets clipped. */
+/* Keep both the lightweight badge shell and its row inside the sidebar. */
 #columns-badges .column-badge > div {
     box-sizing: border-box;
     width: 100% !important;

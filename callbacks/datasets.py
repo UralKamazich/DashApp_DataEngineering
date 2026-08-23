@@ -217,13 +217,14 @@ def activate_dataset(
     if not target:
         raise PreventUpdate
     payload = payload_for_record(target)
-    filtered = payload_for_record(target, filtered=True) or payload
     return (
         updated,
         str(requested_id),
         payload,
         target.get("meta") or {},
-        filtered,
+        # callbacks.pipeline is the single publisher for filtered-data.  It is
+        # triggered by active-dataset-data and restores the committed filters.
+        no_update,
         target.get("filters_state") or {},
         target.get("filters_applied_state") or {},
         target.get("filter_logic") or "and",

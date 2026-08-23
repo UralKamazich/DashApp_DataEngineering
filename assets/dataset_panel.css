@@ -34,3 +34,16 @@
     background: #ffffff;
     border-top: 1px solid #e9ecef;
 }
+
+.dataset-virtualization-status {
+    min-height: 12px;
+    font-size: 9px;
+    line-height: 1.2;
+}
+
+.column-virtual-spacer {
+    width: 1px;
+    min-height: 0;
+    flex: 0 0 auto;
+    pointer-events: none;
+}

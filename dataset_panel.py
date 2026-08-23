@@ -9,12 +9,31 @@ from slide_panel import SlidePanel
 
 def _panel_content():
     footer = html.Div(
-        dmc.Checkbox(
-            id="dataset-close-on-outside",
-            label="Закрывать при клике вне",
-            checked=False,
-            size="xs",
-            persistence=True,
+        dmc.Stack(
+            gap=4,
+            children=[
+                dmc.Checkbox(
+                    id="dataset-virtualize-columns",
+                    label="Виртуализировать список (>200)",
+                    checked=True,
+                    size="xs",
+                    persistence=True,
+                ),
+                dmc.Text(
+                    "",
+                    id="dataset-virtualization-status",
+                    size="xs",
+                    c="dimmed",
+                    className="dataset-virtualization-status",
+                ),
+                dmc.Checkbox(
+                    id="dataset-close-on-outside",
+                    label="Закрывать при клике вне",
+                    checked=False,
+                    size="xs",
+                    persistence=True,
+                ),
+            ],
         ),
         className="dataset-drawer-footer",
     )
@@ -35,6 +54,11 @@ def _panel_content():
                         children=[],
                         gap="2px",
                         style={"maxWidth": "100%", "overflow": "hidden"},
+                    ),
+                    html.Div(
+                        id="dataset-column-catalog",
+                        style={"display": "none"},
+                        **{"aria-hidden": "true"},
                     ),
                 ],
                 shadow="sm",
@@ -71,6 +95,7 @@ DATASET_PANEL = SlidePanel(
     extra_stores=[
         dcc.Store(id="dataset-outside-close-store", data=False),
         dcc.Store(id="dataset-file-drop-store"),
+        dcc.Store(id="dataset-virtual-window", data={"start": 0, "size": 48}),
     ],
 )
 

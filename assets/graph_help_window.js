@@ -33,13 +33,16 @@
     helpWindow.style.top = Math.round(top) + "px";
   }
 
-  function open(workspace, x, y) {
-    const helpWindow = helpWindowFor(workspace);
+  function openWindow(helpWindow, x, y) {
     if (!helpWindow) return false;
     helpWindow.classList.add(OPEN_CLASS);
     helpWindow.setAttribute("aria-hidden", "false");
     position(helpWindow, x, y);
     return true;
+  }
+
+  function open(workspace, x, y) {
+    return openWindow(helpWindowFor(workspace), x, y);
   }
 
   function close(helpWindow) {
@@ -50,6 +53,17 @@
   }
 
   document.addEventListener("click", function (event) {
+    const trigger = event.target.closest("[data-help-window-target]");
+    if (trigger) {
+      const targetId = trigger.getAttribute("data-help-window-target");
+      const helpWindow = targetId ? document.getElementById(targetId) : null;
+      if (!helpWindow) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openWindow(helpWindow, event.clientX, event.clientY);
+      return;
+    }
+
     const closeButton = event.target.closest(".graph-help-window-close");
     if (!closeButton) return;
     event.preventDefault();
@@ -112,5 +126,5 @@
     });
   });
 
-  window.graphHelpWindow = Object.freeze({open: open, close: close});
+  window.graphHelpWindow = Object.freeze({open: open, openWindow: openWindow, close: close});
 })();
