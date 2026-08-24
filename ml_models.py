@@ -7,6 +7,10 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ml_engine import run_catboost_classification, run_catboost_regression
+from random_forest_engine import (
+    run_random_forest_classification,
+    run_random_forest_regression,
+)
 
 
 @dataclass(frozen=True)
@@ -62,9 +66,13 @@ MODEL_ADAPTERS = {
             title="Random Forest",
             family="Ансамбль деревьев",
             tasks=("regression", "classification"),
-            status="planned",
-            description="Устойчивый базовый алгоритм и независимое сравнение с бустингом.",
+            status="ready",
+            description="Устойчивый ансамбль деревьев с OOB-оценкой и контролем переобучения.",
         ),
+        runners={
+            "regression": run_random_forest_regression,
+            "classification": run_random_forest_classification,
+        },
     ),
     "neural-networks": ModelAdapter(
         ModelDescriptor(

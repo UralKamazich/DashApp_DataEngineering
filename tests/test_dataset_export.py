@@ -11,6 +11,7 @@ from dataset_export import (
     dataset_export_name,
     export_catboost_model,
     export_frame_to_excel,
+    export_sklearn_model,
     model_export_name,
 )
 from dataset_registry import commit_result, create_source_registry, get_record
@@ -83,6 +84,19 @@ class DatasetExportTests(unittest.TestCase):
                 model_export_name(source, source.name, "CatBoost run", "2026-08-23T12:00:00+03:00"),
                 "source - CatBoost run - model - 20260823_120000.cbm",
             )
+
+    def test_sklearn_model_export_uses_joblib_extension(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.xlsx"
+            source.touch()
+            target = export_sklearn_model(
+                {"model": "random-forest"}, source_path=source,
+                source_name=source.name, experiment_name="RF run",
+                created_at="2026-08-23T12:00:00+03:00",
+            )
+            self.assertTrue(target.exists())
+            self.assertEqual(target.suffix, ".joblib")
+            self.assertFalse(list(Path(directory).glob("*.pkl")))
 
     def test_registry_records_creation_time_and_ml_tab_class(self):
         payload = self.frame.to_json(orient="split")

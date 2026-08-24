@@ -9,6 +9,7 @@ import re
 import tempfile
 
 import pandas as pd
+import joblib
 
 
 _INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
@@ -37,11 +38,15 @@ def dataset_export_name(source_path, source_name, dataset_name, created_at=None)
     return f"{source_stem} - {dataset_part} - {creation_stamp(created_at)}.xlsx"
 
 
-def model_export_name(source_path, source_name, experiment_name, created_at=None):
+def model_export_name(source_path, source_name, experiment_name, created_at=None,
+                      extension=".cbm"):
     source_value = source_name or (Path(source_path).name if source_path else "dataset")
     source_stem = safe_filename_part(Path(str(source_value)).stem, "dataset")
     experiment_part = safe_filename_part(experiment_name, "CatBoost")
-    return f"{source_stem} - {experiment_part} - model - {creation_stamp(created_at)}.cbm"
+    return (
+        f"{source_stem} - {experiment_part} - model - "
+        f"{creation_stamp(created_at)}{extension}"
+    )
 
 
 def _available_path(path):
@@ -81,6 +86,34 @@ def export_frame_to_excel(frame, *, source_path, source_name=None,
         ) as temporary:
             temporary_name = temporary.name
         export_frame.to_excel(temporary_name, index=False, engine="openpyxl")
+        Path(temporary_name).replace(target)
+    except Exception:
+        if temporary_name:
+            Path(temporary_name).unlink(missing_ok=True)
+        raise
+    return target
+
+
+def export_sklearn_model(model, *, source_path, source_name=None,
+                         experiment_name=None, created_at=None):
+    """Atomically save a fitted scikit-learn pipeline as a joblib artifact."""
+    if model is None:
+        raise ValueError("Обученная модель недоступна.")
+    if not source_path:
+        raise ValueError("Неизвестна директория исходного файла. Выберите файл заново.")
+    directory = Path(source_path).expanduser().resolve().parent
+    if not directory.is_dir():
+        raise ValueError("Директория исходного файла недоступна.")
+    target = _available_path(directory / model_export_name(
+        source_path, source_name, experiment_name, created_at, extension=".joblib"
+    ))
+    temporary_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix=".dashapp-model-", suffix=".joblib", dir=directory, delete=False
+        ) as temporary:
+            temporary_name = temporary.name
+        joblib.dump(model, temporary_name, compress=3)
         Path(temporary_name).replace(target)
     except Exception:
         if temporary_name:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 import hashlib
 import json
 from uuid import uuid4
@@ -12,6 +13,7 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor, Pool
+from catboost.utils import get_gpu_device_count
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -34,6 +36,33 @@ from sklearn.model_selection import (
 
 MAX_SHAP_ROWS = 300
 MAX_CACHED_RESULTS = 12
+
+
+@lru_cache(maxsize=1)
+def available_gpu_count():
+    """Return the CUDA devices visible to the installed CatBoost runtime."""
+    try:
+        return max(0, int(get_gpu_device_count()))
+    except Exception:
+        return 0
+
+
+def resolve_compute_device(requested="auto"):
+    requested = str(requested or "auto").strip().lower()
+    if requested not in {"auto", "cpu", "gpu"}:
+        raise ValueError("Вычислитель должен быть Auto, CPU или GPU.")
+    gpu_count = available_gpu_count()
+    if requested == "gpu" and gpu_count < 1:
+        raise ValueError(
+            "CatBoost не обнаружил CUDA‑GPU. Выберите Auto или CPU. "
+            "На macOS обучение CatBoost выполняется на CPU."
+        )
+    resolved = "GPU" if requested == "gpu" or (requested == "auto" and gpu_count > 0) else "CPU"
+    return {
+        "requested": requested,
+        "resolved": resolved,
+        "gpu_count": gpu_count,
+    }
 
 
 def _check_cancel(cancel_event):
@@ -65,12 +94,15 @@ def _fit_model(model, train_pool, *, eval_set=None, fit_kwargs=None,
     kwargs = dict(fit_kwargs or {})
     if eval_set is not None:
         kwargs["eval_set"] = eval_set
-    if progress_callback or cancel_event is not None:
+    task_type = str((model.get_params() or {}).get("task_type") or "CPU").upper()
+    if task_type != "GPU" and (progress_callback or cancel_event is not None):
         kwargs["callbacks"] = [_CatBoostProgressCallback(
             progress_callback, cancel_event,
             start=progress_start, span=progress_span,
             expected_iterations=expected_iterations, label=label,
         )]
+    elif task_type == "GPU" and progress_callback:
+        progress_callback(progress_start, f"{label} · GPU")
     model.fit(train_pool, **kwargs)
     _check_cancel(cancel_event)
     if progress_callback:
@@ -193,7 +225,7 @@ def _pool(x, y, categorical):
 
 def _model_params(*, iterations, depth, learning_rate, l2_leaf_reg,
                   loss_function, random_seed, random_strength,
-                  bagging_temperature):
+                  bagging_temperature, compute_device="auto"):
     if int(iterations) < 1 or int(iterations) > 20_000:
         raise ValueError("Количество деревьев должно быть от 1 до 20 000.")
     if int(depth) < 1 or int(depth) > 16:
@@ -206,6 +238,7 @@ def _model_params(*, iterations, depth, learning_rate, l2_leaf_reg,
         raise ValueError("Random strength и bagging temperature не могут быть отрицательными.")
     if loss_function not in {"RMSE", "MAE", "MAPE", "Quantile"}:
         raise ValueError("Выбрана неподдерживаемая функция потерь.")
+    compute = resolve_compute_device(compute_device)
     return {
         "iterations": int(iterations),
         "depth": int(depth),
@@ -218,12 +251,14 @@ def _model_params(*, iterations, depth, learning_rate, l2_leaf_reg,
         "allow_writing_files": False,
         "verbose": False,
         "thread_count": -1,
+        "task_type": compute["resolved"],
     }
 
 
 def _classifier_params(*, iterations, depth, learning_rate, l2_leaf_reg,
                        loss_function, random_seed, random_strength,
-                       bagging_temperature, auto_class_weights, class_count):
+                       bagging_temperature, auto_class_weights, class_count,
+                       compute_device="auto"):
     resolved_loss = str(loss_function or "Auto")
     if resolved_loss == "Auto":
         resolved_loss = "Logloss" if int(class_count) == 2 else "MultiClass"
@@ -238,6 +273,7 @@ def _classifier_params(*, iterations, depth, learning_rate, l2_leaf_reg,
         l2_leaf_reg=l2_leaf_reg, loss_function="RMSE",
         random_seed=random_seed, random_strength=random_strength,
         bagging_temperature=bagging_temperature,
+        compute_device=compute_device,
     )
     base["loss_function"] = resolved_loss
     if auto_class_weights == "balanced":
@@ -267,6 +303,52 @@ def _curve(model, label):
     }
 
 
+def _overfitting_summary(task, training_metrics, validation_metrics):
+    """Build a conservative train/validation gap diagnostic."""
+    if task == "classification":
+        metric = "Balanced accuracy"
+        train_value = training_metrics.get("balanced_accuracy")
+        validation_value = validation_metrics.get("balanced_accuracy")
+        if train_value is None or validation_value is None:
+            return {"status": "unknown", "label": "Нет оценки", "color": "gray"}
+        gap = max(0.0, float(train_value) - float(validation_value))
+        gap_percent = gap * 100
+        if gap_percent <= 5:
+            status, label, color = "low", "Низкий риск", "green"
+        elif gap_percent <= 15:
+            status, label, color = "moderate", "Умеренный риск", "yellow"
+        else:
+            status, label, color = "high", "Высокий риск", "red"
+        detail = (
+            f"{metric}: train {float(train_value):.4g} → validation "
+            f"{float(validation_value):.4g} · разрыв {gap_percent:.1f} п.п."
+        )
+    else:
+        metric = "MAE"
+        train_value = training_metrics.get("mae")
+        validation_value = validation_metrics.get("mae")
+        if train_value is None or validation_value is None:
+            return {"status": "unknown", "label": "Нет оценки", "color": "gray"}
+        denominator = max(abs(float(validation_value)), 1e-12)
+        gap_percent = max(0.0, (float(validation_value) - float(train_value)) / denominator * 100)
+        if gap_percent <= 15:
+            status, label, color = "low", "Низкий риск", "green"
+        elif gap_percent <= 35:
+            status, label, color = "moderate", "Умеренный риск", "yellow"
+        else:
+            status, label, color = "high", "Высокий риск", "red"
+        detail = (
+            f"{metric}: train {float(train_value):.4g} → validation "
+            f"{float(validation_value):.4g} · разрыв {gap_percent:.1f}%"
+        )
+    return {
+        "status": status, "label": label, "color": color,
+        "metric": metric, "train": float(train_value),
+        "validation": float(validation_value), "gap_percent": float(gap_percent),
+        "detail": detail,
+    }
+
+
 def run_catboost_regression(
     frame: pd.DataFrame,
     *,
@@ -285,6 +367,8 @@ def run_catboost_regression(
     loss_function="RMSE",
     random_seed=42,
     early_stopping_rounds=80,
+    use_best_iteration=True,
+    compute_device="auto",
     random_strength=1.0,
     bagging_temperature=1.0,
     prediction_column="Прогноз CatBoost",
@@ -325,13 +409,15 @@ def run_catboost_regression(
     x_trainable = x_all.loc[train_mask]
     y_trainable = y_all.loc[train_mask].astype(float)
 
+    compute = resolve_compute_device(compute_device)
     params = _model_params(
         iterations=iterations, depth=depth, learning_rate=learning_rate,
         l2_leaf_reg=l2_leaf_reg, loss_function=loss_function,
         random_seed=random_seed, random_strength=random_strength,
         bagging_temperature=bagging_temperature,
+        compute_device=compute["resolved"],
     )
-    fit_kwargs = {}
+    fit_kwargs = {"use_best_model": bool(use_best_iteration)}
     if int(early_stopping_rounds or 0) > 0:
         fit_kwargs["early_stopping_rounds"] = int(early_stopping_rounds)
 
@@ -456,7 +542,7 @@ def run_catboost_regression(
         for curve in curves if curve.get("validation")
     ]
     final_iterations = int(params["iterations"])
-    if best_iterations and int(early_stopping_rounds or 0) > 0:
+    if best_iterations and bool(use_best_iteration):
         final_iterations = max(1, int(round(float(np.mean(best_iterations)))))
     final_params = {**params, "iterations": final_iterations}
     final_model = CatBoostRegressor(**final_params)
@@ -467,6 +553,9 @@ def run_catboost_regression(
         expected_iterations=final_iterations, label="Финальная модель · все строки",
     )
     all_predictions = np.asarray(final_model.predict(x_all), dtype=float)
+    training_predictions = np.asarray(final_model.predict(x_trainable), dtype=float)
+    training_metrics = _metrics(y_trainable, training_predictions)
+    overfitting = _overfitting_summary("regression", training_metrics, overall_metrics)
     _check_cancel(cancel_event)
     if progress_callback:
         progress_callback(91, "Важность признаков")
@@ -548,6 +637,8 @@ def run_catboost_regression(
         "input_rows": int(len(frame)), "training_rows": int(train_mask.sum()),
         "excluded_target_rows": int((~train_mask).sum()),
         "metrics": overall_metrics,
+        "training_metrics": training_metrics,
+        "overfitting": overfitting,
         "baseline": {"value": baseline_value, **baseline_metrics},
         "fold_metrics": fold_metrics, "evaluation_rows": evaluation_rows,
         "actual": chart_actual, "predicted": chart_predicted,
@@ -558,6 +649,8 @@ def run_catboost_regression(
         "outputs": output_columns, "prediction_column": prediction_name,
         "residual_column": residual_name, "params": final_params,
         "best_iterations": best_iterations, "final_iterations": final_iterations,
+        "use_best_iteration": bool(use_best_iteration),
+        "compute": compute,
         "primary_metric_name": "MAE",
         "primary_metric_value": overall_metrics.get("mae"),
         "higher_is_better": False,
@@ -573,6 +666,8 @@ def run_catboost_regression(
             "time_column": str(time_column or ""),
             "iterations": final_iterations, "depth": int(depth),
             "learning_rate": float(learning_rate), "metrics": overall_metrics,
+            "compute_device": compute["resolved"],
+            "use_best_iteration": bool(use_best_iteration),
         },
     }
     return CachedMLResult(result_frame, analysis, step, signature, final_model)
@@ -596,6 +691,8 @@ def run_catboost_classification(
     loss_function="Auto",
     random_seed=42,
     early_stopping_rounds=80,
+    use_best_iteration=True,
+    compute_device="auto",
     random_strength=1.0,
     bagging_temperature=1.0,
     auto_class_weights="none",
@@ -644,14 +741,16 @@ def run_catboost_classification(
 
     x_all, categorical = _prepare_features(frame, selected)
     x_trainable = x_all.loc[train_mask]
+    compute = resolve_compute_device(compute_device)
     params = _classifier_params(
         iterations=iterations, depth=depth, learning_rate=learning_rate,
         l2_leaf_reg=l2_leaf_reg, loss_function=loss_function,
         random_seed=random_seed, random_strength=random_strength,
         bagging_temperature=bagging_temperature,
         auto_class_weights=auto_class_weights, class_count=class_count,
+        compute_device=compute["resolved"],
     )
-    fit_kwargs = {}
+    fit_kwargs = {"use_best_model": bool(use_best_iteration)}
     if int(early_stopping_rounds or 0) > 0:
         fit_kwargs["early_stopping_rounds"] = int(early_stopping_rounds)
 
@@ -816,7 +915,7 @@ def run_catboost_classification(
         for curve in curves if curve.get("validation")
     ]
     final_iterations = int(params["iterations"])
-    if best_iterations and int(early_stopping_rounds or 0) > 0:
+    if best_iterations and bool(use_best_iteration):
         final_iterations = max(1, int(round(float(np.mean(best_iterations)))))
     final_params = {**params, "iterations": final_iterations}
     final_model = CatBoostClassifier(**final_params)
@@ -829,6 +928,12 @@ def run_catboost_classification(
     all_predictions = _prediction_labels(final_model.predict(x_all))
     all_probabilities = aligned_probabilities(final_model, x_all)
     all_confidence = np.max(all_probabilities, axis=1)
+    training_predictions = _prediction_labels(final_model.predict(x_trainable))
+    training_probabilities = aligned_probabilities(final_model, x_trainable)
+    training_metrics = _classification_metrics(
+        y_trainable, training_predictions, training_probabilities, class_labels
+    )
+    overfitting = _overfitting_summary("classification", training_metrics, overall_metrics)
     _check_cancel(cancel_event)
     if progress_callback:
         progress_callback(91, "Важность признаков")
@@ -924,6 +1029,8 @@ def run_catboost_classification(
         "input_rows": int(len(frame)), "training_rows": int(train_mask.sum()),
         "excluded_target_rows": int((~train_mask).sum()),
         "metrics": overall_metrics,
+        "training_metrics": training_metrics,
+        "overfitting": overfitting,
         "baseline": {"class": majority_label, **baseline_metrics},
         "fold_metrics": fold_metrics, "evaluation_rows": evaluation_rows,
         "actual_labels": shown_actual, "predicted_labels": shown_predicted,
@@ -935,6 +1042,8 @@ def run_catboost_classification(
         "prediction_column": prediction_name, "confidence_column": confidence_name,
         "params": final_params, "best_iterations": best_iterations,
         "final_iterations": final_iterations,
+        "use_best_iteration": bool(use_best_iteration),
+        "compute": compute,
         "primary_metric_name": "Accuracy",
         "primary_metric_value": overall_metrics.get("accuracy"),
         "higher_is_better": True,
@@ -949,6 +1058,8 @@ def run_catboost_classification(
             "classes": class_labels, "iterations": final_iterations,
             "depth": int(depth), "learning_rate": float(learning_rate),
             "metrics": overall_metrics,
+            "compute_device": compute["resolved"],
+            "use_best_iteration": bool(use_best_iteration),
         },
     }
     return CachedMLResult(result_frame, analysis, step, signature, final_model)

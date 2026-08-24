@@ -20,7 +20,7 @@ from dataset_registry import (
     input_payload,
     suggest_dataset_name,
 )
-from ml_engine import cache_result, cached_result, ml_signature
+from ml_engine import available_gpu_count, cache_result, cached_result, ml_signature
 from ml_jobs import cancel_ml_job, ml_job_snapshot, submit_ml_job, take_ml_job_result
 from ml_data_profile import missingness_figure, profile_dataset, target_figure
 from ml_models import get_model_adapter
@@ -104,7 +104,8 @@ def _profile_target_summary(profile):
 def _signature(input_id, scope, task, run_mode, tuning_trials, target, id_column,
                features, method, test_size,
                folds, group_column, time_column, iterations, depth, learning_rate, l2, loss,
-               class_weights, early_stopping, random_strength, bagging_temperature,
+               class_weights, compute_device, early_stopping, use_best_iteration,
+               random_strength, bagging_temperature,
                random_seed, prediction_column, include_residual, include_confidence,
                compute_shap):
     method = method or "split"
@@ -120,7 +121,9 @@ def _signature(input_id, scope, task, run_mode, tuning_trials, target, id_column
         depth=int(depth or 0), learning_rate=float(learning_rate or 0),
         l2=float(l2 or 0), loss=loss or "RMSE",
         class_weights=class_weights or "none",
+        compute_device=compute_device or "auto",
         early_stopping=int(early_stopping or 0),
+        use_best_iteration=bool(use_best_iteration),
         random_strength=float(random_strength or 0),
         bagging_temperature=float(bagging_temperature or 0), random_seed=int(random_seed or 0),
         prediction_column=str(prediction_column or ""), include_residual=bool(include_residual),
@@ -569,6 +572,23 @@ def configure_run_mode(run_mode):
     return {"display": "none"}, {"display": "none"}, "Обучить модель"
 
 
+@app.callback(
+    Output("ml-compute-hint", "children"), Output("ml-compute-hint", "c"),
+    Input("ml-compute-device", "value"),
+)
+def compute_device_hint(value):
+    gpu_count = available_gpu_count()
+    if value == "gpu":
+        if gpu_count:
+            return f"GPU: доступно устройств — {gpu_count}.", "green"
+        return "CUDA‑GPU не обнаружен. Этот запуск завершится с подсказкой выбрать CPU.", "red"
+    if value == "cpu":
+        return "CPU: используются доступные ядра процессора.", "dimmed"
+    if gpu_count:
+        return f"Авто выберет GPU · доступно устройств: {gpu_count}.", "green"
+    return "Авто выберет CPU · CUDA‑GPU не обнаружен.", "dimmed"
+
+
 @app.callback(Output("ml-method", "data"), Input("ml-task", "value"))
 def validation_method_options(task):
     random_label = (
@@ -737,7 +757,9 @@ RUN_STATES = [
     State("ml-depth", "value"), State("ml-learning-rate", "value"),
     State("ml-l2", "value"), State("ml-loss", "value"),
     State("ml-class-weights", "value"),
-    State("ml-early-stopping", "value"), State("ml-random-strength", "value"),
+    State("ml-compute-device", "value"),
+    State("ml-early-stopping", "value"), State("ml-use-best-iteration", "checked"),
+    State("ml-random-strength", "value"),
     State("ml-bagging-temperature", "value"), State("ml-random-seed", "value"),
     State("ml-prediction-column", "value"), State("ml-include-residual", "checked"),
     State("ml-include-confidence", "checked"),
@@ -757,11 +779,17 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope, ta
                 run_mode, tuning_trials,
                 target, id_column, features, method, test_size, folds,
                 group_column, time_column, iterations, depth, learning_rate, l2, loss,
-                class_weights, early_stopping, random_strength, bagging_temperature, random_seed,
+                class_weights, compute_device, early_stopping, use_best_iteration,
+                random_strength, bagging_temperature, random_seed,
                 prediction_column, include_residual, include_confidence, compute_shap):
     if not input_id:
         return no_update, True, no_update, _notification(
             "Сначала загрузите dataset.", color="orange"
+        )
+    if compute_device == "gpu" and available_gpu_count() < 1:
+        return no_update, True, no_update, _notification(
+            "CUDA‑GPU не обнаружен. Выберите Auto или CPU.",
+            color="red", notification_id="ml-gpu-unavailable",
         )
     group_column = group_column if method == "group_cv" else None
     time_column = time_column if method == "time_cv" else None
@@ -777,7 +805,8 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope, ta
         input_id, scope, task, run_mode, tuning_trials, target, id_column,
         features, method, test_size, folds,
         group_column, time_column,
-        iterations, depth, learning_rate, l2, loss, class_weights, early_stopping,
+        iterations, depth, learning_rate, l2, loss, class_weights,
+        compute_device, early_stopping, use_best_iteration,
         random_strength, bagging_temperature, random_seed, prediction_column,
         include_residual, include_confidence, compute_shap,
     )
@@ -787,7 +816,9 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope, ta
         "group_column": group_column, "time_column": time_column,
         "iterations": iterations, "depth": depth, "learning_rate": learning_rate,
         "l2_leaf_reg": l2, "loss_function": loss, "random_seed": random_seed,
+        "compute_device": compute_device or "auto",
         "early_stopping_rounds": early_stopping,
+        "use_best_iteration": bool(use_best_iteration),
         "random_strength": random_strength, "bagging_temperature": bagging_temperature,
         "prediction_column": prediction_column,
         "compute_shap": compute_shap, "signature": signature,
@@ -812,7 +843,9 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope, ta
                 time_column=time_column, iterations=iterations, depth=depth,
                 learning_rate=learning_rate, l2_leaf_reg=l2,
                 loss_function=loss, random_seed=random_seed,
+                compute_device=compute_device or "auto",
                 early_stopping_rounds=early_stopping,
+                use_best_iteration=bool(use_best_iteration),
                 random_strength=random_strength,
                 bagging_temperature=bagging_temperature,
                 auto_class_weights=class_weights or "none",
@@ -833,7 +866,8 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope, ta
                 features, method, test_size, folds, group_column, time_column,
                 parameters["iterations"], parameters["depth"],
                 parameters["learning_rate"], parameters["l2_leaf_reg"], loss,
-                class_weights, early_stopping, parameters["random_strength"],
+                class_weights, compute_device, early_stopping, use_best_iteration,
+                parameters["random_strength"],
                 parameters["bagging_temperature"], random_seed, prediction_column,
                 include_residual, include_confidence, compute_shap,
             )
@@ -950,7 +984,9 @@ def cancel_training(_clicks, job_store):
     Output("ml-prediction-table", "data"), Output("ml-prediction-table", "columns"),
     Output("ml-metric-mae", "children"), Output("ml-metric-rmse", "children"),
     Output("ml-metric-mape", "children"), Output("ml-metric-r2", "children"),
-    Output("ml-metric-baseline", "children"), Output("ml-evaluation-note", "children"),
+    Output("ml-metric-baseline", "children"), Output("ml-metric-gap", "children"),
+    Output("ml-overfit-status", "children"), Output("ml-overfit-status", "color"),
+    Output("ml-evaluation-note", "children"),
     Output("ml-shap-note", "children"), Output("ml-log", "children"),
     Input("ml-analysis", "data"), Input("dropdown_style", "value"),
 )
@@ -960,7 +996,8 @@ def render_analysis(store, template):
         empty = _empty_figure("Выберите цель и признаки, затем обучите модель", template)
         return (
             empty, empty, empty, empty, empty, empty, [], [],
-            "—", "—", "—", "—", "—", "", "", "",
+            "—", "—", "—", "—", "—", "—", "Нет оценки", "gray",
+            "", "", "",
         )
     metrics = analysis.get("metrics") or {}
     baseline = analysis.get("baseline") or {}
@@ -969,6 +1006,8 @@ def render_analysis(store, template):
     rows = analysis.get("preview") or []
     columns = [{"name": name, "id": name} for name in (rows[0].keys() if rows else [])]
     params = analysis.get("params") or {}
+    compute = analysis.get("compute") or {}
+    overfitting = analysis.get("overfitting") or {}
     task = analysis.get("task") or "regression"
     task_label = "Классификация" if task == "classification" else "Регрессия"
     log = "\n".join([
@@ -979,6 +1018,8 @@ def render_analysis(store, template):
         f"Категориальные: {', '.join(analysis.get('categorical_features') or []) or 'нет'}",
         f"Строки: {analysis.get('training_rows')} обучающих из {analysis.get('input_rows')}",
         f"Исключено из обучения из-за пустой цели: {analysis.get('excluded_target_rows')}",
+        f"Вычислитель: {compute.get('resolved', 'CPU')} (выбрано: {compute.get('requested', 'auto')})",
+        f"Контроль переобучения: {overfitting.get('detail') or 'нет оценки'}",
         f"Параметры: {params}",
         f"Финальное количество деревьев: {analysis.get('final_iterations')}",
         *([f"Автоподбор: {analysis['tuning'].get('trials_count')} попыток · "
@@ -994,6 +1035,7 @@ def render_analysis(store, template):
     note = (
         f"{analysis.get('evaluation_label')} · оценено {analysis.get('evaluation_rows')} строк"
         + (f" · на графике выборка {shown}" if shown < analysis.get("evaluation_rows", 0) else "")
+        + f" · {compute.get('resolved', 'CPU')}"
     )
     if task == "classification":
         metric_values = (
@@ -1009,14 +1051,21 @@ def render_analysis(store, template):
             number(metrics.get("mape"), 4, "%"), number(metrics.get("r2")),
             number(baseline.get("mae")),
         )
+    gap_suffix = " п.п." if task == "classification" else "%"
+    gap_value = (
+        "—" if overfitting.get("gap_percent") is None
+        else f"{float(overfitting['gap_percent']):.1f}{gap_suffix}"
+    )
+    overfit_label = str(overfitting.get("label") or "Нет оценки")
+    overfit_color = str(overfitting.get("color") or "gray")
     return (
         _prediction_figure(analysis, template), _learning_figure(analysis, template),
         _importance_figure(analysis.get("feature_importance"), template,
                            "Важность признаков CatBoost", "Feature importance"),
         _shap_figure(analysis, template), _diagnostics_figure(analysis, template),
         _tuning_figure(analysis, template),
-        rows, columns, *metric_values,
-        note, analysis.get("shap_note") or "", log,
+        rows, columns, *metric_values, gap_value,
+        overfit_label, overfit_color, note, analysis.get("shap_note") or "", log,
     )
 
 
@@ -1031,7 +1080,8 @@ SIGNATURE_INPUTS = [
     Input("ml-iterations", "value"), Input("ml-depth", "value"),
     Input("ml-learning-rate", "value"), Input("ml-l2", "value"),
     Input("ml-loss", "value"), Input("ml-class-weights", "value"),
-    Input("ml-early-stopping", "value"),
+    Input("ml-compute-device", "value"), Input("ml-early-stopping", "value"),
+    Input("ml-use-best-iteration", "checked"),
     Input("ml-random-strength", "value"), Input("ml-bagging-temperature", "value"),
     Input("ml-random-seed", "value"), Input("ml-prediction-column", "value"),
     Input("ml-include-residual", "checked"),
@@ -1196,6 +1246,8 @@ def remember_experiment(store, history, registry):
         "tuning_trials": int(((analysis.get("tuning") or {}).get("trials_count") or 0)),
         "tuning_best_trial": (analysis.get("tuning") or {}).get("best_trial"),
         "params": dict(analysis.get("params") or {}),
+        "compute_device": str((analysis.get("compute") or {}).get("resolved") or "CPU"),
+        "overfitting": dict(analysis.get("overfitting") or {}),
         "created_at": str(analysis.get("created_at") or ""),
     })
     return records[-200:]

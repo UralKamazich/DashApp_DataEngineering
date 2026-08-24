@@ -1,13 +1,17 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
 from dataset_registry import summarize_transformation_steps
 from ml_engine import (
+    _overfitting_summary,
+    available_gpu_count,
     cache_result,
     cached_result,
     ml_signature,
+    resolve_compute_device,
     run_catboost_classification,
     run_catboost_regression,
 )
@@ -38,6 +42,8 @@ class CatBoostRegressionTests(unittest.TestCase):
             iterations=35,
             early_stopping_rounds=8,
             prediction_column="prediction",
+            compute_device="cpu",
+            use_best_iteration=True,
             compute_shap=True,
         )
         self.assertEqual(len(result.frame), len(self.frame))
@@ -46,7 +52,34 @@ class CatBoostRegressionTests(unittest.TestCase):
         self.assertEqual(result.analysis["categorical_features"], ["category"])
         self.assertGreater(result.analysis["evaluation_rows"], 1)
         self.assertTrue(result.analysis["shap_importance"])
+        self.assertEqual(result.analysis["compute"]["resolved"], "CPU")
+        self.assertIn(result.analysis["overfitting"]["status"], {"low", "moderate", "high"})
+        self.assertLessEqual(result.analysis["final_iterations"], 35)
         self.assertEqual(result.committed_step["operation"], "catboost_regression")
+
+    def test_compute_device_resolution_and_clean_gpu_error(self):
+        available_gpu_count.cache_clear()
+        with patch("ml_engine.get_gpu_device_count", return_value=0):
+            self.assertEqual(resolve_compute_device("auto")["resolved"], "CPU")
+            self.assertEqual(resolve_compute_device("cpu")["resolved"], "CPU")
+            with self.assertRaisesRegex(ValueError, "CUDA"):
+                resolve_compute_device("gpu")
+        available_gpu_count.cache_clear()
+
+    def test_overfitting_summary_reports_generalization_gap(self):
+        summary = _overfitting_summary(
+            "regression", {"mae": 2.0}, {"mae": 5.0}
+        )
+        self.assertEqual(summary["status"], "high")
+        self.assertAlmostEqual(summary["gap_percent"], 60.0)
+
+        classification = _overfitting_summary(
+            "classification",
+            {"balanced_accuracy": .96},
+            {"balanced_accuracy": .74},
+        )
+        self.assertEqual(classification["status"], "high")
+        self.assertAlmostEqual(classification["gap_percent"], 22.0)
 
     def test_cross_validation_uses_out_of_fold_predictions(self):
         result = run_catboost_regression(
@@ -136,7 +169,7 @@ class CatBoostRegressionTests(unittest.TestCase):
             get_model_adapter("catboost").descriptor.tasks,
             ("regression", "classification"),
         )
-        self.assertFalse(MODEL_ADAPTERS["random-forest"].available)
+        self.assertTrue(MODEL_ADAPTERS["random-forest"].available)
         self.assertFalse(MODEL_ADAPTERS["neural-networks"].available)
 
 
@@ -176,6 +209,8 @@ class CatBoostClassificationTests(unittest.TestCase):
         self.assertTrue(result.frame["Уверенность CatBoost"].between(0, 1).all())
         self.assertGreaterEqual(result.analysis["metrics"]["accuracy"], .5)
         self.assertTrue(result.analysis["shap_importance"])
+        self.assertIn("training_metrics", result.analysis)
+        self.assertIn("overfitting", result.analysis)
         self.assertEqual(
             result.committed_step["operation"], "catboost_classification"
         )

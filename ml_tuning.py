@@ -117,6 +117,8 @@ def tune_catboost_parameters(
     loss_function="RMSE",
     random_seed=42,
     early_stopping_rounds=80,
+    use_best_iteration=True,
+    compute_device="auto",
     random_strength=1,
     bagging_temperature=1,
     auto_class_weights="none",
@@ -195,12 +197,16 @@ def tune_catboost_parameters(
             params = _classifier_params(
                 **common, loss_function=loss_function,
                 auto_class_weights=auto_class_weights, class_count=class_count,
+                compute_device=compute_device,
             )
             model = CatBoostClassifier(**params)
         else:
-            params = _model_params(**common, loss_function=loss_function)
+            params = _model_params(
+                **common, loss_function=loss_function,
+                compute_device=compute_device,
+            )
             model = CatBoostRegressor(**params)
-        fit_kwargs = {}
+        fit_kwargs = {"use_best_model": bool(use_best_iteration)}
         if int(early_stopping_rounds or 0) > 0:
             fit_kwargs["early_stopping_rounds"] = int(early_stopping_rounds)
         _fit_model(

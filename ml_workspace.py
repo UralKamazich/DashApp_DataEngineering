@@ -210,7 +210,16 @@ def create_catboost_workspace():
                 html.Div(_field("Попытки", _number(
                     "ml-tuning-trials", 12, min=3, max=60, step=1,
                 )), id="ml-tuning-trials-wrap", style={"display": "none"}),
-            ], cols=2, spacing="xs", mt=4),
+                _field("Вычислитель", dmc.Select(
+                    id="ml-compute-device", value="auto", allowDeselect=False,
+                    size="xs", data=[
+                        {"label": "Авто", "value": "auto"},
+                        {"label": "CPU", "value": "cpu"},
+                        {"label": "GPU", "value": "gpu"},
+                    ],
+                )),
+            ], cols=3, spacing="xs", mt=4),
+            dmc.Text(id="ml-compute-hint", size="8px", c="dimmed", mt=2),
             html.Div(id="ml-tuning-hint", style={"display": "none"}),
             dmc.SimpleGrid([
                 _field("Деревья", _number("ml-iterations", 800, min=1, max=20000, step=50)),
@@ -218,6 +227,24 @@ def create_catboost_workspace():
                 _field("Learning rate", _number("ml-learning-rate", 0.05, min=0.001, max=1, step=0.01)),
                 _field("L2", _number("ml-l2", 3.0, min=0, step=0.5)),
             ], cols=4, spacing="xs", mt=4, className="ml-param-grid"),
+            html.Details([
+                html.Summary("Контроль переобучения"),
+                dmc.SimpleGrid([
+                    _field("Early stopping · 0 = выкл", _number(
+                        "ml-early-stopping", 80, min=0, max=5000, step=10,
+                    )),
+                    html.Div(dmc.Switch(
+                        id="ml-use-best-iteration",
+                        label="Финал по лучшей итерации",
+                        checked=True, size="xs", styles=COMPACT_SWITCH_STYLES,
+                    ), className="ml-overfit-switch"),
+                ], cols=2, spacing="xs", mt=4),
+                dmc.Text(
+                    "Early stopping прекращает рост деревьев без улучшения validation. "
+                    "Финальная модель использует среднюю лучшую итерацию по проверкам.",
+                    size="8px", c="dimmed", mt=3,
+                ),
+            ], open=True, className="ml-advanced ml-overfit-controls"),
             html.Details([
                 html.Summary("Расширенные параметры"),
                 dmc.SimpleGrid([
@@ -232,7 +259,6 @@ def create_catboost_workspace():
                             {"label": "Автоматически", "value": "balanced"},
                         ],
                     )), id="ml-class-weights-wrap", style={"display": "none"}),
-                    _field("Early stopping", _number("ml-early-stopping", 80, min=0, step=10)),
                     _field("Random strength", _number("ml-random-strength", 1.0, min=0, step=0.1)),
                     _field("Bagging temperature", _number("ml-bagging-temperature", 1.0, min=0, step=0.1)),
                     _field("Random seed", _number("ml-random-seed", 42, min=0, step=1)),
@@ -288,6 +314,7 @@ def create_catboost_workspace():
         _metric("MAPE", "ml-metric-mape", "% · нули исключены"),
         _metric("R²", "ml-metric-r2", "выше — лучше"),
         _metric("Baseline MAE", "ml-metric-baseline", "прогноз средним"),
+        _metric("Train ↔ validation", "ml-metric-gap", "контроль переобучения"),
     ], className="ml-metrics-grid")
 
     empty_graph = lambda graph_id: dcc.Graph(id=graph_id, config=GRAPH_CONFIG)
@@ -297,7 +324,13 @@ def create_catboost_workspace():
                 dmc.Text("Результаты модели", fw=700, size="xs"),
                 dmc.Text(id="ml-evaluation-note", size="9px", c="dimmed"),
             ]),
-            dmc.Text(id="ml-shap-note", size="9px", c="dimmed"),
+            dmc.Group([
+                dmc.Badge(
+                    "Нет оценки", id="ml-overfit-status", size="sm",
+                    variant="light", color="gray",
+                ),
+                dmc.Text(id="ml-shap-note", size="9px", c="dimmed"),
+            ], gap=6),
         ], justify="space-between"),
         dmc.Tabs([
             dmc.TabsList([
@@ -331,6 +364,254 @@ def create_catboost_workspace():
         html.Div([controls, html.Div([metrics, results], className="ml-output")],
                  className="ml-main-grid"),
     ], className="ml-catboost-workspace")
+
+
+def create_random_forest_workspace():
+    routing = dmc.Paper([
+        dmc.Group([
+            dmc.Text("Random Forest · регрессия", id="rf-workspace-title",
+                     fw=700, size="sm"),
+            dmc.Group([
+                dmc.Badge("Нет данных", id="rf-dataset-badge", size="sm",
+                          variant="light", color="gray"),
+                dmc.Badge("Ожидает запуска", id="rf-run-status", size="sm",
+                          variant="light", color="gray"),
+            ], gap=6),
+        ], justify="space-between", align="center"),
+        dmc.SimpleGrid([
+            _field("Задача", dmc.SegmentedControl(
+                id="rf-task", value="regression", size="xs", fullWidth=True,
+                data=[
+                    {"label": "Регрессия", "value": "regression"},
+                    {"label": "Классификация", "value": "classification"},
+                ],
+            )),
+            _field("Входной dataset", dmc.Select(
+                id="rf-input-dataset", data=[], searchable=True,
+                allowDeselect=False, size="xs",
+            )),
+            _field("Слой данных", dmc.SegmentedControl(
+                id="rf-input-scope", value="base", size="xs", fullWidth=True,
+                data=[
+                    {"label": "До фильтров", "value": "base"},
+                    {"label": "После фильтров", "value": "filtered"},
+                ],
+            )),
+            _field("Новый dataset", dmc.TextInput(
+                id="rf-output-name", placeholder="RandomForest_До фильтров_1", size="xs",
+            )),
+        ], cols=4, spacing="xs", mt=6, className="ml-routing-grid"),
+    ], p="xs", withBorder=True, shadow="xs", className="ml-routing")
+
+    controls = dmc.Paper([
+        dmc.Group([
+            dmc.Text("Данные модели", fw=700, size="11px"),
+            dmc.Button("Все числовые", id="rf-select-numeric", size="compact-xs",
+                       variant="subtle"),
+        ], justify="space-between"),
+        dmc.SimpleGrid([
+            _field("Целевой канал · число", dmc.Select(
+                id="rf-target", data=[], searchable=True, clearable=True, size="xs",
+            ), label_id="rf-target-label"),
+            _field("ID / подпись · необязательно", dmc.Select(
+                id="rf-id-column", data=[], searchable=True, clearable=True, size="xs",
+            )),
+        ], cols=2, spacing="xs", mt=4),
+        html.Div([
+            dmc.Group([
+                dmc.Text("Признаки", size="9px", fw=650, c="dimmed"),
+                dmc.Text("числа и категории", size="8px", c="dimmed"),
+            ], justify="space-between"),
+            dmc.MultiSelect(
+                id="rf-features", data=[], value=[], searchable=True, clearable=True,
+                nothingFoundMessage="Ничего не найдено", maxDropdownHeight=300,
+                comboboxProps={"shadow": "md"}, size="xs",
+            ),
+        ], id="rf-features-drop", className="ml-features-drop",
+           **{"data-drop-target": "rf-features", "data-drop-mode": "append",
+              "data-current-value": "[]"}),
+
+        dmc.Divider(label="Проверка качества", labelPosition="left", my="xs"),
+        dmc.Select(
+            id="rf-method", value="split", size="xs", allowDeselect=False,
+            data=[
+                {"label": "Train / test · случайное", "value": "split"},
+                {"label": "KFold · случайные фолды", "value": "cv"},
+                {"label": "GroupKFold · группы не смешиваются", "value": "group_cv"},
+                {"label": "TimeSeriesSplit · прошлое → будущее", "value": "time_cv"},
+            ],
+        ),
+        dmc.SimpleGrid([
+            _field("Доля test", _number("rf-test-size", .2, min=.05, max=.5, step=.05)),
+            _field("Фолды", _number("rf-folds", 5, min=2, max=20, step=1)),
+        ], cols=2, spacing="xs", mt=4),
+        dmc.SimpleGrid([
+            _field("Канал группы", dmc.Select(
+                id="rf-group-column", data=[], searchable=True, clearable=True,
+                size="xs", disabled=True,
+            )),
+            _field("Время / порядок", dmc.Select(
+                id="rf-time-column", data=[], searchable=True, clearable=True,
+                size="xs", disabled=True,
+            )),
+        ], cols=2, spacing="xs", mt=4),
+        dmc.Text(id="rf-validation-hint", size="9px", c="dimmed", mt=4),
+
+        dmc.Divider(label="Параметры Random Forest", labelPosition="left", my="xs"),
+        dmc.SimpleGrid([
+            _field("Пресет", dmc.Select(
+                id="rf-preset", value="balanced", allowDeselect=False, size="xs",
+                data=[
+                    {"label": "Быстрый черновик", "value": "draft"},
+                    {"label": "Баланс", "value": "balanced"},
+                    {"label": "Высокое качество", "value": "quality"},
+                    {"label": "Вручную", "value": "custom"},
+                ],
+            )),
+            _field("Вычислитель", dmc.TextInput(
+                value="CPU · все ядра", size="xs", disabled=True,
+            )),
+        ], cols=2, spacing="xs", mt=4),
+        dmc.SimpleGrid([
+            _field("Деревья", _number("rf-n-estimators", 600, min=10, max=5000, step=50)),
+            _field("Макс. глубина · 0 = ∞", _number("rf-max-depth", 0, min=0, max=200, step=1)),
+            _field("Мин. строк в листе", _number("rf-min-samples-leaf", 2, min=1, step=1)),
+            _field("Мин. строк для разбиения", _number("rf-min-samples-split", 2, min=2, step=1)),
+        ], cols=4, spacing="xs", mt=4, className="ml-param-grid"),
+        html.Details([
+            html.Summary("Контроль переобучения"),
+            dmc.SimpleGrid([
+                _field("Признаков на дерево", dmc.Select(
+                    id="rf-max-features", value="sqrt", allowDeselect=False, size="xs",
+                    data=[
+                        {"label": "√ числа признаков", "value": "sqrt"},
+                        {"label": "log₂ признаков", "value": "log2"},
+                        {"label": "50% признаков", "value": "0.5"},
+                        {"label": "80% признаков", "value": "0.8"},
+                        {"label": "Все признаки", "value": "all"},
+                    ],
+                )),
+                _field("Доля строк на дерево", _number(
+                    "rf-max-samples", .85, min=.1, max=1, step=.05,
+                )),
+                html.Div(dmc.Switch(
+                    id="rf-bootstrap", label="Bootstrap", checked=True,
+                    size="xs", styles=COMPACT_SWITCH_STYLES,
+                ), className="ml-overfit-switch"),
+                html.Div(dmc.Switch(
+                    id="rf-oob-score", label="OOB-оценка", checked=True,
+                    size="xs", styles=COMPACT_SWITCH_STYLES,
+                ), className="ml-overfit-switch"),
+            ], cols=2, spacing="xs", mt=4),
+            dmc.Text(
+                "Глубина и размер листа ограничивают сложность. Bootstrap и случайный "
+                "набор признаков уменьшают сходство деревьев; OOB даёт дополнительную "
+                "оценку без отдельного test.",
+                size="8px", c="dimmed", mt=3,
+            ),
+        ], open=True, className="ml-advanced ml-overfit-controls"),
+        html.Details([
+            html.Summary("Расширенные параметры"),
+            dmc.SimpleGrid([
+                _field("Критерий", dmc.Select(
+                    id="rf-criterion", value="squared_error", allowDeselect=False,
+                    size="xs", data=[
+                        {"label": "Squared error", "value": "squared_error"},
+                        {"label": "Absolute error", "value": "absolute_error"},
+                        {"label": "Poisson", "value": "poisson"},
+                    ],
+                )),
+                html.Div(_field("Баланс классов", dmc.Select(
+                    id="rf-class-weight", value="balanced", allowDeselect=False,
+                    size="xs", data=[
+                        {"label": "Без балансировки", "value": "none"},
+                        {"label": "Balanced", "value": "balanced"},
+                        {"label": "Balanced subsample", "value": "balanced_subsample"},
+                    ],
+                )), id="rf-class-weight-wrap", style={"display": "none"}),
+                _field("Random seed", _number("rf-random-seed", 42, min=0, step=1)),
+            ], cols=3, spacing="xs", mt="xs", className="ml-advanced-grid"),
+        ], className="ml-advanced"),
+
+        dmc.Divider(label="Выходные каналы", labelPosition="left", my="xs"),
+        dmc.SimpleGrid([
+            _field("Имя прогноза", dmc.TextInput(
+                id="rf-prediction-column", value="Прогноз Random Forest", size="xs",
+            )),
+            html.Div(dmc.Switch(
+                id="rf-include-residual", label="Добавить остаток", checked=True,
+                size="xs", styles=COMPACT_SWITCH_STYLES,
+            ), id="rf-residual-wrap"),
+            html.Div(dmc.Switch(
+                id="rf-include-confidence", label="Добавить уверенность", checked=True,
+                size="xs", styles=COMPACT_SWITCH_STYLES,
+            ), id="rf-confidence-wrap", style={"display": "none"}),
+        ], cols=3, spacing="xs"),
+        dmc.SimpleGrid([
+            dmc.Button("Обучить модель", id="rf-run", size="xs", fullWidth=True),
+            dmc.Button("Отменить", id="rf-cancel", size="xs", fullWidth=True,
+                       variant="light", color="red", disabled=True),
+        ], cols=2, spacing="xs", mt=6),
+        dmc.Progress(id="rf-job-progress", value=0, size="xs", animated=True,
+                     striped=True, mt=6, className="ml-job-progress"),
+        dmc.Text(id="rf-job-message", size="9px", c="dimmed", mt=3),
+        dmc.SimpleGrid([
+            dmc.Button("Создать dataset", id="rf-commit", size="xs",
+                       variant="light", disabled=True),
+            dmc.Button("Выгрузить Excel", id="rf-export-excel", size="xs",
+                       variant="light", color="violet", disabled=True),
+            dmc.Button("Сохранить модель", id="rf-save-model", size="xs",
+                       variant="light", color="grape", disabled=True),
+        ], cols=3, spacing="xs", mt=5),
+        dmc.Text(id="rf-row-status", size="9px", c="dimmed", mt=4),
+    ], p="xs", withBorder=True, shadow="xs", className="ml-controls")
+
+    metrics = html.Div([
+        _metric("MAE", "rf-metric-mae", "ниже — лучше"),
+        _metric("RMSE", "rf-metric-rmse", "ниже — лучше"),
+        _metric("R²", "rf-metric-r2", "выше — лучше"),
+        _metric("Baseline MAE", "rf-metric-baseline", "прогноз средним"),
+        _metric("OOB", "rf-metric-oob", "вне bootstrap-выборки"),
+        _metric("Train ↔ validation", "rf-metric-gap", "контроль переобучения"),
+    ], className="ml-metrics-grid")
+    empty_graph = lambda graph_id: dcc.Graph(id=graph_id, config=GRAPH_CONFIG)
+    results = dmc.Paper([
+        dmc.Group([
+            html.Div([
+                dmc.Text("Результаты модели", fw=700, size="xs"),
+                dmc.Text(id="rf-evaluation-note", size="9px", c="dimmed"),
+            ]),
+            dmc.Badge("Нет оценки", id="rf-overfit-status", size="sm",
+                      variant="light", color="gray"),
+        ], justify="space-between"),
+        dmc.Tabs([
+            dmc.TabsList([
+                dmc.TabsTab("Прогноз", value="prediction"),
+                dmc.TabsTab("Валидация", value="validation"),
+                dmc.TabsTab("Важность", value="importance"),
+                dmc.TabsTab("Диагностика", value="diagnostics"),
+                dmc.TabsTab("Таблица", value="table"),
+                dmc.TabsTab("Протокол", value="log"),
+            ]),
+            dmc.TabsPanel(empty_graph("rf-prediction-graph"), value="prediction"),
+            dmc.TabsPanel(empty_graph("rf-validation-graph"), value="validation"),
+            dmc.TabsPanel(empty_graph("rf-importance-graph"), value="importance"),
+            dmc.TabsPanel(empty_graph("rf-diagnostics-graph"), value="diagnostics"),
+            dmc.TabsPanel(dash_table.DataTable(
+                id="rf-prediction-table", data=[], columns=[], page_size=20,
+                sort_action="native", filter_action="native",
+                style_table={"overflowX": "auto"},
+                style_cell={"fontSize": "11px", "padding": "5px", "maxWidth": "180px",
+                            "overflow": "hidden", "textOverflow": "ellipsis"},
+            ), value="table"),
+            dmc.TabsPanel(html.Pre(id="rf-log", className="ml-log"), value="log"),
+        ], value="prediction", mt="xs", keepMounted=True),
+    ], p="xs", withBorder=True, shadow="xs", className="ml-results")
+    return html.Div([
+        routing,
+        html.Div([controls, html.Div([metrics, results], className="ml-output")],
+                 className="ml-main-grid"),
+    ], className="ml-catboost-workspace ml-rf-workspace")
 
 
 def _subnav_link(label, href, icon):
@@ -544,14 +825,19 @@ def create_ml_workspace():
         html.Div(id="ml-page-catboost", style={"display": "none"},
                  children=[create_catboost_workspace()]),
         html.Div(id="ml-page-random-forest", style={"display": "none"},
-                 children=[create_future_model_workspace("random-forest")]),
+                 children=[create_random_forest_workspace()]),
         html.Div(id="ml-page-neural-networks", style={"display": "none"},
                  children=[create_future_model_workspace("neural-networks")]),
         dcc.Store(id="ml-analysis"),
         dcc.Store(id="ml-job-state", data={"status": "idle", "progress": 0}),
+        dcc.Store(id="rf-analysis"),
+        dcc.Store(id="rf-job-state", data={"status": "idle", "progress": 0}),
+        dcc.Store(id="rf-auto-output-name"),
+        dcc.Store(id="rf-columns-sync"),
         dcc.Store(id="ml-auto-output-name"),
         dcc.Store(id="ml-tuning-presets", data={}, storage_type="local"),
         dcc.Store(id="ml-columns-sync"),
         dcc.Store(id="ml-experiment-history", data=[], storage_type="local"),
         dcc.Interval(id="ml-job-poll", interval=650, disabled=True, n_intervals=0),
+        dcc.Interval(id="rf-job-poll", interval=650, disabled=True, n_intervals=0),
     ], className="ml-workspace")

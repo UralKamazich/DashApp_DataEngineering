@@ -85,7 +85,9 @@
 .ml-features-drop.drag-over { border-color: var(--mantine-primary-color-filled); background: color-mix(in srgb, var(--mantine-primary-color-filled) 8%, transparent); }
 .ml-advanced { margin-top: 5px; font-size: 10px; color: var(--mantine-color-dimmed); }
 .ml-advanced summary { cursor: pointer; font-weight: 650; }
-.ml-metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 5px; margin-bottom: 6px; }
+.ml-overfit-controls { padding: 4px 5px; border: 1px solid var(--mantine-color-gray-3); border-radius: 5px; }
+.ml-overfit-switch { display: flex; min-height: 34px; align-items: flex-end; padding-bottom: 4px; }
+.ml-metrics-grid { display: grid; grid-template-columns: repeat(6, minmax(82px, 1fr)); gap: 5px; margin-bottom: 6px; }
 .ml-metric-card { min-width: 0; }
 .ml-metric-value { font-size: 19px; line-height: 1.2; font-weight: 750; font-variant-numeric: tabular-nums; }
 .ml-results .js-plotly-plot { min-height: 390px; }
