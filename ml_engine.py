@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor, Pool
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import GroupKFold, KFold, TimeSeriesSplit, train_test_split
 
 
 MAX_SHAP_ROWS = 300
@@ -154,6 +154,8 @@ def run_catboost_regression(
     method="split",
     test_size=0.2,
     folds=5,
+    group_column=None,
+    time_column=None,
     iterations=500,
     depth=6,
     learning_rate=0.05,
@@ -176,7 +178,15 @@ def run_catboost_regression(
         raise ValueError("Выберите числовой целевой канал.")
     selected = list(dict.fromkeys(str(value) for value in (features or [])))
     selected = [value for value in selected if value in frame.columns]
-    selected = [value for value in selected if value not in {target, str(id_column or "")}]
+    control_columns = {
+        target,
+        str(id_column or ""),
+    }
+    if method == "group_cv":
+        control_columns.add(str(group_column or ""))
+    if method == "time_cv":
+        control_columns.add(str(time_column or ""))
+    selected = [value for value in selected if value not in control_columns]
     if not selected:
         raise ValueError("Выберите хотя бы один признак модели.")
 
@@ -204,14 +214,57 @@ def run_catboost_regression(
     curves = []
     fold_metrics = []
 
-    if method == "cv":
+    if method in {"cv", "group_cv", "time_cv"}:
         folds = int(folds or 0)
-        if folds < 2 or folds > len(x_trainable):
+        if folds < 2 or folds >= len(x_trainable):
             raise ValueError("Число фолдов должно быть от 2 до количества обучающих строк.")
-        splitter = KFold(n_splits=folds, shuffle=True, random_state=int(random_seed))
-        for fold_number, (train_idx, valid_idx) in enumerate(splitter.split(x_trainable), 1):
-            x_fit, y_fit = x_trainable.iloc[train_idx], y_trainable.iloc[train_idx]
-            x_valid, y_valid = x_trainable.iloc[valid_idx], y_trainable.iloc[valid_idx]
+        split_source = x_trainable
+        split_groups = None
+        if method == "group_cv":
+            group_column = str(group_column or "")
+            if group_column not in frame.columns:
+                raise ValueError("Для групповой проверки выберите канал группы.")
+            split_groups = (
+                frame.loc[train_mask, group_column]
+                .astype("string").fillna("<NA>").astype(str)
+            )
+            unique_groups = int(split_groups.nunique(dropna=False))
+            if unique_groups < folds:
+                raise ValueError(
+                    f"Для {folds} фолдов нужно не меньше {folds} групп; найдено {unique_groups}."
+                )
+            splitter = GroupKFold(n_splits=folds)
+            splits = splitter.split(split_source, y_trainable, groups=split_groups)
+            evaluation_label = f"Group OOF, {folds} folds · {group_column}"
+        elif method == "time_cv":
+            time_column = str(time_column or "")
+            if time_column not in frame.columns:
+                raise ValueError("Для временной проверки выберите канал времени или порядка.")
+            time_values = frame.loc[train_mask, time_column]
+            if pd.api.types.is_numeric_dtype(time_values):
+                order_values = pd.to_numeric(time_values, errors="coerce")
+            else:
+                order_values = pd.to_datetime(time_values, errors="coerce", utc=True)
+            if order_values.isna().any():
+                missing = int(order_values.isna().sum())
+                raise ValueError(
+                    f"В канале порядка {missing} пустых или нераспознанных значений."
+                )
+            order = np.argsort(order_values.to_numpy(), kind="stable")
+            split_source = x_trainable.iloc[order]
+            splitter = TimeSeriesSplit(n_splits=folds)
+            splits = splitter.split(split_source)
+            evaluation_label = f"Time series OOF, {folds} folds · {time_column}"
+        else:
+            splitter = KFold(n_splits=folds, shuffle=True, random_state=int(random_seed))
+            splits = splitter.split(split_source)
+            evaluation_label = f"OOF, {folds} folds"
+
+        for fold_number, (train_idx, valid_idx) in enumerate(splits, 1):
+            x_fit = split_source.iloc[train_idx]
+            x_valid = split_source.iloc[valid_idx]
+            y_fit = y_trainable.loc[x_fit.index]
+            y_valid = y_trainable.loc[x_valid.index]
             model = CatBoostRegressor(**params)
             model.fit(_pool(x_fit, y_fit, categorical),
                       eval_set=_pool(x_valid, y_valid, categorical), **fit_kwargs)
@@ -223,7 +276,6 @@ def run_catboost_regression(
             curve = _curve(model, f"Fold {fold_number}")
             if curve:
                 curves.append(curve)
-        evaluation_label = f"OOF, {folds} folds"
     else:
         test_size = float(test_size or 0)
         if not 0 < test_size < 1:
@@ -329,6 +381,8 @@ def run_catboost_regression(
 
     analysis = {
         "method": method, "evaluation_label": evaluation_label, "target": target,
+        "group_column": str(group_column or ""),
+        "time_column": str(time_column or ""),
         "features": selected,
         "categorical_features": [selected[index] for index in categorical],
         "input_rows": int(len(frame)), "training_rows": int(train_mask.sum()),
@@ -352,6 +406,8 @@ def run_catboost_regression(
         "outputs": output_columns,
         "params": {
             "method": method, "target": target, "features": selected,
+            "group_column": str(group_column or ""),
+            "time_column": str(time_column or ""),
             "iterations": final_iterations, "depth": int(depth),
             "learning_rate": float(learning_rate), "metrics": overall_metrics,
         },

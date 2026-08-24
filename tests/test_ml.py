@@ -5,6 +5,7 @@ import pandas as pd
 
 from dataset_registry import summarize_transformation_steps
 from ml_engine import cache_result, cached_result, ml_signature, run_catboost_regression
+from ml_models import MODEL_ADAPTERS, get_model_adapter
 
 
 class CatBoostRegressionTests(unittest.TestCase):
@@ -58,6 +59,44 @@ class CatBoostRegressionTests(unittest.TestCase):
         self.assertEqual(result.analysis["evaluation_label"], "OOF, 3 folds")
         self.assertEqual(len(result.analysis["outputs"]), 1)
 
+    def test_group_cross_validation_keeps_group_strategy_in_analysis(self):
+        frame = self.frame.copy()
+        frame["well"] = [f"well-{index // 6}" for index in range(len(frame))]
+        result = run_catboost_regression(
+            frame,
+            target="target",
+            features=["x", "category", "well"],
+            method="group_cv",
+            group_column="well",
+            folds=3,
+            iterations=15,
+            early_stopping_rounds=4,
+            compute_shap=False,
+        )
+        self.assertEqual(result.analysis["group_column"], "well")
+        self.assertIn("Group OOF", result.analysis["evaluation_label"])
+        self.assertNotIn("well", result.analysis["features"])
+        self.assertEqual(result.analysis["evaluation_rows"], len(frame))
+
+    def test_time_series_validation_sorts_by_order_channel(self):
+        frame = self.frame.sample(frac=1, random_state=7).copy()
+        frame["timestamp"] = pd.date_range("2025-01-01", periods=len(frame), freq="D")
+        result = run_catboost_regression(
+            frame,
+            target="target",
+            features=["x", "category", "timestamp"],
+            method="time_cv",
+            time_column="timestamp",
+            folds=3,
+            iterations=15,
+            early_stopping_rounds=4,
+            compute_shap=False,
+        )
+        self.assertEqual(result.analysis["time_column"], "timestamp")
+        self.assertIn("Time series OOF", result.analysis["evaluation_label"])
+        self.assertNotIn("timestamp", result.analysis["features"])
+        self.assertLess(result.analysis["evaluation_rows"], len(frame))
+
     def test_cache_signature_and_dataset_summary(self):
         signature = ml_signature(target="target", features=["x"])
         result = run_catboost_regression(
@@ -84,6 +123,11 @@ class CatBoostRegressionTests(unittest.TestCase):
                 iterations=5,
                 compute_shap=False,
             )
+
+    def test_model_adapter_registry_separates_available_and_planned_models(self):
+        self.assertTrue(get_model_adapter("catboost").available)
+        self.assertFalse(MODEL_ADAPTERS["random-forest"].available)
+        self.assertFalse(MODEL_ADAPTERS["neural-networks"].available)
 
 
 if __name__ == "__main__":

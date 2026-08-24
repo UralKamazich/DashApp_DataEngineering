@@ -6,11 +6,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from dash import Input, Output, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
-from dataset_export import export_frame_to_excel
+from dataset_export import export_catboost_model, export_frame_to_excel
 from dataset_registry import (
     commit_result,
     dataset_options,
@@ -18,7 +19,8 @@ from dataset_registry import (
     input_payload,
     suggest_dataset_name,
 )
-from ml_engine import cache_result, cached_result, ml_signature, run_catboost_regression
+from ml_engine import cache_result, cached_result, ml_signature
+from ml_models import get_model_adapter
 from utils import meta_from_df, read_df_from_store
 
 
@@ -30,13 +32,17 @@ def _notification(message, *, color="green", notification_id="ml"):
 
 
 def _signature(input_id, scope, target, id_column, features, method, test_size,
-               folds, iterations, depth, learning_rate, l2, loss,
+               folds, group_column, time_column, iterations, depth, learning_rate, l2, loss,
                early_stopping, random_strength, bagging_temperature,
                random_seed, prediction_column, include_residual, compute_shap):
+    method = method or "split"
+    group_column = group_column if method == "group_cv" else None
+    time_column = time_column if method == "time_cv" else None
     return ml_signature(
         input_id=str(input_id or ""), scope=scope or "base", target=str(target or ""),
-        id_column=str(id_column or ""), features=list(features or []), method=method or "split",
+        id_column=str(id_column or ""), features=list(features or []), method=method,
         test_size=float(test_size or 0), folds=int(folds or 0), iterations=int(iterations or 0),
+        group_column=str(group_column or ""), time_column=str(time_column or ""),
         depth=int(depth or 0), learning_rate=float(learning_rate or 0),
         l2=float(l2 or 0), loss=loss or "RMSE", early_stopping=int(early_stopping or 0),
         random_strength=float(random_strength or 0),
@@ -160,6 +166,38 @@ def _shap_figure(analysis, template):
     return figure
 
 
+def _diagnostics_figure(analysis, template):
+    actual = np.asarray(analysis.get("actual") or [], dtype=float)
+    predicted = np.asarray(analysis.get("predicted") or [], dtype=float)
+    if actual.size == 0 or predicted.size == 0:
+        return _empty_figure("Обучите модель", template)
+    residuals = actual - predicted
+    figure = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=("Остаток vs прогноз", "Распределение остатков"),
+        horizontal_spacing=.12,
+    )
+    figure.add_trace(go.Scattergl(
+        x=predicted, y=residuals, mode="markers", name="Остаток",
+        marker=dict(size=6, opacity=.58),
+        hovertemplate="Прогноз: %{x:.5g}<br>Остаток: %{y:.5g}<extra></extra>",
+    ), row=1, col=1)
+    figure.add_hline(y=0, line_width=1, line_dash="dash", line_color="#868e96", row=1, col=1)
+    figure.add_trace(go.Histogram(
+        x=residuals, name="Распределение", marker_color="#7950f2", opacity=.78,
+        hovertemplate="Остаток: %{x:.5g}<br>Строк: %{y}<extra></extra>",
+    ), row=1, col=2)
+    figure.update_xaxes(title_text="Прогноз", row=1, col=1)
+    figure.update_yaxes(title_text="Факт − прогноз", row=1, col=1)
+    figure.update_xaxes(title_text="Остаток", row=1, col=2)
+    figure.update_yaxes(title_text="Количество", row=1, col=2)
+    figure.update_layout(
+        template=template or "plotly", height=420, showlegend=False,
+        margin=dict(l=55, r=20, t=55, b=50), bargap=.05,
+    )
+    return figure
+
+
 @app.callback(
     Output("ml-input-dataset", "data"), Output("ml-input-dataset", "value"),
     Output("ml-dataset-badge", "children"), Output("ml-dataset-badge", "color"),
@@ -184,11 +222,15 @@ def sync_dataset_selector(registry, active_id, current):
     Output("ml-target", "data"), Output("ml-target", "value"),
     Output("ml-id-column", "data"), Output("ml-id-column", "value"),
     Output("ml-features", "data"), Output("ml-features", "value"),
+    Output("ml-group-column", "data"), Output("ml-group-column", "value"),
+    Output("ml-time-column", "data"), Output("ml-time-column", "value"),
     Input("ml-input-dataset", "value"), Input("dataset-registry", "data"),
     State("ml-target", "value"), State("ml-id-column", "value"),
-    State("ml-features", "value"),
+    State("ml-features", "value"), State("ml-group-column", "value"),
+    State("ml-time-column", "value"),
 )
-def sync_column_options(input_id, registry, target, id_column, selected_features):
+def sync_column_options(input_id, registry, target, id_column, selected_features,
+                        group_column, time_column):
     meta = ((get_record(registry, input_id) or {}).get("meta") or {})
     columns = [str(value) for value in meta.get("columns", [])]
     numeric = [str(value) for value in meta.get("numeric", [])]
@@ -197,7 +239,12 @@ def sync_column_options(input_id, registry, target, id_column, selected_features
     target = target if target in numeric else None
     id_column = id_column if id_column in columns else None
     kept = [value for value in (selected_features or []) if value in columns and value != target]
-    return numeric_options, target, all_options, id_column, all_options, kept
+    group_column = group_column if group_column in columns else None
+    time_column = time_column if time_column in columns else None
+    return (
+        numeric_options, target, all_options, id_column, all_options, kept,
+        all_options, group_column, all_options, time_column,
+    )
 
 
 @app.callback(
@@ -215,10 +262,21 @@ def select_all_numeric(_clicks, input_id, registry, target, id_column):
 
 @app.callback(
     Output("ml-test-size", "disabled"), Output("ml-folds", "disabled"),
+    Output("ml-group-column", "disabled"), Output("ml-time-column", "disabled"),
+    Output("ml-validation-hint", "children"),
     Input("ml-method", "value"),
 )
 def toggle_validation_controls(method):
-    return method == "cv", method != "cv"
+    hints = {
+        "split": "Быстрая случайная проверка. Для связанных объектов она может завысить качество.",
+        "cv": "KFold устойчивее одной случайной выборки, но не защищает от смешивания связанных объектов.",
+        "group_cv": "Группы не смешиваются между train и validation. Для скважин укажите скважину или месторождение.",
+        "time_cv": "Строки сортируются по выбранному каналу; модель проверяется только на будущем относительно train.",
+    }
+    return (
+        method != "split", method == "split", method != "group_cv",
+        method != "time_cv", hints.get(method, hints["split"]),
+    )
 
 
 @app.callback(
@@ -259,7 +317,8 @@ RUN_STATES = [
     State("ml-input-scope", "value"), State("ml-target", "value"),
     State("ml-id-column", "value"), State("ml-features", "value"),
     State("ml-method", "value"), State("ml-test-size", "value"),
-    State("ml-folds", "value"), State("ml-iterations", "value"),
+    State("ml-folds", "value"), State("ml-group-column", "value"),
+    State("ml-time-column", "value"), State("ml-iterations", "value"),
     State("ml-depth", "value"), State("ml-learning-rate", "value"),
     State("ml-l2", "value"), State("ml-loss", "value"),
     State("ml-early-stopping", "value"), State("ml-random-strength", "value"),
@@ -278,11 +337,13 @@ RUN_STATES = [
 )
 def train_model(_clicks, registry, active_id, filtered_data, input_id, scope,
                 target, id_column, features, method, test_size, folds,
-                iterations, depth, learning_rate, l2, loss, early_stopping,
+                group_column, time_column, iterations, depth, learning_rate, l2, loss, early_stopping,
                 random_strength, bagging_temperature, random_seed,
                 prediction_column, include_residual, compute_shap):
     if not input_id:
         return no_update, _notification("Сначала загрузите dataset.", color="orange")
+    group_column = group_column if method == "group_cv" else None
+    time_column = time_column if method == "time_cv" else None
     payload, meta = input_payload(
         registry, input_id, scope or "base",
         active_id=active_id, active_filtered=filtered_data,
@@ -291,15 +352,17 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope,
         return no_update, _notification("Входной dataset недоступен.", color="red")
     signature = _signature(
         input_id, scope, target, id_column, features, method, test_size, folds,
+        group_column, time_column,
         iterations, depth, learning_rate, l2, loss, early_stopping,
         random_strength, bagging_temperature, random_seed, prediction_column,
         include_residual, compute_shap,
     )
     try:
         frame = read_df_from_store(payload, meta)
-        result = run_catboost_regression(
+        result = get_model_adapter("catboost").run(
             frame, target=target, features=features, id_column=id_column,
-            method=method, test_size=test_size, folds=folds, iterations=iterations,
+            method=method, test_size=test_size, folds=folds,
+            group_column=group_column, time_column=time_column, iterations=iterations,
             depth=depth, learning_rate=learning_rate, l2_leaf_reg=l2,
             loss_function=loss, random_seed=random_seed,
             early_stopping_rounds=early_stopping, random_strength=random_strength,
@@ -325,6 +388,7 @@ def train_model(_clicks, registry, active_id, filtered_data, input_id, scope,
 @app.callback(
     Output("ml-prediction-graph", "figure"), Output("ml-learning-graph", "figure"),
     Output("ml-importance-graph", "figure"), Output("ml-shap-graph", "figure"),
+    Output("ml-diagnostics-graph", "figure"),
     Output("ml-prediction-table", "data"), Output("ml-prediction-table", "columns"),
     Output("ml-metric-mae", "children"), Output("ml-metric-rmse", "children"),
     Output("ml-metric-mape", "children"), Output("ml-metric-r2", "children"),
@@ -336,7 +400,7 @@ def render_analysis(store, template):
     analysis = (store or {}).get("analysis") or {}
     if not analysis:
         empty = _empty_figure("Выберите цель и признаки, затем обучите модель", template)
-        return empty, empty, empty, empty, [], [], "—", "—", "—", "—", "—", "", "", ""
+        return empty, empty, empty, empty, empty, [], [], "—", "—", "—", "—", "—", "", "", ""
     metrics = analysis.get("metrics") or {}
     baseline = analysis.get("baseline") or {}
     def number(value, digits=4, suffix=""):
@@ -364,7 +428,8 @@ def render_analysis(store, template):
         _prediction_figure(analysis, template), _learning_figure(analysis, template),
         _importance_figure(analysis.get("feature_importance"), template,
                            "Важность признаков CatBoost", "Feature importance"),
-        _shap_figure(analysis, template), rows, columns,
+        _shap_figure(analysis, template), _diagnostics_figure(analysis, template),
+        rows, columns,
         number(metrics.get("mae")), number(metrics.get("rmse")),
         number(metrics.get("mape"), 4, "%"), number(metrics.get("r2")),
         number(baseline.get("mae")), note, analysis.get("shap_note") or "", log,
@@ -376,6 +441,7 @@ SIGNATURE_INPUTS = [
     Input("ml-target", "value"), Input("ml-id-column", "value"),
     Input("ml-features", "value"), Input("ml-method", "value"),
     Input("ml-test-size", "value"), Input("ml-folds", "value"),
+    Input("ml-group-column", "value"), Input("ml-time-column", "value"),
     Input("ml-iterations", "value"), Input("ml-depth", "value"),
     Input("ml-learning-rate", "value"), Input("ml-l2", "value"),
     Input("ml-loss", "value"), Input("ml-early-stopping", "value"),
@@ -388,20 +454,21 @@ SIGNATURE_INPUTS = [
 @app.callback(
     Output("ml-run-status", "children"), Output("ml-run-status", "color"),
     Output("ml-commit", "disabled"), Output("ml-export-excel", "disabled"),
+    Output("ml-save-model", "disabled"),
     Output("ml-row-status", "children"),
     Input("ml-analysis", "data"), *SIGNATURE_INPUTS,
 )
 def validate_current_result(store, *values):
     if not store:
-        return "Ожидает запуска", "gray", True, True, ""
+        return "Ожидает запуска", "gray", True, True, True, ""
     current = _signature(*values)
     analysis = store.get("analysis") or {}
     rows = f"{analysis.get('training_rows', 0)} / {analysis.get('input_rows', 0)} строк"
     if current != store.get("signature"):
-        return "Параметры изменены", "orange", True, True, rows + " · требуется пересчёт"
+        return "Параметры изменены", "orange", True, True, True, rows + " · требуется пересчёт"
     if not cached_result(store.get("reference")):
-        return "Результат устарел", "red", True, True, "Повторите обучение"
-    return "Модель готова", "green", False, False, rows + " · можно создать dataset или Excel"
+        return "Результат устарел", "red", True, True, True, "Повторите обучение"
+    return "Модель готова", "green", False, False, False, rows + " · доступны dataset, Excel и CBM"
 
 
 @app.callback(
@@ -428,6 +495,137 @@ def export_ml_result(_clicks, store, output_name, source_path, source_name):
     return _notification(
         f"Excel сохранён рядом с исходником: {path}", notification_id="ml-export-ready"
     )
+
+
+@app.callback(
+    Output("notifications-container", "sendNotifications", allow_duplicate=True),
+    Input("ml-save-model", "n_clicks"), State("ml-analysis", "data"),
+    State("ml-output-name", "value"), State("source-file-path", "data"),
+    State("source-file-name", "data"), prevent_initial_call=True,
+)
+def save_ml_model(_clicks, store, output_name, source_path, source_name):
+    cached = cached_result((store or {}).get("reference"))
+    if not cached:
+        return _notification(
+            "Сначала обучите модель.", color="orange", notification_id="ml-model-export"
+        )
+    analysis = (store or {}).get("analysis") or {}
+    try:
+        path = export_catboost_model(
+            cached.model,
+            source_path=source_path,
+            source_name=source_name,
+            experiment_name=str(output_name or "CatBoost"),
+            created_at=analysis.get("created_at"),
+        )
+    except Exception as error:
+        return _notification(
+            str(error), color="red", notification_id="ml-model-export-error"
+        )
+    return _notification(
+        f"Модель CatBoost сохранена: {path}", notification_id="ml-model-export-ready"
+    )
+
+
+@app.callback(
+    Output("ml-experiment-history", "data"),
+    Input("ml-analysis", "data"), State("ml-experiment-history", "data"),
+    State("dataset-registry", "data"),
+    prevent_initial_call=True,
+)
+def remember_experiment(store, history, registry):
+    analysis = (store or {}).get("analysis") or {}
+    reference = str((store or {}).get("reference") or "")
+    if not analysis or not reference:
+        raise PreventUpdate
+    records = list(history or [])
+    if any(str(item.get("reference") or "") == reference for item in records):
+        raise PreventUpdate
+    input_id = str((store or {}).get("input_id") or "")
+    input_record = get_record(registry, input_id) or {}
+    records.append({
+        "reference": reference,
+        "signature": str((store or {}).get("signature") or ""),
+        "model": "CatBoost",
+        "task": "Регрессия",
+        "dataset": str(input_record.get("name") or input_id),
+        "dataset_id": input_id,
+        "scope": str((store or {}).get("scope") or "base"),
+        "target": str(analysis.get("target") or ""),
+        "features": list(analysis.get("features") or []),
+        "validation": str(analysis.get("evaluation_label") or ""),
+        "training_rows": int(analysis.get("training_rows") or 0),
+        "evaluation_rows": int(analysis.get("evaluation_rows") or 0),
+        "feature_count": len(analysis.get("features") or []),
+        "mae": (analysis.get("metrics") or {}).get("mae"),
+        "rmse": (analysis.get("metrics") or {}).get("rmse"),
+        "r2": (analysis.get("metrics") or {}).get("r2"),
+        "params": dict(analysis.get("params") or {}),
+        "created_at": str(analysis.get("created_at") or ""),
+    })
+    return records[-200:]
+
+
+@app.callback(
+    Output("ml-experiments-table", "data"), Output("ml-experiments-table", "columns"),
+    Output("ml-experiments-graph", "figure"), Output("ml-history-count", "children"),
+    Output("ml-history-count", "color"), Output("ml-history-best", "children"),
+    Input("ml-experiment-history", "data"), Input("dropdown_style", "value"),
+)
+def render_experiment_history(history, template):
+    records = list(history or [])
+    if not records:
+        return (
+            [], [], _empty_figure("Запусков пока нет", template, height=330),
+            "0 запусков", "gray", "Лучший MAE: —",
+        )
+
+    rows = []
+    for index, item in enumerate(reversed(records), 1):
+        created = str(item.get("created_at") or "").replace("T", " ")[:19]
+        rows.append({
+            "№": len(records) - index + 1,
+            "Время": created,
+            "Модель": item.get("model"),
+            "Dataset": item.get("dataset"),
+            "Слой": "после фильтров" if item.get("scope") == "filtered" else "до фильтров",
+            "Цель": item.get("target"),
+            "Проверка": item.get("validation"),
+            "Строк train": item.get("training_rows"),
+            "Строк eval": item.get("evaluation_rows"),
+            "Признаков": item.get("feature_count"),
+            "MAE": item.get("mae"),
+            "RMSE": item.get("rmse"),
+            "R²": item.get("r2"),
+        })
+    columns = [{"name": name, "id": name} for name in rows[0]]
+
+    chart_records = records[-30:]
+    labels, values, hover = [], [], []
+    first_run = max(1, len(records) - len(chart_records) + 1)
+    for run_number, item in enumerate(chart_records, first_run):
+        if item.get("mae") is None:
+            continue
+        labels.append(f"#{run_number}")
+        values.append(float(item["mae"]))
+        hover.append(f"{item.get('model')} · {item.get('target')}<br>{item.get('validation')}")
+    if values:
+        best_value = min(values)
+        colors = ["#40c057" if value == best_value else "#7950f2" for value in values]
+        figure = go.Figure(go.Bar(
+            x=labels, y=values, marker_color=colors, customdata=hover,
+            hovertemplate="%{customdata}<br>MAE: %{y:.5g}<extra></extra>",
+        ))
+        figure.update_layout(
+            template=template or "plotly", height=330,
+            margin=dict(l=48, r=18, t=20, b=42),
+            xaxis_title="Запуск", yaxis_title="MAE",
+        )
+        best_label = f"Лучший MAE: {best_value:.5g}"
+    else:
+        figure = _empty_figure("Нет MAE для сравнения", template, height=330)
+        best_label = "Лучший MAE: —"
+    return rows, columns, figure, f"{len(records)} запусков", "violet", best_label
 
 
 @app.callback(

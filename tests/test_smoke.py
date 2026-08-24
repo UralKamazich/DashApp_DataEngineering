@@ -93,6 +93,10 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/data-engineering",
             "/clustering",
             "/ml",
+            "/ml/experiments",
+            "/ml/catboost",
+            "/ml/random-forest",
+            "/ml/neural-networks",
         ):
             with self.subTest(path=path):
                 with self.client.get(path) as response:
@@ -106,6 +110,23 @@ class DashApplicationSmokeTests(unittest.TestCase):
                     self.assertEqual(response.status_code, 200)
                     self.assertIn("application/json", response.content_type)
                     self.assertIsNotNone(json.loads(response.data))
+
+    def test_ml_workspace_has_independent_model_subpages(self):
+        component_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(app.layout)
+        }
+        for component_id in (
+            "ml-page-experiments",
+            "ml-page-catboost",
+            "ml-page-random-forest",
+            "ml-page-neural-networks",
+            "ml-experiment-history",
+            "ml-group-column",
+            "ml-time-column",
+            "ml-save-model",
+        ):
+            self.assertIn(component_id, component_ids)
 
     def test_custom_assets_are_available(self):
         assets = {

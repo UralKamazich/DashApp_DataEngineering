@@ -7,7 +7,12 @@ import pandas as pd
 
 from callbacks.download import export_registered_dataset
 from callbacks.datasets import render_dataset_controls
-from dataset_export import dataset_export_name, export_frame_to_excel
+from dataset_export import (
+    dataset_export_name,
+    export_catboost_model,
+    export_frame_to_excel,
+    model_export_name,
+)
 from dataset_registry import commit_result, create_source_registry, get_record
 from utils import meta_from_df
 
@@ -52,6 +57,32 @@ class DatasetExportTests(unittest.TestCase):
             self.assertNotEqual(first, second)
             restored = pd.read_excel(first)
             pd.testing.assert_frame_equal(restored, self.frame)
+
+    def test_native_model_export_uses_cbm_and_never_pickle(self):
+        class FakeCatBoostModel:
+            def save_model(self, path, format):
+                self.format = format
+                Path(path).write_bytes(b"native-catboost")
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.xlsx"
+            source.touch()
+            model = FakeCatBoostModel()
+            target = export_catboost_model(
+                model,
+                source_path=source,
+                source_name=source.name,
+                experiment_name="CatBoost run",
+                created_at="2026-08-23T12:00:00+03:00",
+            )
+            self.assertEqual(model.format, "cbm")
+            self.assertEqual(target.suffix, ".cbm")
+            self.assertEqual(target.read_bytes(), b"native-catboost")
+            self.assertFalse(list(Path(directory).glob("*.pkl")))
+            self.assertEqual(
+                model_export_name(source, source.name, "CatBoost run", "2026-08-23T12:00:00+03:00"),
+                "source - CatBoost run - model - 20260823_120000.cbm",
+            )
 
     def test_registry_records_creation_time_and_ml_tab_class(self):
         payload = self.frame.to_json(orient="split")

@@ -41,21 +41,47 @@ app.clientside_callback(
             var el = document.getElementById(pages[key]);
             if (el) el.style.display = "none";
         }
-        var targetId = pages[pathname] || pages["/"];
+        var isMl = pathname === "/ml" || pathname.indexOf("/ml/") === 0;
+        var targetId = isMl ? pages["/ml"] : (pages[pathname] || pages["/"]);
         var target = document.getElementById(targetId);
         if (target) target.style.display = "block";
+
+        // --- Внутренняя маршрутизация ML: тяжёлая модель остаётся отдельным подлистом ---
+        var mlPages = {
+            "/ml": "ml-page-experiments",
+            "/ml/experiments": "ml-page-experiments",
+            "/ml/catboost": "ml-page-catboost",
+            "/ml/random-forest": "ml-page-random-forest",
+            "/ml/neural-networks": "ml-page-neural-networks"
+        };
+        Object.keys(mlPages).forEach(function(key) {
+            var page = document.getElementById(mlPages[key]);
+            if (page) page.style.display = "none";
+        });
+        var mlTargetId = mlPages[pathname] || "ml-page-experiments";
+        var mlTarget = document.getElementById(mlTargetId);
+        if (isMl && mlTarget) mlTarget.style.display = "block";
 
         // --- Подсветить активную ссылку ---
         var links = document.querySelectorAll('.nav-link');
         for (var i = 0; i < links.length; i++) {
             var link = links[i];
-            if (link.getAttribute('href') === pathname) {
+            var href = link.getAttribute('href');
+            if (href === pathname || (href === "/ml/experiments" && isMl)) {
                 link.style.color = '#fff';
                 link.style.backgroundColor = 'rgba(255,255,255,0.12)';
             } else {
                 link.style.color = '#aaa';
                 link.style.backgroundColor = 'transparent';
             }
+        }
+
+        var mlLinks = document.querySelectorAll('.ml-subnav-link');
+        for (var j = 0; j < mlLinks.length; j++) {
+            var mlLink = mlLinks[j];
+            var active = mlLink.getAttribute('href') === pathname ||
+                (pathname === "/ml" && mlLink.getAttribute('href') === "/ml/experiments");
+            mlLink.classList.toggle('is-active', active);
         }
 
         return pathname;

@@ -1,6 +1,6 @@
 # Конспект проекта DataAnalize
 
-## Состояние на 24.06.2026
+## Состояние на 24.08.2026
 
 ### Структура проекта
 ```
@@ -36,7 +36,10 @@ DashApp_DataEngineering/
 | `/correlation` | Коррелограмма | Выбор корреляционных столбцов | Корреляционная матрица + bar-графики |
 | `/data-engineering` | Data Engineering | Биннинг, текстовые копии, агрегаты | График |
 | `/clustering` | Кластеризация | Dataset-aware лаборатория | PCA, подбор K, размеры и профили |
-| `/ml` | ML | Заглушка (в разработке) | — |
+| `/ml/experiments` | ML · Эксперименты | Журнал запусков | Сравнение качества |
+| `/ml/catboost` | ML · CatBoost | Данные, валидация и параметры | Метрики, графики, SHAP, диагностика |
+| `/ml/random-forest` | ML · Random Forest | Подлист подготовлен | Модель ещё не подключена |
+| `/ml/neural-networks` | ML · Нейросети | Подлист подготовлен | Модель ещё не подключена |
 
 ### Что сделано за эту сессию
 1. **Перестройка UI**: тёмный хедер (`#1A1B1E`) с названием, кнопкой выбора файла и навигацией
@@ -48,7 +51,7 @@ DashApp_DataEngineering/
 
 ### Что нужно доделать
 1. ~~**Информация о файле появляется только после обновления графика**~~ ✅ Исправлено (24.06.2026): file-info-bar перенесён в левый нижний угол, source-file-path добавлен как Input, зелёное status-message убрано
-2. **Страница ML** — наполнить функционалом (регрессия, классификация, подбор параметров)
+2. **Страница ML** — добавить классификацию, фоновые задания и подбор параметров; CatBoost-регрессия уже работает
 3. **Фильтры на странице Корреляции** — сейчас их нет, добавить
 4. **DE-страница**: добавить фильтры для биннинга/агрегатов
 5. **Страница кластеризации**: расчёт отделён от записи; результат добавляется в текущий или новый dataset
@@ -66,6 +69,7 @@ python run.py
 - `pick-file-btn` — кнопка выбора файла
 - `file-info-bar` — строка информации о файле внизу
 - `page-graph`, `page-correlation`, `page-data-engineering`, `page-clustering`, `page-ml` — контейнеры страниц
+- `ml-page-experiments`, `ml-page-catboost`, `ml-page-random-forest`, `ml-page-neural-networks` — подлисты ML
 - `url` — dcc.Location
 - `nav-active-store` — dcc.Store с текущим путём
 - Основные совместимые ID сохранены (dropdown_x, dropdown_y, update-graf, graph, btn-grouping, btn-agg, btn-txtcopy и т.д.)
@@ -73,5 +77,6 @@ python run.py
 ### Колбэки, требующие осторожности
 - `update_main_graph` (graph.py) — ~300 строк, все типы графиков
 - `callbacks.clustering` — отдельный расчёт и явная запись кластерных каналов в реестр dataset
+- `callbacks.ml` — CatBoost, история экспериментов, экспорт Excel/CBM и стратегии разбиения
 - `update_dropdown_options_all` (dropdowns.py) — 15 Outputs
 - `create_text_copies` (data_engineering.py) — текстовые копии

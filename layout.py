@@ -44,7 +44,7 @@ NAV_LINKS = [
     {"label": "Корреляционный анализ", "href": "/correlation"},
     {"label": "Data Engineering", "href": "/data-engineering"},
     {"label": "Кластеризация", "href": "/clustering"},
-    {"label": "ML", "href": "/ml"},
+    {"label": "ML", "href": "/ml/experiments"},
 ]
 
 
