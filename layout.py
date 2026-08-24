@@ -268,21 +268,11 @@ def create_layout():
             # ========================
             dmc.Paper(
                 id="file-info-bar",
+                className="app-file-footer",
                 children=["Файл не выбран"],
                 shadow="sm",
-                p="md",
                 withBorder=False,
-                style={
-                    "backgroundColor": "#1A1B1E",
-                    "borderTop": "1px solid #2C2E33",
-                    "color": "#888",
-                    "fontSize": "12px",
-                    "fontFamily": "monospace",
-                    "textAlign": "right",
-                    "minHeight": "36px",
-                    "flexShrink": "0",
-                    "zIndex": "100",
-                },
+                style={"padding": "0 20px 0 12px"},
             ),
 
             dcc.Store(id="nav-active-store", data="/"),

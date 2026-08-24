@@ -190,7 +190,6 @@ def on_sheet_selected(n_clicks, ids):
 # ============ Информация о загруженном файле (внизу, серым) ============
 @app.callback(
     Output('file-info-bar', 'children'),
-    Output('file-info-bar', 'style'),
     Input('stored-data', 'data'),
     Input('meta-columns', 'data'),
     Input('selected-sheet', 'data'),
@@ -220,19 +219,7 @@ def update_file_info(stored_json, meta, sheet_name, source_name):
     parts.append(f"Строк: {n_rows}")
     parts.append(f"Столбцов: {n_cols}")
 
-    info_text = "  |  ".join(parts)
-    info_style = {
-        "backgroundColor": "#1A1B1E",
-        "borderTop": "1px solid #2C2E33",
-        "padding": "16px",
-        "display": "block",
-        "color": "#888",
-        "fontSize": "12px",
-        "fontFamily": "monospace",
-        "textAlign": "right",
-        "minHeight": "36px",
-    }
-    return info_text, info_style
+    return "  |  ".join(parts)
 
 
 @app.callback(

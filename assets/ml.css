@@ -1,10 +1,11 @@
 .ml-workspace { padding: 0 8px 8px; min-width: 0; width: 100%; box-sizing: border-box; }
-.ml-shell-header { position: sticky; top: -8px; z-index: 8; margin-bottom: 8px; }
-.ml-subnav { display: flex; align-items: center; gap: 5px; margin-top: 9px; overflow-x: auto; }
+.ml-shell-header { position: sticky; top: -8px; z-index: 8; margin-bottom: 6px; }
+.ml-shell-title { flex: 0 0 auto; margin: 0 3px 0 2px; white-space: nowrap; }
+.ml-subnav { display: flex; align-items: center; gap: 3px; min-width: 0; flex: 1 1 auto; overflow-x: auto; }
 .ml-subnav-link {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 28px;
-  padding: 3px 9px; border: 1px solid transparent; border-radius: 6px;
-  color: var(--mantine-color-dimmed); text-decoration: none; font-size: 11px;
+  display: inline-flex; align-items: center; gap: 5px; min-height: 24px;
+  padding: 2px 7px; border: 1px solid transparent; border-radius: 5px;
+  color: var(--mantine-color-dimmed); text-decoration: none; font-size: 10px;
   font-weight: 650; white-space: nowrap; transition: 120ms ease;
 }
 .ml-subnav-link:hover { color: var(--mantine-color-text); background: var(--mantine-color-default-hover); }
@@ -13,20 +14,78 @@
   background: var(--mantine-primary-color-light);
 }
 .ml-subnav-icon {
-  display: inline-grid; place-items: center; min-width: 19px; height: 19px;
-  padding: 0 3px; border-radius: 4px; background: rgba(121, 80, 242, .12);
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px;
+  padding: 0 2px; border-radius: 4px; background: rgba(121, 80, 242, .12);
   font-size: 8px; font-weight: 800; letter-spacing: -.2px;
 }
 .ml-catboost-workspace, .ml-page-body { min-width: 0; width: 100%; }
-.ml-routing { margin-bottom: 8px; }
+.ml-routing { margin-bottom: 6px; }
 .ml-main-grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 8px; align-items: start; }
 .ml-controls, .ml-output, .ml-results { min-width: 0; }
+.ml-controls { font-size: 10px; }
+.ml-controls .mantine-Text-root { line-height: 1.12; }
+.ml-controls .mantine-Input-input:not(.mantine-MultiSelect-input),
+.ml-controls .mantine-Select-input,
+.ml-controls .mantine-TextInput-input,
+.ml-controls .mantine-NumberInput-input {
+  min-height: 23px;
+  height: 23px;
+  padding-block: 1px;
+  font-size: 9px;
+  line-height: 1.1;
+}
+.ml-controls .mantine-SegmentedControl-root { min-height: 23px; padding: 1px; }
+.ml-controls .mantine-SegmentedControl-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 21px;
+  min-height: 21px;
+  padding: 0 5px;
+  font-size: 8px;
+  line-height: 1;
+}
+.ml-controls .mantine-Switch-label { font-size: 8px; line-height: 1.05; }
+.ml-controls .mantine-NumberInput-wrapper { height: 23px; }
+.ml-controls .mantine-NumberInput-controls {
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: 21px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.ml-controls .mantine-NumberInput-control {
+  flex: 0 0 50%;
+  height: 50%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.ml-controls .mantine-Button-root { min-height: 22px; height: 22px; font-size: 8px; }
+.ml-controls .mantine-Pill-root {
+  height: 18px;
+  padding-inline: 5px;
+  font-size: 8px;
+  line-height: 16px;
+}
+.ml-controls .mantine-PillsInput-input,
+.ml-controls .mantine-MultiSelect-input {
+  min-height: 23px;
+  padding-block: 1px;
+  font-size: 8px;
+}
+.ml-output-channel-grid {
+  grid-template-columns: minmax(145px, 1.55fr) repeat(2, minmax(78px, 1fr)) !important;
+  align-items: end;
+}
 .ml-field { min-width: 0; }
-.ml-features-drop { margin-top: 7px; padding: 5px; border: 1px dashed var(--mantine-color-gray-4); border-radius: 6px; }
+.ml-controls .mantine-Divider-root { margin-block: 6px; }
+.ml-controls .mantine-InputWrapper-root + .mantine-InputWrapper-root { margin-top: 0; }
+.ml-features-drop { margin-top: 5px; padding: 4px; border: 1px dashed var(--mantine-color-gray-4); border-radius: 6px; }
 .ml-features-drop.drag-over { border-color: var(--mantine-primary-color-filled); background: color-mix(in srgb, var(--mantine-primary-color-filled) 8%, transparent); }
-.ml-advanced { margin-top: 7px; font-size: 10px; color: var(--mantine-color-dimmed); }
+.ml-advanced { margin-top: 5px; font-size: 10px; color: var(--mantine-color-dimmed); }
 .ml-advanced summary { cursor: pointer; font-weight: 650; }
-.ml-metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.ml-metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 5px; margin-bottom: 6px; }
 .ml-metric-card { min-width: 0; }
 .ml-metric-value { font-size: 19px; line-height: 1.2; font-weight: 750; font-variant-numeric: tabular-nums; }
 .ml-results .js-plotly-plot { min-height: 390px; }

@@ -29,7 +29,7 @@
 .slide-panel--overlay {
     position: fixed;
     top: 43px;
-    bottom: 52px;
+    bottom: 26px;
     width: var(--sp-width);
     height: auto;
     margin: 0;
