@@ -94,12 +94,67 @@
 .ml-experiments-grid { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(0, 1.2fr); gap: 8px; margin-top: 8px; align-items: start; }
 .ml-experiment-chart, .ml-experiment-table { min-width: 0; }
 .ml-future-model { max-width: 760px; margin: 18px auto; }
+.ml-profile-routing { margin-bottom: 6px; }
+.ml-profile-content { display: grid; gap: 6px; min-width: 0; }
+.ml-profile-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(85px, 1fr));
+  gap: 5px;
+}
+.ml-profile-metric { min-width: 0; }
+.ml-profile-metric-value {
+  margin-top: 1px;
+  font-size: 17px;
+  line-height: 1.05;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.ml-profile-insights {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1.1fr);
+  gap: 6px;
+  align-items: stretch;
+}
+.ml-profile-list { display: grid; align-content: start; gap: 4px; }
+.ml-profile-list-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px;
+  align-items: start;
+  padding: 4px 5px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 5px;
+  background: var(--mantine-color-gray-0);
+}
+.ml-profile-list-item--error { border-color: #ffc9c9; background: #fff5f5; }
+.ml-profile-list-item--warning { border-color: #ffec99; background: #fff9db; }
+.ml-profile-list-item--info { border-color: #d0ebff; background: #e7f5ff; }
+.ml-profile-list-copy { min-width: 0; font-size: 9px; line-height: 1.25; }
+.ml-profile-list-title { font-weight: 700; }
+.ml-profile-list-detail { margin-top: 1px; color: var(--mantine-color-dimmed); }
+.ml-profile-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.ml-profile-charts > * { min-width: 0; }
+.ml-profile-charts .dash-graph {
+  height: 270px;
+  min-height: 270px;
+}
+.ml-profile-table { min-width: 0; }
 @media (max-width: 1080px) {
   .ml-main-grid { grid-template-columns: 1fr; }
   .ml-routing-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .ml-experiments-grid { grid-template-columns: 1fr; }
+  .ml-profile-routing-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .ml-profile-metrics { grid-template-columns: repeat(3, minmax(85px, 1fr)); }
+  .ml-profile-insights { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .ml-metrics-grid { grid-template-columns: repeat(2, minmax(90px, 1fr)); }
   .ml-routing-grid, .ml-param-grid { grid-template-columns: 1fr !important; }
+  .ml-profile-routing-grid { grid-template-columns: 1fr !important; }
+  .ml-profile-metrics { grid-template-columns: repeat(2, minmax(85px, 1fr)); }
+  .ml-profile-charts { grid-template-columns: 1fr; }
 }

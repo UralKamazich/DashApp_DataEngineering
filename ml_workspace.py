@@ -61,6 +61,16 @@ def _metric(label, component_id, note):
     )
 
 
+def _profile_metric(label, component_id):
+    return dmc.Paper(
+        [
+            dmc.Text(label, size="8px", c="dimmed", tt="uppercase", fw=700),
+            dmc.Text("—", id=component_id, className="ml-profile-metric-value"),
+        ],
+        p=6, withBorder=True, shadow="xs", className="ml-profile-metric",
+    )
+
+
 def _number(component_id, value, **kwargs):
     return dmc.NumberInput(
         id=component_id, value=value, size="xs", debounce=True,
@@ -347,6 +357,113 @@ def _empty_experiments_graph():
     }
 
 
+def create_data_profile_workspace():
+    controls = dmc.Paper([
+        dmc.Group([
+            dmc.Text("Паспорт данных", fw=700, size="sm"),
+            dmc.Badge(
+                "Нет данных", id="ml-profile-status", size="sm",
+                variant="light", color="gray",
+            ),
+        ], justify="space-between", align="center"),
+        dmc.SimpleGrid([
+            _field("Dataset", dmc.Select(
+                id="ml-profile-dataset", data=[], searchable=True,
+                allowDeselect=False, size="xs",
+            )),
+            _field("Слой данных", dmc.SegmentedControl(
+                id="ml-profile-scope", value="base", size="xs", fullWidth=True,
+                data=[
+                    {"label": "До фильтров", "value": "base"},
+                    {"label": "После фильтров", "value": "filtered"},
+                ],
+            )),
+            _field("Целевой канал", dmc.Select(
+                id="ml-profile-target", data=[], searchable=True,
+                clearable=True, size="xs",
+            )),
+            _field("Интерпретация цели", dmc.SegmentedControl(
+                id="ml-profile-task", value="auto", size="xs", fullWidth=True,
+                data=[
+                    {"label": "Авто", "value": "auto"},
+                    {"label": "Регрессия", "value": "regression"},
+                    {"label": "Классы", "value": "classification"},
+                ],
+            )),
+        ], cols=4, spacing="xs", mt=5, className="ml-profile-routing-grid"),
+    ], p="xs", withBorder=True, shadow="xs", className="ml-profile-routing")
+
+    metrics = html.Div([
+        _profile_metric("Строки", "ml-profile-rows"),
+        _profile_metric("Каналы", "ml-profile-columns"),
+        _profile_metric("Числовые", "ml-profile-numeric"),
+        _profile_metric("Категории", "ml-profile-categorical"),
+        _profile_metric("Пропуски", "ml-profile-missing"),
+        _profile_metric("Память", "ml-profile-memory"),
+    ], className="ml-profile-metrics")
+
+    insights = html.Div([
+        dmc.Paper([
+            dmc.Text("Что требует внимания", fw=700, size="xs", mb=5),
+            html.Div(id="ml-profile-issues", className="ml-profile-list"),
+        ], p="xs", withBorder=True, shadow="xs"),
+        dmc.Paper([
+            dmc.Text("Целевой канал", fw=700, size="xs", mb=5),
+            html.Div(id="ml-profile-target-summary", className="ml-profile-list"),
+        ], p="xs", withBorder=True, shadow="xs"),
+        dmc.Paper([
+            dmc.Text("Рекомендации", fw=700, size="xs", mb=5),
+            html.Div(id="ml-profile-recommendations", className="ml-profile-list"),
+        ], p="xs", withBorder=True, shadow="xs"),
+    ], className="ml-profile-insights")
+
+    charts = html.Div([
+        dmc.Paper([
+            dmc.Text("Пропуски · топ 20", fw=700, size="xs"),
+            dcc.Graph(id="ml-profile-missing-graph", config=GRAPH_CONFIG),
+        ], p="xs", withBorder=True, shadow="xs"),
+        dmc.Paper([
+            dmc.Text("Распределение цели", fw=700, size="xs"),
+            dcc.Graph(id="ml-profile-target-graph", config=GRAPH_CONFIG),
+        ], p="xs", withBorder=True, shadow="xs"),
+    ], className="ml-profile-charts")
+
+    table = dmc.Paper([
+        dmc.Group([
+            dmc.Text("Каналы и сигналы качества", fw=700, size="xs"),
+            dmc.Text(id="ml-profile-sample-note", size="8px", c="dimmed"),
+        ], justify="space-between"),
+        dash_table.DataTable(
+            id="ml-profile-table", data=[], columns=[], page_size=18,
+            sort_action="native", filter_action="native",
+            style_table={"overflowX": "auto", "marginTop": "5px"},
+            style_cell={
+                "fontSize": "9px", "padding": "4px", "maxWidth": "230px",
+                "overflow": "hidden", "textOverflow": "ellipsis",
+            },
+            style_data_conditional=[
+                {
+                    "if": {"filter_query": "{Сигналы} contains 'утечка'"},
+                    "backgroundColor": "#fff5f5", "color": "#c92a2a",
+                },
+                {
+                    "if": {"filter_query": "{Сигналы} contains 'пропусков'"},
+                    "backgroundColor": "#fff9db",
+                },
+            ],
+        ),
+    ], p="xs", withBorder=True, shadow="xs", className="ml-profile-table")
+
+    return html.Div([
+        controls,
+        dcc.Loading(
+            html.Div([metrics, insights, charts, table], className="ml-profile-content"),
+            type="dot", color="#7950f2",
+        ),
+        dcc.Store(id="ml-profile-analysis"),
+    ], className="ml-page-body ml-data-profile")
+
+
 def create_experiments_workspace():
     return html.Div([
         dmc.Paper([
@@ -411,6 +528,7 @@ def create_ml_workspace():
             dmc.Group([
                 dmc.Text("ML Studio", fw=750, size="sm", className="ml-shell-title"),
                 html.Nav([
+                    _subnav_link("Паспорт", "/ml/data-profile", "DP"),
                     _subnav_link("Эксперименты", "/ml/experiments", "◫"),
                     _subnav_link("CatBoost", "/ml/catboost", "CB"),
                     _subnav_link("Random Forest", "/ml/random-forest", "RF"),
@@ -420,6 +538,8 @@ def create_ml_workspace():
                           variant="dot", color="violet"),
             ], gap="xs", wrap="nowrap", align="center"),
         ], p=6, withBorder=True, shadow="xs", className="ml-shell-header"),
+        html.Div(id="ml-page-data-profile", style={"display": "none"},
+                 children=[create_data_profile_workspace()]),
         html.Div(id="ml-page-experiments", children=[create_experiments_workspace()]),
         html.Div(id="ml-page-catboost", style={"display": "none"},
                  children=[create_catboost_workspace()]),

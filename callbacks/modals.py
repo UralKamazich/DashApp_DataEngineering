@@ -49,6 +49,7 @@ app.clientside_callback(
         // --- Внутренняя маршрутизация ML: тяжёлая модель остаётся отдельным подлистом ---
         var mlPages = {
             "/ml": "ml-page-experiments",
+            "/ml/data-profile": "ml-page-data-profile",
             "/ml/experiments": "ml-page-experiments",
             "/ml/catboost": "ml-page-catboost",
             "/ml/random-forest": "ml-page-random-forest",

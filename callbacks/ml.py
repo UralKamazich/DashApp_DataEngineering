@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dash import Input, Output, State, no_update
+from dash import Input, Output, State, html, no_update
+import dash_mantine_components as dmc
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
@@ -21,6 +22,7 @@ from dataset_registry import (
 )
 from ml_engine import cache_result, cached_result, ml_signature
 from ml_jobs import cancel_ml_job, ml_job_snapshot, submit_ml_job, take_ml_job_result
+from ml_data_profile import missingness_figure, profile_dataset, target_figure
 from ml_models import get_model_adapter
 from ml_tuning import tune_catboost_parameters
 from utils import meta_from_df, read_df_from_store
@@ -31,6 +33,72 @@ def _notification(message, *, color="green", notification_id="ml"):
         "id": notification_id, "title": "Machine Learning", "message": message,
         "color": color, "action": "show", "autoClose": 7000,
     }]
+
+
+def _format_bytes(value):
+    size = float(value or 0)
+    for suffix in ("Б", "КБ", "МБ", "ГБ", "ТБ"):
+        if size < 1024 or suffix == "ТБ":
+            return f"{size:.0f} {suffix}" if suffix in {"Б", "КБ"} else f"{size:.1f} {suffix}"
+        size /= 1024
+
+
+def _profile_list(items, *, empty="Сигналов нет"):
+    if not items:
+        return dmc.Text(empty, size="9px", c="dimmed")
+    icons = {"error": "×", "warning": "!", "info": "i"}
+    colors = {"error": "red", "warning": "yellow", "info": "blue"}
+    result = []
+    for item in items:
+        severity = str(item.get("severity") or "info")
+        result.append(html.Div([
+            dmc.Badge(
+                icons.get(severity, "i"), color=colors.get(severity, "blue"),
+                variant="filled", circle=True, size="xs",
+            ),
+            html.Div([
+                html.Div(str(item.get("title") or ""), className="ml-profile-list-title"),
+                html.Div(str(item.get("detail") or ""), className="ml-profile-list-detail"),
+            ], className="ml-profile-list-copy"),
+        ], className=f"ml-profile-list-item ml-profile-list-item--{severity}"))
+    return result
+
+
+def _profile_target_summary(profile):
+    target = (profile or {}).get("target") or {}
+    if not target.get("selected"):
+        return dmc.Text("Выберите цель для проверки постановки задачи.", size="9px", c="dimmed")
+    task = target.get("task")
+    task_label = {
+        "classification": "Классификация", "regression": "Регрессия",
+    }.get(task, "Не определено")
+    items = [
+        {"severity": "info", "title": target.get("name"),
+         "detail": f"{task_label} · уникальных значений: {target.get('unique', 0)}"},
+    ]
+    if task == "classification":
+        items.append({
+            "severity": "warning" if float(target.get("minority_share") or 100) < 10 else "info",
+            "title": f"Классов: {target.get('unique', 0)}",
+            "detail": (
+                f"Минимальный класс: {float(target.get('minority_share') or 0):.1f}% · "
+                f"отношение max/min: {float(target.get('imbalance_ratio') or 0):.2f}"
+            ),
+        })
+    elif task == "regression" and target.get("mean") is not None:
+        items.append({
+            "severity": "info", "title": "Диапазон",
+            "detail": (
+                f"{target.get('min'):.5g} … {target.get('max'):.5g} · "
+                f"среднее {target.get('mean'):.5g} · σ {target.get('std'):.5g}"
+            ),
+        })
+    if float(target.get("missing_percent") or 0) > 0:
+        items.append({
+            "severity": "warning", "title": "Пропуски в цели",
+            "detail": f"{target.get('missing_percent'):.1f}% строк будут исключены из обучения.",
+        })
+    return _profile_list(items)
 
 
 def _signature(input_id, scope, task, run_mode, tuning_trials, target, id_column,
@@ -313,6 +381,102 @@ def sync_dataset_selector(registry, active_id, current):
     meta = record.get("meta") or {}
     label = f"{int(meta.get('row_count') or 0):,} × {int(meta.get('column_count') or 0)}".replace(",", " ")
     return options, selected, label, "blue"
+
+
+@app.callback(
+    Output("ml-profile-dataset", "data"), Output("ml-profile-dataset", "value"),
+    Input("dataset-registry", "data"), Input("active-dataset-id", "data"),
+    State("ml-profile-dataset", "value"),
+)
+def sync_profile_dataset_selector(registry, active_id, current):
+    options = dataset_options(registry)
+    available = {item["value"] for item in options}
+    selected = current if current in available else active_id
+    if selected not in available:
+        selected = next(iter(available), None)
+    return options, selected
+
+
+@app.callback(
+    Output("ml-profile-target", "data"), Output("ml-profile-target", "value"),
+    Input("ml-profile-dataset", "value"), Input("dataset-registry", "data"),
+    State("ml-profile-target", "value"),
+)
+def sync_profile_target_options(input_id, registry, current):
+    meta = ((get_record(registry, input_id) or {}).get("meta") or {})
+    columns = [str(value) for value in meta.get("columns", [])]
+    options = [{"label": value, "value": value} for value in columns]
+    return options, current if current in columns else None
+
+
+@app.callback(
+    Output("ml-profile-status", "children"), Output("ml-profile-status", "color"),
+    Output("ml-profile-rows", "children"), Output("ml-profile-columns", "children"),
+    Output("ml-profile-numeric", "children"), Output("ml-profile-categorical", "children"),
+    Output("ml-profile-missing", "children"), Output("ml-profile-memory", "children"),
+    Output("ml-profile-issues", "children"),
+    Output("ml-profile-target-summary", "children"),
+    Output("ml-profile-recommendations", "children"),
+    Output("ml-profile-missing-graph", "figure"),
+    Output("ml-profile-target-graph", "figure"),
+    Output("ml-profile-table", "data"), Output("ml-profile-table", "columns"),
+    Output("ml-profile-sample-note", "children"),
+    Output("ml-profile-analysis", "data"),
+    Input("ml-profile-dataset", "value"), Input("ml-profile-scope", "value"),
+    Input("ml-profile-target", "value"), Input("ml-profile-task", "value"),
+    Input("dataset-registry", "data"), Input("active-dataset-id", "data"),
+    Input("filtered-data", "data"), Input("dropdown_style", "value"),
+)
+def render_data_profile(input_id, scope, target, task_mode, registry, active_id,
+                        active_filtered, template):
+    payload, meta = input_payload(
+        registry, input_id, scope or "base",
+        active_id=active_id, active_filtered=active_filtered,
+    )
+    frame = read_df_from_store(payload, meta) if payload else pd.DataFrame()
+    profile = profile_dataset(frame, target=target, task_mode=task_mode or "auto")
+    summary = profile["summary"]
+    if not len(frame):
+        status_label, status_color = "Нет данных", "gray"
+    else:
+        status_label, status_color = {
+            "critical": ("Есть критические сигналы", "red"),
+            "warning": ("Требует проверки", "yellow"),
+            "ready": ("Готово к моделированию", "green"),
+        }.get(profile.get("status"), ("Готово", "green"))
+
+    recommendation_items = [
+        {"severity": "info", **item}
+        for item in profile.get("recommendations", [])
+    ]
+    table_rows = [
+        {key: value for key, value in row.items() if key != "_risk"}
+        for row in profile.get("columns", [])
+    ]
+    numeric_table_columns = {"Пропуски, %", "Уникальных", "Уникальность, %", "Макс. доля, %"}
+    table_columns = [
+        {
+            "name": name, "id": name,
+            **({"type": "numeric"} if name in numeric_table_columns else {}),
+        }
+        for name in (list(table_rows[0]) if table_rows else [])
+    ]
+    sample_note = (
+        f"Тяжёлые проверки: выборка {summary['sample_rows']:,} из {summary['rows']:,} строк"
+        if summary.get("sampled") else f"Проверены все {summary['rows']:,} строк"
+    ).replace(",", " ")
+    return (
+        status_label, status_color,
+        f"{summary['rows']:,}".replace(",", " "),
+        f"{summary['columns']:,}".replace(",", " "),
+        str(summary["numeric"]), str(summary["categorical"]),
+        f"{summary['missing_percent']:.1f}%", _format_bytes(summary["memory_bytes"]),
+        _profile_list(profile.get("issues", []), empty="Критических сигналов нет"),
+        _profile_target_summary(profile),
+        _profile_list(recommendation_items, empty="Рекомендации появятся после анализа"),
+        missingness_figure(profile, template), target_figure(frame, profile, template),
+        table_rows, table_columns, sample_note, profile,
+    )
 
 
 @app.callback(

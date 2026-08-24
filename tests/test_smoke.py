@@ -93,6 +93,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/data-engineering",
             "/clustering",
             "/ml",
+            "/ml/data-profile",
             "/ml/experiments",
             "/ml/catboost",
             "/ml/random-forest",
@@ -117,6 +118,13 @@ class DashApplicationSmokeTests(unittest.TestCase):
             for component in walk_components(app.layout)
         }
         for component_id in (
+            "ml-page-data-profile",
+            "ml-profile-dataset",
+            "ml-profile-scope",
+            "ml-profile-target",
+            "ml-profile-task",
+            "ml-profile-table",
+            "ml-profile-analysis",
             "ml-page-experiments",
             "ml-page-catboost",
             "ml-page-random-forest",
@@ -153,6 +161,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/graph_fullscreen.js": "text/javascript",
             "/assets/filter_panel.css": "text/css",
             "/assets/slide_panel.css": "text/css",
+            "/assets/app_shell.css": "text/css",
             "/assets/filter_panel.js": "text/javascript",
             "/assets/clustering.css": "text/css",
             "/assets/dataset_virtual_list.js": "text/javascript",
