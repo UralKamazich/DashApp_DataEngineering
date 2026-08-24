@@ -4,7 +4,13 @@ import numpy as np
 import pandas as pd
 
 from dataset_registry import summarize_transformation_steps
-from ml_engine import cache_result, cached_result, ml_signature, run_catboost_regression
+from ml_engine import (
+    cache_result,
+    cached_result,
+    ml_signature,
+    run_catboost_classification,
+    run_catboost_regression,
+)
 from ml_models import MODEL_ADAPTERS, get_model_adapter
 
 
@@ -126,8 +132,89 @@ class CatBoostRegressionTests(unittest.TestCase):
 
     def test_model_adapter_registry_separates_available_and_planned_models(self):
         self.assertTrue(get_model_adapter("catboost").available)
+        self.assertEqual(
+            get_model_adapter("catboost").descriptor.tasks,
+            ("regression", "classification"),
+        )
         self.assertFalse(MODEL_ADAPTERS["random-forest"].available)
         self.assertFalse(MODEL_ADAPTERS["neural-networks"].available)
+
+
+class CatBoostClassificationTests(unittest.TestCase):
+    def setUp(self):
+        rng = np.random.default_rng(17)
+        rows = 72
+        x = rng.normal(size=rows)
+        category = np.where(np.arange(rows) % 3, "песчаник", "карбонат")
+        target = np.where(x + (category == "песчаник") * .8 > .35, "продуктивный", "сухой")
+        self.frame = pd.DataFrame({
+            "id": [f"sample-{index}" for index in range(rows)],
+            "x": x,
+            "lithology": category,
+            "class": target,
+        })
+
+    def test_binary_split_adds_class_and_confidence(self):
+        result = run_catboost_classification(
+            self.frame,
+            target="class",
+            features=["x", "lithology"],
+            id_column="id",
+            method="split",
+            test_size=.25,
+            iterations=35,
+            early_stopping_rounds=8,
+            prediction_column="predicted class",
+            include_confidence=True,
+            compute_shap=True,
+        )
+        self.assertEqual(result.analysis["task"], "classification")
+        self.assertEqual(result.analysis["class_count"], 2)
+        self.assertEqual(len(result.frame), len(self.frame))
+        self.assertIn("predicted class", result.frame)
+        self.assertIn("Уверенность CatBoost", result.frame)
+        self.assertTrue(result.frame["Уверенность CatBoost"].between(0, 1).all())
+        self.assertGreaterEqual(result.analysis["metrics"]["accuracy"], .5)
+        self.assertTrue(result.analysis["shap_importance"])
+        self.assertEqual(
+            result.committed_step["operation"], "catboost_classification"
+        )
+        summary = summarize_transformation_steps([result.committed_step])[0]
+        self.assertIn("classification", summary)
+
+    def test_multiclass_cv_uses_stratified_oof(self):
+        frame = self.frame.copy()
+        frame["class"] = np.tile(["A", "B", "C"], len(frame) // 3)
+        result = get_model_adapter("catboost").run(
+            frame,
+            task="classification",
+            target="class",
+            features=["x", "lithology"],
+            method="cv",
+            folds=3,
+            iterations=20,
+            early_stopping_rounds=5,
+            include_confidence=False,
+            compute_shap=True,
+        )
+        self.assertEqual(result.analysis["evaluation_rows"], len(frame))
+        self.assertEqual(len(result.analysis["fold_metrics"]), 3)
+        self.assertIn("Stratified OOF", result.analysis["evaluation_label"])
+        self.assertEqual(result.analysis["class_labels"], ["A", "B", "C"])
+        self.assertEqual(len(result.analysis["outputs"]), 1)
+        self.assertTrue(result.analysis["shap_importance"])
+
+    def test_rejects_continuous_target(self):
+        frame = self.frame.copy()
+        frame["continuous"] = np.arange(len(frame))
+        with self.assertRaisesRegex(ValueError, "непрерывный"):
+            run_catboost_classification(
+                frame,
+                target="continuous",
+                features=["x"],
+                iterations=5,
+                compute_shap=False,
+            )
 
 
 if __name__ == "__main__":

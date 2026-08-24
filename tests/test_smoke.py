@@ -125,6 +125,18 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "ml-group-column",
             "ml-time-column",
             "ml-save-model",
+            "ml-job-state",
+            "ml-job-poll",
+            "ml-job-progress",
+            "ml-cancel",
+            "ml-task",
+            "ml-class-weights",
+            "ml-include-confidence",
+            "ml-history-chart-title",
+            "ml-run-mode",
+            "ml-tuning-trials",
+            "ml-tuning-graph",
+            "ml-tuning-presets",
         ):
             self.assertIn(component_id, component_ids)
 

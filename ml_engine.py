@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CatBoost regression helpers and a short-lived server-side result cache."""
+"""CatBoost regression/classification and a short-lived server result cache."""
 
 from __future__ import annotations
 
@@ -11,12 +11,70 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-from catboost import CatBoostRegressor, Pool
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import GroupKFold, KFold, TimeSeriesSplit, train_test_split
+from catboost import CatBoostClassifier, CatBoostRegressor, Pool
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    log_loss,
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+    roc_auc_score,
+)
+from sklearn.model_selection import (
+    GroupKFold,
+    KFold,
+    StratifiedKFold,
+    TimeSeriesSplit,
+    train_test_split,
+)
 
 
 MAX_SHAP_ROWS = 300
+MAX_CACHED_RESULTS = 12
+
+
+def _check_cancel(cancel_event):
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("Обучение отменено.")
+
+
+class _CatBoostProgressCallback:
+    def __init__(self, report, cancel_event, *, start, span, expected_iterations, label):
+        self.report = report
+        self.cancel_event = cancel_event
+        self.start = float(start)
+        self.span = float(span)
+        self.expected_iterations = max(1, int(expected_iterations or 1))
+        self.label = label
+
+    def after_iteration(self, info):
+        iteration = max(1, int(getattr(info, "iteration", 1)))
+        fraction = min(1.0, iteration / self.expected_iterations)
+        if self.report:
+            self.report(self.start + self.span * fraction, self.label)
+        return not (self.cancel_event is not None and self.cancel_event.is_set())
+
+
+def _fit_model(model, train_pool, *, eval_set=None, fit_kwargs=None,
+               progress_callback=None, cancel_event=None, progress_start=0,
+               progress_span=1, expected_iterations=1, label="Обучение"):
+    _check_cancel(cancel_event)
+    kwargs = dict(fit_kwargs or {})
+    if eval_set is not None:
+        kwargs["eval_set"] = eval_set
+    if progress_callback or cancel_event is not None:
+        kwargs["callbacks"] = [_CatBoostProgressCallback(
+            progress_callback, cancel_event,
+            start=progress_start, span=progress_span,
+            expected_iterations=expected_iterations, label=label,
+        )]
+    model.fit(train_pool, **kwargs)
+    _check_cancel(cancel_event)
+    if progress_callback:
+        progress_callback(progress_start + progress_span, label)
 
 
 @dataclass
@@ -25,7 +83,7 @@ class CachedMLResult:
     analysis: dict
     committed_step: dict
     signature: str
-    model: CatBoostRegressor
+    model: object
 
 
 _RESULT_CACHE: dict[str, CachedMLResult] = {}
@@ -39,6 +97,9 @@ def ml_signature(**parameters) -> str:
 def cache_result(result: CachedMLResult) -> str:
     reference = uuid4().hex
     _RESULT_CACHE[reference] = result
+    while len(_RESULT_CACHE) > MAX_CACHED_RESULTS:
+        oldest = next(iter(_RESULT_CACHE))
+        _RESULT_CACHE.pop(oldest, None)
     return reference
 
 
@@ -76,6 +137,39 @@ def _metrics(actual, predicted):
         "mape": _mape(actual, predicted),
         "r2": float(r2_score(actual, predicted)) if len(actual) > 1 else None,
     }
+
+
+def _classification_metrics(actual, predicted, probabilities=None, labels=None):
+    actual = np.asarray(actual, dtype=str)
+    predicted = np.asarray(predicted, dtype=str)
+    result = {
+        "accuracy": float(accuracy_score(actual, predicted)),
+        "balanced_accuracy": float(balanced_accuracy_score(actual, predicted)),
+        "f1": float(f1_score(actual, predicted, average="weighted", zero_division=0)),
+        "logloss": None,
+        "roc_auc": None,
+    }
+    if probabilities is None or labels is None:
+        return result
+    probabilities = np.asarray(probabilities, dtype=float)
+    labels = [str(value) for value in labels]
+    try:
+        result["logloss"] = float(log_loss(actual, probabilities, labels=labels))
+    except ValueError:
+        pass
+    try:
+        if len(labels) == 2:
+            binary_actual = (actual == labels[1]).astype(int)
+            if len(np.unique(binary_actual)) == 2:
+                result["roc_auc"] = float(roc_auc_score(binary_actual, probabilities[:, 1]))
+        elif len(labels) > 2 and len(np.unique(actual)) == len(labels):
+            result["roc_auc"] = float(roc_auc_score(
+                actual, probabilities, labels=labels,
+                multi_class="ovr", average="weighted",
+            ))
+    except ValueError:
+        pass
+    return result
 
 
 def _prepare_features(frame, features):
@@ -127,6 +221,34 @@ def _model_params(*, iterations, depth, learning_rate, l2_leaf_reg,
     }
 
 
+def _classifier_params(*, iterations, depth, learning_rate, l2_leaf_reg,
+                       loss_function, random_seed, random_strength,
+                       bagging_temperature, auto_class_weights, class_count):
+    resolved_loss = str(loss_function or "Auto")
+    if resolved_loss == "Auto":
+        resolved_loss = "Logloss" if int(class_count) == 2 else "MultiClass"
+    if resolved_loss not in {"Logloss", "MultiClass"}:
+        raise ValueError("Выбрана неподдерживаемая функция потерь классификации.")
+    if int(class_count) > 2 and resolved_loss == "Logloss":
+        raise ValueError("Для многоклассовой цели используйте Auto или MultiClass.")
+    if int(class_count) == 2 and resolved_loss == "MultiClass":
+        raise ValueError("Для бинарной цели используйте Auto или Logloss.")
+    base = _model_params(
+        iterations=iterations, depth=depth, learning_rate=learning_rate,
+        l2_leaf_reg=l2_leaf_reg, loss_function="RMSE",
+        random_seed=random_seed, random_strength=random_strength,
+        bagging_temperature=bagging_temperature,
+    )
+    base["loss_function"] = resolved_loss
+    if auto_class_weights == "balanced":
+        base["auto_class_weights"] = "Balanced"
+    return base
+
+
+def _prediction_labels(values):
+    return np.asarray(values, dtype=object).reshape(-1).astype(str)
+
+
 def _curve(model, label):
     result = model.get_evals_result() or {}
     validation = result.get("validation") or result.get("validation_0") or {}
@@ -169,10 +291,15 @@ def run_catboost_regression(
     include_residual=True,
     compute_shap=True,
     signature="",
+    progress_callback=None,
+    cancel_event=None,
 ):
     """Train/evaluate a regressor and fit a final model on all labelled rows."""
     if frame is None or frame.empty:
         raise ValueError("Входной dataset пуст.")
+    if progress_callback:
+        progress_callback(2, "Подготовка данных")
+    _check_cancel(cancel_event)
     target = str(target or "")
     if target not in frame.columns:
         raise ValueError("Выберите числовой целевой канал.")
@@ -213,6 +340,11 @@ def run_catboost_regression(
     evaluation_indices = []
     curves = []
     fold_metrics = []
+
+    validation_fits = int(folds or 0) if method in {"cv", "group_cv", "time_cv"} else 1
+    fit_count = validation_fits + 1
+    fit_span = 84.0 / fit_count
+    completed_fits = 0
 
     if method in {"cv", "group_cv", "time_cv"}:
         folds = int(folds or 0)
@@ -266,8 +398,14 @@ def run_catboost_regression(
             y_fit = y_trainable.loc[x_fit.index]
             y_valid = y_trainable.loc[x_valid.index]
             model = CatBoostRegressor(**params)
-            model.fit(_pool(x_fit, y_fit, categorical),
-                      eval_set=_pool(x_valid, y_valid, categorical), **fit_kwargs)
+            _fit_model(
+                model, _pool(x_fit, y_fit, categorical),
+                eval_set=_pool(x_valid, y_valid, categorical), fit_kwargs=fit_kwargs,
+                progress_callback=progress_callback, cancel_event=cancel_event,
+                progress_start=4 + completed_fits * fit_span, progress_span=fit_span,
+                expected_iterations=params["iterations"], label=f"Обучение · fold {fold_number}/{folds}",
+            )
+            completed_fits += 1
             predicted = np.asarray(model.predict(x_valid), dtype=float)
             evaluation_actual.extend(y_valid.tolist())
             evaluation_predicted.extend(predicted.tolist())
@@ -289,8 +427,14 @@ def run_catboost_regression(
         x_fit, y_fit = x_trainable.iloc[train_idx], y_trainable.iloc[train_idx]
         x_valid, y_valid = x_trainable.iloc[valid_idx], y_trainable.iloc[valid_idx]
         model = CatBoostRegressor(**params)
-        model.fit(_pool(x_fit, y_fit, categorical),
-                  eval_set=_pool(x_valid, y_valid, categorical), **fit_kwargs)
+        _fit_model(
+            model, _pool(x_fit, y_fit, categorical),
+            eval_set=_pool(x_valid, y_valid, categorical), fit_kwargs=fit_kwargs,
+            progress_callback=progress_callback, cancel_event=cancel_event,
+            progress_start=4, progress_span=fit_span,
+            expected_iterations=params["iterations"], label="Обучение · train/test",
+        )
+        completed_fits = 1
         predicted = np.asarray(model.predict(x_valid), dtype=float)
         evaluation_actual = y_valid.tolist()
         evaluation_predicted = predicted.tolist()
@@ -316,8 +460,16 @@ def run_catboost_regression(
         final_iterations = max(1, int(round(float(np.mean(best_iterations)))))
     final_params = {**params, "iterations": final_iterations}
     final_model = CatBoostRegressor(**final_params)
-    final_model.fit(_pool(x_trainable, y_trainable, categorical))
+    _fit_model(
+        final_model, _pool(x_trainable, y_trainable, categorical),
+        progress_callback=progress_callback, cancel_event=cancel_event,
+        progress_start=4 + completed_fits * fit_span, progress_span=fit_span,
+        expected_iterations=final_iterations, label="Финальная модель · все строки",
+    )
     all_predictions = np.asarray(final_model.predict(x_all), dtype=float)
+    _check_cancel(cancel_event)
+    if progress_callback:
+        progress_callback(91, "Важность признаков")
 
     prediction_name = _unique_name(frame.columns, prediction_column)
     result_frame = frame.copy()
@@ -341,6 +493,9 @@ def run_catboost_regression(
     shap_importance, shap_sample, shap_values = [], [], []
     shap_note = "SHAP отключён"
     if compute_shap:
+        _check_cancel(cancel_event)
+        if progress_callback:
+            progress_callback(95, "Расчёт SHAP")
         sample_size = min(MAX_SHAP_ROWS, len(x_trainable))
         sample = x_trainable.sample(sample_size, random_state=int(random_seed))
         sample_y = y_trainable.loc[sample.index]
@@ -356,6 +511,10 @@ def run_catboost_regression(
         shap_sample = sample.astype(object).where(sample.notna(), None).to_dict("records")
         shap_values = matrix.tolist()
         shap_note = f"SHAP рассчитан на {sample_size} строках"
+
+    _check_cancel(cancel_event)
+    if progress_callback:
+        progress_callback(99, "Подготовка результатов")
 
     preview = []
     for actual, predicted, row_index in zip(
@@ -380,7 +539,8 @@ def run_catboost_regression(
         chart_predicted = evaluation_predicted
 
     analysis = {
-        "method": method, "evaluation_label": evaluation_label, "target": target,
+        "task": "regression", "method": method,
+        "evaluation_label": evaluation_label, "target": target,
         "group_column": str(group_column or ""),
         "time_column": str(time_column or ""),
         "features": selected,
@@ -398,6 +558,9 @@ def run_catboost_regression(
         "outputs": output_columns, "prediction_column": prediction_name,
         "residual_column": residual_name, "params": final_params,
         "best_iterations": best_iterations, "final_iterations": final_iterations,
+        "primary_metric_name": "MAE",
+        "primary_metric_value": overall_metrics.get("mae"),
+        "higher_is_better": False,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
     step = {
@@ -410,6 +573,382 @@ def run_catboost_regression(
             "time_column": str(time_column or ""),
             "iterations": final_iterations, "depth": int(depth),
             "learning_rate": float(learning_rate), "metrics": overall_metrics,
+        },
+    }
+    return CachedMLResult(result_frame, analysis, step, signature, final_model)
+
+
+def run_catboost_classification(
+    frame: pd.DataFrame,
+    *,
+    target: str,
+    features,
+    id_column=None,
+    method="split",
+    test_size=0.2,
+    folds=5,
+    group_column=None,
+    time_column=None,
+    iterations=500,
+    depth=6,
+    learning_rate=0.05,
+    l2_leaf_reg=3.0,
+    loss_function="Auto",
+    random_seed=42,
+    early_stopping_rounds=80,
+    random_strength=1.0,
+    bagging_temperature=1.0,
+    auto_class_weights="none",
+    prediction_column="Класс CatBoost",
+    include_confidence=True,
+    compute_shap=True,
+    signature="",
+    progress_callback=None,
+    cancel_event=None,
+):
+    """Train/evaluate a classifier and append aligned prediction channels."""
+    if frame is None or frame.empty:
+        raise ValueError("Входной dataset пуст.")
+    if progress_callback:
+        progress_callback(2, "Подготовка данных")
+    _check_cancel(cancel_event)
+
+    target = str(target or "")
+    if target not in frame.columns:
+        raise ValueError("Выберите целевой канал-класс.")
+    raw_target = frame[target].astype("string")
+    train_mask = raw_target.notna() & raw_target.str.strip().ne("")
+    if int(train_mask.sum()) < 8:
+        raise ValueError("После исключения пустой цели осталось меньше восьми строк.")
+    y_trainable = raw_target.loc[train_mask].astype(str)
+    class_labels = sorted(y_trainable.unique().tolist())
+    class_count = len(class_labels)
+    if class_count < 2:
+        raise ValueError("Для классификации нужно минимум два класса.")
+    if class_count > 100 or class_count > max(20, int(len(y_trainable) * .25)):
+        raise ValueError(
+            f"В цели найдено {class_count} классов — канал похож на непрерывный. "
+            "Сначала преобразуйте его в категории."
+        )
+
+    selected = list(dict.fromkeys(str(value) for value in (features or [])))
+    selected = [value for value in selected if value in frame.columns]
+    control_columns = {target, str(id_column or "")}
+    if method == "group_cv":
+        control_columns.add(str(group_column or ""))
+    if method == "time_cv":
+        control_columns.add(str(time_column or ""))
+    selected = [value for value in selected if value not in control_columns]
+    if not selected:
+        raise ValueError("Выберите хотя бы один признак модели.")
+
+    x_all, categorical = _prepare_features(frame, selected)
+    x_trainable = x_all.loc[train_mask]
+    params = _classifier_params(
+        iterations=iterations, depth=depth, learning_rate=learning_rate,
+        l2_leaf_reg=l2_leaf_reg, loss_function=loss_function,
+        random_seed=random_seed, random_strength=random_strength,
+        bagging_temperature=bagging_temperature,
+        auto_class_weights=auto_class_weights, class_count=class_count,
+    )
+    fit_kwargs = {}
+    if int(early_stopping_rounds or 0) > 0:
+        fit_kwargs["early_stopping_rounds"] = int(early_stopping_rounds)
+
+    def aligned_probabilities(model, values):
+        raw = np.asarray(model.predict_proba(values), dtype=float)
+        model_labels = [str(value) for value in np.asarray(model.classes_).reshape(-1)]
+        aligned = np.zeros((len(values), class_count), dtype=float)
+        for source_index, label in enumerate(model_labels):
+            if label in class_labels:
+                aligned[:, class_labels.index(label)] = raw[:, source_index]
+        row_sums = aligned.sum(axis=1, keepdims=True)
+        return np.divide(
+            aligned, row_sums, out=np.full_like(aligned, 1 / class_count),
+            where=row_sums > 0,
+        )
+
+    evaluation_actual, evaluation_predicted = [], []
+    evaluation_probabilities, evaluation_indices = [], []
+    curves, fold_metrics = [], []
+    validation_fits = int(folds or 0) if method in {"cv", "group_cv", "time_cv"} else 1
+    fit_count = validation_fits + 1
+    fit_span = 84.0 / fit_count
+    completed_fits = 0
+
+    if method in {"cv", "group_cv", "time_cv"}:
+        folds = int(folds or 0)
+        if folds < 2 or folds >= len(x_trainable):
+            raise ValueError("Число фолдов должно быть от 2 до количества обучающих строк.")
+        split_source = x_trainable
+        if method == "group_cv":
+            group_column = str(group_column or "")
+            if group_column not in frame.columns:
+                raise ValueError("Для групповой проверки выберите канал группы.")
+            groups = frame.loc[train_mask, group_column].astype("string").fillna("<NA>").astype(str)
+            unique_groups = int(groups.nunique(dropna=False))
+            if unique_groups < folds:
+                raise ValueError(
+                    f"Для {folds} фолдов нужно не меньше {folds} групп; найдено {unique_groups}."
+                )
+            splits = GroupKFold(n_splits=folds).split(split_source, y_trainable, groups=groups)
+            evaluation_label = f"Group OOF, {folds} folds · {group_column}"
+        elif method == "time_cv":
+            time_column = str(time_column or "")
+            if time_column not in frame.columns:
+                raise ValueError("Для временной проверки выберите канал времени или порядка.")
+            time_values = frame.loc[train_mask, time_column]
+            order_values = (
+                pd.to_numeric(time_values, errors="coerce")
+                if pd.api.types.is_numeric_dtype(time_values)
+                else pd.to_datetime(time_values, errors="coerce", utc=True)
+            )
+            if order_values.isna().any():
+                raise ValueError(
+                    f"В канале порядка {int(order_values.isna().sum())} пустых или нераспознанных значений."
+                )
+            order = np.argsort(order_values.to_numpy(), kind="stable")
+            split_source = x_trainable.iloc[order]
+            splits = TimeSeriesSplit(n_splits=folds).split(split_source)
+            evaluation_label = f"Time series OOF, {folds} folds · {time_column}"
+        else:
+            minimum_class = int(y_trainable.value_counts().min())
+            if minimum_class < folds:
+                raise ValueError(
+                    f"Для {folds} стратифицированных фолдов в каждом классе нужно минимум {folds} строк."
+                )
+            splits = StratifiedKFold(
+                n_splits=folds, shuffle=True, random_state=int(random_seed)
+            ).split(split_source, y_trainable)
+            evaluation_label = f"Stratified OOF, {folds} folds"
+
+        for fold_number, (train_idx, valid_idx) in enumerate(splits, 1):
+            x_fit, x_valid = split_source.iloc[train_idx], split_source.iloc[valid_idx]
+            y_fit, y_valid = y_trainable.loc[x_fit.index], y_trainable.loc[x_valid.index]
+            if y_fit.nunique() < 2:
+                raise ValueError(
+                    f"В train fold {fold_number} остался один класс. Измените порядок, группы или число фолдов."
+                )
+            model = CatBoostClassifier(**params)
+            _fit_model(
+                model, _pool(x_fit, y_fit, categorical),
+                eval_set=_pool(x_valid, y_valid, categorical), fit_kwargs=fit_kwargs,
+                progress_callback=progress_callback, cancel_event=cancel_event,
+                progress_start=4 + completed_fits * fit_span, progress_span=fit_span,
+                expected_iterations=params["iterations"],
+                label=f"Обучение · fold {fold_number}/{folds}",
+            )
+            completed_fits += 1
+            probabilities = aligned_probabilities(model, x_valid)
+            predicted = _prediction_labels(model.predict(x_valid))
+            evaluation_actual.extend(y_valid.astype(str).tolist())
+            evaluation_predicted.extend(predicted.tolist())
+            evaluation_probabilities.extend(probabilities.tolist())
+            evaluation_indices.extend(x_valid.index.tolist())
+            fold_metrics.append({
+                "fold": fold_number,
+                **_classification_metrics(y_valid, predicted, probabilities, class_labels),
+            })
+            curve = _curve(model, f"Fold {fold_number}")
+            if curve:
+                curves.append(curve)
+    else:
+        test_size = float(test_size or 0)
+        if not 0 < test_size < 1:
+            raise ValueError("Доля test должна быть в диапазоне (0; 1).")
+        counts = y_trainable.value_counts()
+        if int(counts.min()) < 2:
+            raise ValueError("Для train/test в каждом классе нужно минимум две строки.")
+        test_rows = int(np.ceil(len(x_trainable) * test_size))
+        train_rows = len(x_trainable) - test_rows
+        if test_rows < class_count or train_rows < class_count:
+            raise ValueError(
+                "Выбранная доля test не оставляет хотя бы по одной строке каждого класса "
+                "в train и test. Измените долю или объедините редкие классы."
+            )
+        indices = np.arange(len(x_trainable))
+        train_idx, valid_idx = train_test_split(
+            indices, test_size=test_size, random_state=int(random_seed),
+            stratify=y_trainable.to_numpy(),
+        )
+        x_fit, x_valid = x_trainable.iloc[train_idx], x_trainable.iloc[valid_idx]
+        y_fit, y_valid = y_trainable.iloc[train_idx], y_trainable.iloc[valid_idx]
+        model = CatBoostClassifier(**params)
+        _fit_model(
+            model, _pool(x_fit, y_fit, categorical),
+            eval_set=_pool(x_valid, y_valid, categorical), fit_kwargs=fit_kwargs,
+            progress_callback=progress_callback, cancel_event=cancel_event,
+            progress_start=4, progress_span=fit_span,
+            expected_iterations=params["iterations"], label="Обучение · stratified train/test",
+        )
+        completed_fits = 1
+        probabilities = aligned_probabilities(model, x_valid)
+        predicted = _prediction_labels(model.predict(x_valid))
+        evaluation_actual = y_valid.astype(str).tolist()
+        evaluation_predicted = predicted.tolist()
+        evaluation_probabilities = probabilities.tolist()
+        evaluation_indices = x_valid.index.tolist()
+        fold_metrics.append({
+            "fold": 1,
+            **_classification_metrics(y_valid, predicted, probabilities, class_labels),
+        })
+        curve = _curve(model, "Train / test")
+        if curve:
+            curves.append(curve)
+        evaluation_label = f"Stratified test, {test_size:.0%}"
+
+    probability_matrix = np.asarray(evaluation_probabilities, dtype=float)
+    overall_metrics = _classification_metrics(
+        evaluation_actual, evaluation_predicted, probability_matrix, class_labels
+    )
+    majority_label = str(y_trainable.value_counts().idxmax())
+    class_priors = y_trainable.value_counts(normalize=True).reindex(class_labels, fill_value=0).to_numpy()
+    baseline_probabilities = np.tile(class_priors, (len(evaluation_actual), 1))
+    baseline_metrics = _classification_metrics(
+        evaluation_actual,
+        np.full(len(evaluation_actual), majority_label, dtype=object),
+        baseline_probabilities,
+        class_labels,
+    )
+
+    best_iterations = [
+        int(np.argmin(curve["validation"])) + 1
+        for curve in curves if curve.get("validation")
+    ]
+    final_iterations = int(params["iterations"])
+    if best_iterations and int(early_stopping_rounds or 0) > 0:
+        final_iterations = max(1, int(round(float(np.mean(best_iterations)))))
+    final_params = {**params, "iterations": final_iterations}
+    final_model = CatBoostClassifier(**final_params)
+    _fit_model(
+        final_model, _pool(x_trainable, y_trainable, categorical),
+        progress_callback=progress_callback, cancel_event=cancel_event,
+        progress_start=4 + completed_fits * fit_span, progress_span=fit_span,
+        expected_iterations=final_iterations, label="Финальная модель · все строки",
+    )
+    all_predictions = _prediction_labels(final_model.predict(x_all))
+    all_probabilities = aligned_probabilities(final_model, x_all)
+    all_confidence = np.max(all_probabilities, axis=1)
+    _check_cancel(cancel_event)
+    if progress_callback:
+        progress_callback(91, "Важность признаков")
+
+    prediction_name = _unique_name(frame.columns, prediction_column or "Класс CatBoost")
+    result_frame = frame.copy()
+    result_frame[prediction_name] = all_predictions
+    output_columns = [prediction_name]
+    confidence_name = None
+    if include_confidence:
+        confidence_name = _unique_name(result_frame.columns, "Уверенность CatBoost")
+        result_frame[confidence_name] = all_confidence
+        output_columns.append(confidence_name)
+
+    importances = final_model.get_feature_importance(
+        _pool(x_trainable, y_trainable, categorical)
+    )
+    feature_importance = sorted(
+        [{"feature": feature, "importance": float(value)}
+         for feature, value in zip(selected, importances)],
+        key=lambda item: item["importance"], reverse=True,
+    )
+
+    shap_importance, shap_sample, shap_values = [], [], []
+    shap_note = "SHAP отключён"
+    if compute_shap:
+        _check_cancel(cancel_event)
+        if progress_callback:
+            progress_callback(95, "Расчёт SHAP")
+        sample_size = min(MAX_SHAP_ROWS, len(x_trainable))
+        sample = x_trainable.sample(sample_size, random_state=int(random_seed))
+        sample_y = y_trainable.loc[sample.index]
+        raw_shap = np.asarray(final_model.get_feature_importance(
+            _pool(sample, sample_y, categorical), type="ShapValues"
+        ))
+        if raw_shap.ndim == 2:
+            matrix = raw_shap[:, :-1]
+            means = np.mean(np.abs(matrix), axis=0)
+            shap_values = matrix.tolist()
+        else:
+            matrix = raw_shap[:, :, :-1]
+            means = np.mean(np.abs(matrix), axis=(0, 1))
+        shap_importance = sorted(
+            [{"feature": feature, "importance": float(value)}
+             for feature, value in zip(selected, means)],
+            key=lambda item: item["importance"], reverse=True,
+        )
+        shap_sample = sample.astype(object).where(sample.notna(), None).to_dict("records")
+        shap_note = (
+            f"SHAP рассчитан на {sample_size} строках"
+            + (" · многоклассовое среднее |SHAP|" if raw_shap.ndim == 3 else "")
+        )
+
+    confidence = probability_matrix.max(axis=1)
+    preview = []
+    for actual, predicted, score, row_index in zip(
+        evaluation_actual, evaluation_predicted, confidence, evaluation_indices
+    ):
+        row = {
+            "Строка": str(row_index), "Факт": str(actual),
+            "Прогноз": str(predicted), "Уверенность": float(score),
+            "Верно": "Да" if str(actual) == str(predicted) else "Нет",
+        }
+        if id_column in frame.columns:
+            row["ID"] = str(frame.loc[row_index, id_column])
+        preview.append(row)
+
+    evaluation_rows = len(evaluation_actual)
+    if evaluation_rows > 6000:
+        generator = np.random.default_rng(int(random_seed))
+        positions = np.sort(generator.choice(evaluation_rows, 6000, replace=False))
+    else:
+        positions = np.arange(evaluation_rows)
+    shown_actual = [evaluation_actual[position] for position in positions]
+    shown_predicted = [evaluation_predicted[position] for position in positions]
+    shown_confidence = [float(confidence[position]) for position in positions]
+    matrix = confusion_matrix(evaluation_actual, evaluation_predicted, labels=class_labels)
+
+    _check_cancel(cancel_event)
+    if progress_callback:
+        progress_callback(99, "Подготовка результатов")
+    analysis = {
+        "task": "classification", "method": method,
+        "evaluation_label": evaluation_label, "target": target,
+        "group_column": str(group_column or ""), "time_column": str(time_column or ""),
+        "features": selected,
+        "categorical_features": [selected[index] for index in categorical],
+        "class_labels": class_labels, "class_count": class_count,
+        "class_distribution": {
+            str(label): int(count)
+            for label, count in y_trainable.value_counts().items()
+        },
+        "input_rows": int(len(frame)), "training_rows": int(train_mask.sum()),
+        "excluded_target_rows": int((~train_mask).sum()),
+        "metrics": overall_metrics,
+        "baseline": {"class": majority_label, **baseline_metrics},
+        "fold_metrics": fold_metrics, "evaluation_rows": evaluation_rows,
+        "actual_labels": shown_actual, "predicted_labels": shown_predicted,
+        "confidence": shown_confidence, "confusion_matrix": matrix.tolist(),
+        "preview": preview[:200], "feature_importance": feature_importance,
+        "curves": curves, "shap_importance": shap_importance,
+        "shap_sample": shap_sample, "shap_values": shap_values,
+        "shap_note": shap_note, "outputs": output_columns,
+        "prediction_column": prediction_name, "confidence_column": confidence_name,
+        "params": final_params, "best_iterations": best_iterations,
+        "final_iterations": final_iterations,
+        "primary_metric_name": "Accuracy",
+        "primary_metric_value": overall_metrics.get("accuracy"),
+        "higher_is_better": True,
+        "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+    step = {
+        "type": "catboost_classification", "operation": "catboost_classification",
+        "label": "CatBoost classification", "inputs": [target, *selected],
+        "outputs": output_columns,
+        "params": {
+            "method": method, "target": target, "features": selected,
+            "classes": class_labels, "iterations": final_iterations,
+            "depth": int(depth), "learning_rate": float(learning_rate),
+            "metrics": overall_metrics,
         },
     }
     return CachedMLResult(result_frame, analysis, step, signature, final_model)

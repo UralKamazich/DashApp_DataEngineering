@@ -134,6 +134,14 @@ def summarize_transformation_steps(steps):
             feature_count = len(params.get("features") or inputs[1:])
             outputs_text = ", ".join(outputs[:2]) or "прогноз"
             summary = f"CatBoost: {target} · {feature_count} признаков → {outputs_text}"
+        elif operation == "catboost_classification":
+            target = str(params.get("target") or (inputs[0] if inputs else "класс"))
+            feature_count = len(params.get("features") or inputs[1:])
+            outputs_text = ", ".join(outputs[:2]) or "класс"
+            summary = (
+                f"CatBoost classification: {target} · "
+                f"{feature_count} признаков → {outputs_text}"
+            )
         else:
             summary = str(step.get("label") or "Преобразование")
 
@@ -178,6 +186,7 @@ def suggest_dataset_name(registry, queued_steps, scope="base"):
         "group_aggregates": "Агрегат",
         "clustering": "Кластеризация",
         "catboost_regression": "CatBoost",
+        "catboost_classification": "CatBoostКласс",
     }
     methods = []
     for step in queued_steps or []:

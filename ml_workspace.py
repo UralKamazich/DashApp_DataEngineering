@@ -19,9 +19,12 @@ GRAPH_CONFIG = {
 }
 
 
-def _field(label, control, class_name=""):
+def _field(label, control, class_name="", label_id=None):
+    label_props = {"size": "10px", "fw": 650, "c": "dimmed"}
+    if label_id:
+        label_props["id"] = label_id
     return html.Div(
-        [dmc.Text(label, size="10px", fw=650, c="dimmed"), control],
+        [dmc.Text(label, **label_props), control],
         className=f"ml-field {class_name}".strip(),
     )
 
@@ -29,9 +32,10 @@ def _field(label, control, class_name=""):
 def _metric(label, component_id, note):
     return dmc.Paper(
         [
-            dmc.Text(label, size="9px", c="dimmed", tt="uppercase", fw=700),
+            dmc.Text(label, id=f"{component_id}-label", size="9px", c="dimmed",
+                     tt="uppercase", fw=700),
             dmc.Text("—", id=component_id, className="ml-metric-value"),
-            dmc.Text(note, size="9px", c="dimmed"),
+            dmc.Text(note, id=f"{component_id}-note", size="9px", c="dimmed"),
         ],
         p="xs", withBorder=True, shadow="xs", className="ml-metric-card",
     )
@@ -47,7 +51,8 @@ def create_catboost_workspace():
             dmc.Group(
                 [
                     html.Div([
-                        dmc.Text("CatBoost · регрессия", fw=700, size="sm"),
+                        dmc.Text("CatBoost · регрессия", id="ml-workspace-title",
+                                 fw=700, size="sm"),
                         dmc.Text(
                             "Обучение, проверка качества и запись прогноза в dataset",
                             size="10px", c="dimmed",
@@ -64,6 +69,14 @@ def create_catboost_workspace():
             ),
             dmc.SimpleGrid(
                 [
+                    _field("Задача", dmc.SegmentedControl(
+                        id="ml-task",
+                        data=[
+                            {"label": "Регрессия", "value": "regression"},
+                            {"label": "Классификация", "value": "classification"},
+                        ],
+                        value="regression", size="xs", fullWidth=True,
+                    )),
                     _field("Входной dataset", dmc.Select(
                         id="ml-input-dataset", data=[], searchable=True,
                         allowDeselect=False, size="xs",
@@ -80,7 +93,7 @@ def create_catboost_workspace():
                         id="ml-output-name", placeholder="CatBoost_До фильтров_1", size="xs",
                     )),
                 ],
-                cols=3, spacing="xs", mt="sm", className="ml-routing-grid",
+                cols=4, spacing="xs", mt="sm", className="ml-routing-grid",
             ),
         ],
         p="sm", withBorder=True, shadow="xs", className="ml-routing",
@@ -101,7 +114,7 @@ def create_catboost_workspace():
             dmc.SimpleGrid([
                 _field("Целевой канал · число", dmc.Select(
                     id="ml-target", data=[], searchable=True, clearable=True, size="xs",
-                )),
+                ), label_id="ml-target-label"),
                 _field("ID / подпись · необязательно", dmc.Select(
                     id="ml-id-column", data=[], searchable=True, clearable=True, size="xs",
                 )),
@@ -149,15 +162,32 @@ def create_catboost_workspace():
             ),
 
             dmc.Divider(label="Параметры CatBoost", labelPosition="left", my="xs"),
-            _field("Пресет", dmc.Select(
-                id="ml-preset", value="balanced", allowDeselect=False, size="xs",
+            _field("Режим обучения", dmc.SegmentedControl(
+                id="ml-run-mode", value="single", size="xs", fullWidth=True,
                 data=[
-                    {"label": "Быстрый черновик", "value": "draft"},
-                    {"label": "Баланс", "value": "balanced"},
-                    {"label": "Высокое качество", "value": "quality"},
-                    {"label": "Вручную", "value": "custom"},
+                    {"label": "Один запуск", "value": "single"},
+                    {"label": "Автоподбор параметров", "value": "tune"},
                 ],
             )),
+            dmc.SimpleGrid([
+                _field("Пресет / исходная точка", dmc.Select(
+                    id="ml-preset", value="balanced", allowDeselect=False, size="xs",
+                    data=[
+                        {"label": "Быстрый черновик", "value": "draft"},
+                        {"label": "Баланс", "value": "balanced"},
+                        {"label": "Высокое качество", "value": "quality"},
+                        {"label": "Вручную", "value": "custom"},
+                    ],
+                )),
+                html.Div(_field("Попытки", _number(
+                    "ml-tuning-trials", 12, min=3, max=60, step=1,
+                )), id="ml-tuning-trials-wrap", style={"display": "none"}),
+            ], cols=2, spacing="xs", mt="xs"),
+            dmc.Text(
+                "Автоподбор использует один validation holdout; лучшая конфигурация затем проходит выбранную выше полноценную проверку.",
+                id="ml-tuning-hint", size="9px", c="dimmed", mt=4,
+                style={"display": "none"},
+            ),
             dmc.SimpleGrid([
                 _field("Деревья", _number("ml-iterations", 800, min=1, max=20000, step=50)),
                 _field("Глубина", _number("ml-depth", 6, min=1, max=16, step=1)),
@@ -171,11 +201,18 @@ def create_catboost_workspace():
                         id="ml-loss", value="RMSE", allowDeselect=False, size="xs",
                         data=[value for value in ["RMSE", "MAE", "MAPE", "Quantile"]],
                     )),
+                    html.Div(_field("Баланс классов", dmc.Select(
+                        id="ml-class-weights", value="none", allowDeselect=False,
+                        size="xs", data=[
+                            {"label": "Без балансировки", "value": "none"},
+                            {"label": "Автоматически", "value": "balanced"},
+                        ],
+                    )), id="ml-class-weights-wrap", style={"display": "none"}),
                     _field("Early stopping", _number("ml-early-stopping", 80, min=0, step=10)),
                     _field("Random strength", _number("ml-random-strength", 1.0, min=0, step=0.1)),
                     _field("Bagging temperature", _number("ml-bagging-temperature", 1.0, min=0, step=0.1)),
                     _field("Random seed", _number("ml-random-seed", 42, min=0, step=1)),
-                ], cols=5, spacing="xs", mt="xs"),
+                ], cols=3, spacing="xs", mt="xs", className="ml-advanced-grid"),
             ], className="ml-advanced"),
 
             dmc.Divider(label="Выходные каналы", labelPosition="left", my="xs"),
@@ -183,10 +220,27 @@ def create_catboost_workspace():
                 _field("Имя прогноза", dmc.TextInput(
                     id="ml-prediction-column", value="Прогноз CatBoost", size="xs",
                 )),
-                dmc.Switch(id="ml-include-residual", label="Добавить остаток", checked=True, size="xs"),
+                html.Div(dmc.Switch(
+                    id="ml-include-residual", label="Добавить остаток", checked=True, size="xs"
+                ), id="ml-residual-wrap"),
+                html.Div(dmc.Switch(
+                    id="ml-include-confidence", label="Добавить уверенность",
+                    checked=True, size="xs",
+                ), id="ml-confidence-wrap", style={"display": "none"}),
                 dmc.Switch(id="ml-compute-shap", label="Рассчитать SHAP", checked=True, size="xs"),
-            ], cols=3, spacing="xs"),
-            dmc.Button("Обучить модель", id="ml-run", size="xs", fullWidth=True, mt="sm"),
+            ], cols=4, spacing="xs"),
+            dmc.SimpleGrid([
+                dmc.Button("Обучить модель", id="ml-run", size="xs", fullWidth=True),
+                dmc.Button(
+                    "Отменить", id="ml-cancel", size="xs", fullWidth=True,
+                    variant="light", color="red", disabled=True,
+                ),
+            ], cols=2, spacing="xs", mt="sm"),
+            dmc.Progress(
+                id="ml-job-progress", value=0, size="xs", animated=True,
+                striped=True, mt=6, className="ml-job-progress",
+            ),
+            dmc.Text(id="ml-job-message", size="9px", c="dimmed", mt=3),
             dmc.SimpleGrid([
                 dmc.Button("Создать dataset", id="ml-commit", size="xs",
                            variant="light", disabled=True),
@@ -224,6 +278,7 @@ def create_catboost_workspace():
                 dmc.TabsTab("Важность", value="importance"),
                 dmc.TabsTab("SHAP", value="shap"),
                 dmc.TabsTab("Диагностика", value="diagnostics"),
+                dmc.TabsTab("Автоподбор", value="tuning"),
                 dmc.TabsTab("Таблица", value="table"),
                 dmc.TabsTab("Протокол", value="log"),
             ]),
@@ -232,6 +287,7 @@ def create_catboost_workspace():
             dmc.TabsPanel(empty_graph("ml-importance-graph"), value="importance"),
             dmc.TabsPanel(empty_graph("ml-shap-graph"), value="shap"),
             dmc.TabsPanel(empty_graph("ml-diagnostics-graph"), value="diagnostics"),
+            dmc.TabsPanel(empty_graph("ml-tuning-graph"), value="tuning"),
             dmc.TabsPanel(dash_table.DataTable(
                 id="ml-prediction-table", data=[], columns=[], page_size=20,
                 sort_action="native", filter_action="native", style_table={"overflowX": "auto"},
@@ -292,7 +348,8 @@ def create_experiments_workspace():
         ], p="sm", withBorder=True, shadow="xs"),
         html.Div([
             dmc.Paper([
-                dmc.Text("Сравнение MAE", fw=700, size="xs", mb=4),
+                dmc.Text("Сравнение MAE", id="ml-history-chart-title",
+                         fw=700, size="xs", mb=4),
                 dcc.Graph(
                     id="ml-experiments-graph", figure=_empty_experiments_graph(),
                     config=GRAPH_CONFIG,
@@ -342,7 +399,8 @@ def create_ml_workspace():
                     dmc.Text("ML Studio", fw=750, size="md"),
                     dmc.Text("Модели, эксперименты и производные dataset", size="10px", c="dimmed"),
                 ]),
-                dmc.Badge("Регрессия", variant="dot", color="violet"),
+                dmc.Badge("Регрессия", id="ml-shell-task-badge",
+                          variant="dot", color="violet"),
             ], justify="space-between", align="flex-start"),
             html.Nav([
                 _subnav_link("Эксперименты", "/ml/experiments", "◫"),
@@ -359,7 +417,10 @@ def create_ml_workspace():
         html.Div(id="ml-page-neural-networks", style={"display": "none"},
                  children=[create_future_model_workspace("neural-networks")]),
         dcc.Store(id="ml-analysis"),
+        dcc.Store(id="ml-job-state", data={"status": "idle", "progress": 0}),
         dcc.Store(id="ml-auto-output-name"),
+        dcc.Store(id="ml-tuning-presets", data={}, storage_type="local"),
         dcc.Store(id="ml-columns-sync"),
         dcc.Store(id="ml-experiment-history", data=[], storage_type="local"),
+        dcc.Interval(id="ml-job-poll", interval=650, disabled=True, n_intervals=0),
     ], className="ml-workspace")

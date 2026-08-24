@@ -31,6 +31,7 @@
 .ml-metric-value { font-size: 19px; line-height: 1.2; font-weight: 750; font-variant-numeric: tabular-nums; }
 .ml-results .js-plotly-plot { min-height: 390px; }
 .ml-log { white-space: pre-wrap; max-height: 430px; overflow: auto; margin: 0; padding: 10px; font-size: 10px; line-height: 1.45; }
+.ml-job-progress { opacity: .82; }
 .ml-experiments-grid { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(0, 1.2fr); gap: 8px; margin-top: 8px; align-items: start; }
 .ml-experiment-chart, .ml-experiment-table { min-width: 0; }
 .ml-future-model { max-width: 760px; margin: 18px auto; }

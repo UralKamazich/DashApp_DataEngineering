@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
-from ml_engine import run_catboost_regression
+from ml_engine import run_catboost_classification, run_catboost_regression
 
 
 @dataclass(frozen=True)
@@ -22,18 +22,23 @@ class ModelDescriptor:
 @dataclass(frozen=True)
 class ModelAdapter:
     descriptor: ModelDescriptor
-    runner: Callable | None = None
+    runners: dict[str, Callable] = field(default_factory=dict)
 
     @property
     def available(self) -> bool:
-        return self.runner is not None
+        return bool(self.runners)
 
-    def run(self, frame, **parameters):
-        if self.runner is None:
+    def run(self, frame, *, task="regression", **parameters):
+        runner = self.runners.get(str(task or "regression"))
+        if runner is None:
+            if self.available:
+                raise NotImplementedError(
+                    f"Модель «{self.descriptor.title}» не поддерживает задачу «{task}»."
+                )
             raise NotImplementedError(
                 f"Модель «{self.descriptor.title}» ещё не подключена."
             )
-        return self.runner(frame, **parameters)
+        return runner(frame, **parameters)
 
 
 MODEL_ADAPTERS = {
@@ -42,11 +47,14 @@ MODEL_ADAPTERS = {
             key="catboost",
             title="CatBoost",
             family="Градиентный бустинг",
-            tasks=("regression",),
+            tasks=("regression", "classification"),
             status="ready",
             description="Смешанные числовые и категориальные признаки без ручного кодирования.",
         ),
-        runner=run_catboost_regression,
+        runners={
+            "regression": run_catboost_regression,
+            "classification": run_catboost_classification,
+        },
     ),
     "random-forest": ModelAdapter(
         ModelDescriptor(
@@ -76,4 +84,3 @@ def get_model_adapter(key: str) -> ModelAdapter:
         return MODEL_ADAPTERS[str(key)]
     except KeyError as error:
         raise KeyError(f"Неизвестная ML-модель: {key}") from error
-
