@@ -2,17 +2,19 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
 from callbacks.download import export_registered_dataset
-from callbacks.datasets import render_dataset_controls
+from callbacks.datasets import initialize_dataset_registry, render_dataset_controls
 from dataset_export import (
     dataset_export_name,
     export_catboost_model,
     export_frame_to_excel,
     export_sklearn_model,
     model_export_name,
+    source_directory,
 )
 from dataset_registry import commit_result, create_source_registry, get_record
 from utils import meta_from_df
@@ -33,6 +35,30 @@ class DatasetExportTests(unittest.TestCase):
             name,
             "Pesec_metrics - CatBoost_До фильтров_1 - 20260823_194211.xlsx",
         )
+
+    def test_online_source_exports_to_downloads(self):
+        with tempfile.TemporaryDirectory() as folder:
+            downloads = Path(folder) / "Downloads"
+            downloads.mkdir()
+            with patch("dataset_export.Path.home", return_value=Path(folder)):
+                resolved = source_directory(
+                    "https://example.test/datasets/iris.csv"
+                )
+        self.assertEqual(resolved, downloads)
+
+    def test_source_registry_preserves_import_metadata(self):
+        payload = self.frame.to_json(orient="split")
+        meta = meta_from_df(self.frame)
+        meta["import"] = {
+            "format": "CSV", "encoding": "utf-8", "delimiter": ",",
+            "decimal": ".", "remote": True,
+        }
+        registry, active_id, active_data = initialize_dataset_registry(
+            payload, meta, "iris.csv"
+        )
+        self.assertEqual(active_id, "source")
+        self.assertEqual(active_data, payload)
+        self.assertEqual(registry["source"]["meta"]["import"], meta["import"])
 
     def test_export_is_next_to_source_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:

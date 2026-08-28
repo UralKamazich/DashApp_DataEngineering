@@ -108,7 +108,8 @@
     if (chartSelect) group.appendChild(chartSelect);
 
     if (workspace.getAttribute("data-settings-popup-id")) {
-      group.appendChild(makeIconButton("⚙", "Настройки типа графика", "modebar-settings-custom", function (button) {
+      var settingsTitle = workspace.getAttribute("data-settings-button-title") || "Настройки типа графика";
+      group.appendChild(makeIconButton("⚙", settingsTitle, "modebar-settings-custom", function (button) {
         if (!window.graphSettingsPopover) return;
         var rect = button.getBoundingClientRect();
         window.graphSettingsPopover.open(

@@ -151,6 +151,15 @@ def summarize_transformation_steps(steps):
                 f"Random Forest{task_text}: {target} · "
                 f"{feature_count} признаков → {outputs_text}"
             )
+        elif operation in {"neural_network_regression", "neural_network_classification"}:
+            target = str(params.get("target") or (inputs[0] if inputs else "цель"))
+            feature_count = len(params.get("features") or inputs[1:])
+            outputs_text = ", ".join(outputs[:2]) or "прогноз"
+            task_text = " classification" if operation.endswith("classification") else ""
+            summary = (
+                f"Neural Network{task_text}: {target} · "
+                f"{feature_count} признаков → {outputs_text}"
+            )
         else:
             summary = str(step.get("label") or "Преобразование")
 
@@ -198,6 +207,8 @@ def suggest_dataset_name(registry, queued_steps, scope="base"):
         "catboost_classification": "CatBoostКласс",
         "random_forest_regression": "RandomForest",
         "random_forest_classification": "RandomForestКласс",
+        "neural_network_regression": "NeuralNetwork",
+        "neural_network_classification": "NeuralNetworkКласс",
     }
     methods = []
     for step in queued_steps or []:

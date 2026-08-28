@@ -89,7 +89,9 @@
 
   document.addEventListener("pointerdown", function (event) {
     const header = event.target.closest(".graph-settings-popover-header");
-    const popup = header && header.closest(".graph-settings-popover--common.is-open");
+    const popup = header && header.closest(
+      ".graph-settings-popover--common.is-open, .multi-axis-settings-popover.is-open"
+    );
     if (!popup || event.button !== 0) return;
     if (event.target.closest("button, input, select, textarea, a, [role='button']")) return;
 

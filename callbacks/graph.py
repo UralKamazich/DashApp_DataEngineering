@@ -50,6 +50,27 @@ MAX_RIDGE_GROUPS = 60
 MAX_PIE_SLICES = 30
 POINT_CHART_TYPES = {"Scatter", "3D_Scatter", "Polar"}
 
+# Plotly serializes raw trace values into the figure sent to Electron. Sending
+# millions of points blocks the renderer even when WebGL is used; categorical
+# axes and labels are more expensive because they force SVG traces. These
+# limits apply only to the visual frame. Source/filtered datasets and every
+# downstream calculation keep all rows.
+MAX_PLOT_ROWS = 50_000
+MAX_SVG_PLOT_ROWS = 10_000
+MAX_TEXT_PLOT_ROWS = 5_000
+MAX_LINE_PLOT_ROWS = 25_000
+RAW_ROW_CHART_TYPES = {
+    "Scatter",
+    "3D_Scatter",
+    "Box",
+    "Line",
+    "Hist",
+    "Violin",
+    "Polar",
+    "DensityHeat",
+    "DensityContour",
+}
+
 # Temporary categorical rendering is intentionally bounded. Axis categories
 # are relatively cheap; color groups and facets multiply traces/subplots and
 # therefore use stricter limits.
@@ -63,6 +84,40 @@ TEMPORARY_CATEGORY_LIMITS = {
     "facet-col": 24,
     "hover": 1500,
 }
+
+
+def _visual_frame(source, chart_type, render_mode="hybrid", force_svg=False,
+                  has_text=False):
+    """Return a deterministic, renderer-safe frame for raw-row charts.
+
+    The returned tuple is ``(frame, original_rows)``. ``original_rows`` is
+    ``None`` when no visual sampling was required. Line charts retain source
+    order through evenly spaced selection; other charts use a repeatable
+    random sample so dense clouds and distributions are not biased toward the
+    start of a dataset.
+    """
+    if chart_type not in RAW_ROW_CHART_TYPES:
+        return source, None
+
+    if has_text:
+        limit = MAX_TEXT_PLOT_ROWS
+    elif chart_type == "Line":
+        limit = MAX_LINE_PLOT_ROWS
+    elif render_mode == "svg" or force_svg:
+        limit = MAX_SVG_PLOT_ROWS
+    else:
+        limit = MAX_PLOT_ROWS
+
+    row_count = len(source)
+    if row_count <= limit:
+        return source, None
+
+    if chart_type == "Line":
+        positions = np.linspace(0, row_count - 1, limit, dtype=np.int64)
+        sampled = source.iloc[positions]
+    else:
+        sampled = source.sample(n=limit, random_state=42).sort_index()
+    return sampled.copy(deep=False), row_count
 
 
 def _marker_size_in_pixels(value):
@@ -700,8 +755,23 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
 
         facet_row = facet_row if (facet_row and facet_row in dff.columns) else None
         facet_col = facet_col if (facet_col and facet_col in dff.columns) else None
-        plot_df, temporary_category_fields, category_error = _temporary_category_frame(
+        meta = meta or {"numeric": [], "categorical": [], "datetime": []}
+        categorical_modes = categorical_fields if isinstance(categorical_fields, dict) else {}
+        force_svg = (
+            needs_text_axis(x_col, meta)
+            or needs_text_axis(y_col, meta)
+            or bool(categorical_modes.get("x"))
+            or bool(categorical_modes.get("y"))
+        )
+        plot_source, sampled_from_rows = _visual_frame(
             dff,
+            chart_type,
+            render_mode=render_mode,
+            force_svg=force_svg,
+            has_text=bool(text_col and text_col in dff.columns),
+        )
+        plot_df, temporary_category_fields, category_error = _temporary_category_frame(
+            plot_source,
             categorical_fields,
             {
                 "x": x_col,
@@ -727,7 +797,6 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         carg = color_col if _valid(color_col) else None
         sarg = size_col  if (bubble and _valid(size_col)) else None
 
-        meta = meta or {"numeric": [], "categorical": [], "datetime": []}
         x_as_text = needs_text_axis(x_col, meta) or "x" in temporary_category_fields
         y_as_text = needs_text_axis(y_col, meta) or "y" in temporary_category_fields
         if x_as_text and "x" not in temporary_category_fields:
@@ -999,7 +1068,26 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         if chart_type != "3D_Scatter" and facet_row:
            hide_xlabels_on_upper_facets(fig)
 
-        return fig, bar_notifications if chart_type == "Bar" else []
+        notifications = bar_notifications if chart_type == "Bar" else []
+        if sampled_from_rows:
+            sample_message = (
+                f"Отображается {len(plot_df):,} из {sampled_from_rows:,} строк. "
+                "Исходные и отфильтрованные данные не изменены."
+            ).replace(",", " ")
+            notifications = [
+                *notifications,
+                {
+                    "id": f"{GRAPH_WORKSPACE.graph_id}-visual-sample",
+                    "title": "Визуальная выборка",
+                    "message": sample_message,
+                    "color": "blue",
+                    "action": "show",
+                    "position": "bottom-right",
+                    "autoClose": False,
+                    "withCloseButton": True,
+                },
+            ]
+        return fig, notifications
 
     except Exception as e:
         logger.error(f"Ошибка при построении графика: {e}", exc_info=True)

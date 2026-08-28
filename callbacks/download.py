@@ -12,7 +12,7 @@ from dash import callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
-from dataset_export import export_frame_to_excel
+from dataset_export import export_frame_to_excel, source_directory
 from dataset_registry import SOURCE_DATASET_ID, get_record, payload_for_record
 from utils import _make_error_notif, read_df_from_store
 
@@ -21,7 +21,7 @@ def _export_ok(path):
     return [{
         "id": str(uuid.uuid4()),
         "title": "Excel сохранён",
-        "message": f"Файл сохранён рядом с исходником: {path}",
+        "message": f"Файл сохранён: {path}",
         "color": "green",
         "loading": False,
         "action": "show",
@@ -107,14 +107,14 @@ def download_excel_dataset(n_clicks, filtered_json, source_path, source_name, sh
     out_name = f"{stem}{sheet_suffix}_filtered_{ts}.xlsx"
 
     out_name = re.sub(r'[<>:"/\\|?*]+', '_', out_name)
-    out_path = Path(source_path).resolve().parent / out_name
+    out_path = source_directory(source_path) / out_name
 
     try:
         df.to_excel(out_path, index=False, engine="openpyxl")
         ok = [{
             "id": str(uuid.uuid4()),
             "title": "Excel сохранён",
-            "message": f"Файл сохранён рядом с исходником: {out_path}",
+            "message": f"Файл сохранён: {out_path}",
             "color": "green",
             "loading": False,
             "action": "show",

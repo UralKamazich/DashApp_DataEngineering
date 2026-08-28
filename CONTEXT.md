@@ -11,11 +11,14 @@ DashApp_DataEngineering/
 ├── utils.py            # Вспомогательные функции (чтение Store, пустая фигура, уведомления и т.д.)
 ├── components.py       # UI-компоненты (dropdowns, selects, switches, кнопки)
 ├── layout.py           # Layout приложения (многостраничный)
+├── multi_axis_workspace.py # Самостоятельный UI-класс многоосевого графика
+├── multi_axis_engine.py # Чистый Plotly-движок нескольких независимых Y-осей
 ├── _filedialog.py      # Отдельный процесс tkinter для macOS (выбор файла)
+├── data_import.py      # CSV/TXT/TSV/ZIP, URL-источники и каталог учебных datasets
 ├── callbacks/
 │   ├── __init__.py
 │   ├── modals.py        # Клиентский колбэк переключения страниц + подсветка nav + открытие Drawer
-│   ├── file_handling.py # Загрузка .xlsx/.pkl, выбор листа, инфо о файле
+│   ├── file_handling.py # Локальные/сетевые источники, выбор листа, инфо о файле
 │   ├── filters.py       # Управление фильтрами (добавление, удаление, обновление)
 │   ├── pipeline.py      # Применение фильтров к активному dataset
 │   ├── clustering.py    # Расчёт, визуализация и запись кластеризации
@@ -33,13 +36,14 @@ DashApp_DataEngineering/
 | URL | Страница | Левая панель | Правая панель |
 |-----|----------|-------------|---------------|
 | `/` | График | Оси X/Y/Z, Color, Size, Text, Facet, Hover, Фильтры | Тип графика + кнопки + график |
+| `/multi-y` | Multi-Y | Общий X, левые и правые Y-серии | Много независимых цветных Y-осей |
 | `/correlation` | Коррелограмма | Выбор корреляционных столбцов | Корреляционная матрица + bar-графики |
 | `/data-engineering` | Data Engineering | Биннинг, текстовые копии, агрегаты | График |
 | `/clustering` | Кластеризация | Dataset-aware лаборатория | PCA, подбор K, размеры и профили |
 | `/ml/experiments` | ML · Эксперименты | Журнал запусков | Сравнение качества |
 | `/ml/catboost` | ML · CatBoost | Регрессия/классификация, валидация и параметры | Метрики, графики, SHAP, диагностика |
 | `/ml/random-forest` | ML · Random Forest | Регрессия/классификация, split/CV/group/time | Метрики, OOB, важность, диагностика |
-| `/ml/neural-networks` | ML · Нейросети | Подлист подготовлен | Модель ещё не подключена |
+| `/ml/neural-networks` | ML · Нейросети | PyTorch MLP с Metal/MPS + sklearn CPU, early stopping, split/CV/group/time | Кривые обучения, метрики, permutation importance |
 
 ### Что сделано за эту сессию
 1. **Перестройка UI**: тёмный хедер (`#1A1B1E`) с названием, кнопкой выбора файла и навигацией
@@ -48,10 +52,11 @@ DashApp_DataEngineering/
 4. **Подсветка активной страницы**: белый текст + серый фон на активной ссылке
 5. **Информация о файле**: внизу под графиком серым шрифтом (имя, лист, строки, столбцы, путь)
 6. **Убрана DE-модалка**: функционал Data Engineering разнесён на отдельные страницы
+7. **Ввод данных**: Excel/PKL + CSV/TXT/TSV/ZIP с автоопределением формата; URL и каталог популярных datasets
 
 ### Что нужно доделать
 1. ~~**Информация о файле появляется только после обновления графика**~~ ✅ Исправлено (24.06.2026): file-info-bar перенесён в левый нижний угол, source-file-path добавлен как Input, зелёное status-message убрано
-2. **Страница ML** — CatBoost и Random Forest поддерживают регрессию/классификацию, фоновые задания, прогресс/отмену, отдельные результаты и запись прогнозов в производный dataset; далее — нейросети
+2. **Страница ML** — CatBoost, Random Forest и табличный Neural Network поддерживают регрессию/классификацию, фоновые задания, прогресс/отмену, отдельные результаты и запись прогнозов в производный dataset
 3. **Фильтры на странице Корреляции** — сейчас их нет, добавить
 4. **DE-страница**: добавить фильтры для биннинга/агрегатов
 5. **Страница кластеризации**: расчёт отделён от записи; результат добавляется в текущий или новый dataset
@@ -67,8 +72,9 @@ python run.py
 ### Важные ID компонентов
 - `segmented` — тип графика (dmc.Select)
 - `pick-file-btn` — кнопка выбора файла
+- `online-dataset-menu` — каталог datasets и ввод прямой CSV/TXT/TSV-ссылки
 - `file-info-bar` — строка информации о файле внизу
-- `page-graph`, `page-correlation`, `page-data-engineering`, `page-clustering`, `page-ml` — контейнеры страниц
+- `page-graph`, `page-multi-y`, `page-correlation`, `page-data-engineering`, `page-clustering`, `page-ml` — контейнеры страниц
 - `ml-page-experiments`, `ml-page-catboost`, `ml-page-random-forest`, `ml-page-neural-networks` — подлисты ML
 - `url` — dcc.Location
 - `nav-active-store` — dcc.Store с текущим путём
@@ -80,6 +86,9 @@ python run.py
 - `callbacks.ml` — CatBoost, фоновые задания, история экспериментов, экспорт Excel/CBM и стратегии разбиения
 - `callbacks.ml_random_forest` — отдельное состояние Random Forest, OOB, важность признаков, экспорт Excel/joblib и запись результата
 - `random_forest_engine.py` — sklearn Pipeline для смешанных данных, split/KFold/GroupKFold/TimeSeriesSplit, регрессия и классификация
+- `callbacks.ml_neural_networks` — отдельное состояние табличного MLP, кривые обучения, экспорт Excel/joblib и запись результата
+- `neural_network_engine.py` — общий контур табличных сетей: PyTorch/sklearn, масштабирование, one-hot, early stopping, permutation importance
+- `torch_tabular_engine.py` — PyTorch MLP, Auto/CPU/Metal-MPS, отмена по эпохам и сериализуемая модель
 - `ml_jobs.py` — однопоточная очередь тяжёлых ML-расчётов, polling прогресса и отмена
 - `ml_tuning.py` — детерминированный CatBoost random search на validation holdout без промежуточных dataset
 - `update_dropdown_options_all` (dropdowns.py) — 15 Outputs

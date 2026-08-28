@@ -8,6 +8,9 @@ compute_correlation и build_correlogram.
 
 from __future__ import annotations
 
+from io import StringIO
+from threading import Lock
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -17,8 +20,9 @@ import dash_mantine_components as dmc
 from utils import read_df_from_store
 
 
-MAX_CORRELATION_COLUMNS = 50
+MAX_CORRELATION_COLUMNS = 60
 DEFAULT_CORRELATION_COLUMNS = 12
+CORRELATION_WORK_LOCK = Lock()
 
 
 def _empty_analysis_figure(
@@ -99,12 +103,11 @@ def compute_correlation(frame, columns, method="pearson", min_periods=10):
     Возвращает (correlation, pair_counts, status, error): при ошибке
     correlation/pair_counts равны None, error содержит текст сообщения.
     """
-    frame = frame.copy()
-    frame.columns = [str(column) for column in frame.columns]
     method = method if method in {"pearson", "spearman"} else "pearson"
     min_periods = max(int(min_periods or 2), 2)
+    column_lookup = {str(column): column for column in frame.columns}
     selected = list(dict.fromkeys(
-        str(column) for column in (columns or []) if str(column) in frame.columns
+        str(column) for column in (columns or []) if str(column) in column_lookup
     ))
     if len(selected) > MAX_CORRELATION_COLUMNS:
         message = (
@@ -116,7 +119,10 @@ def compute_correlation(frame, columns, method="pearson", min_periods=10):
         message = "Выберите минимум два числовых столбца."
         return None, None, message, message
 
-    numeric = frame[selected].apply(pd.to_numeric, errors="coerce")
+    source = frame[[column_lookup[column] for column in selected]].copy(deep=False)
+    source.columns = selected
+
+    numeric = source.apply(pd.to_numeric, errors="coerce")
     excluded = [
         column for column in selected
         if numeric[column].count() < min_periods or numeric[column].nunique(dropna=True) <= 1
@@ -131,15 +137,16 @@ def compute_correlation(frame, columns, method="pearson", min_periods=10):
 
     numeric = numeric[usable]
     correlation = numeric.corr(method=method, min_periods=min_periods)
-    valid = numeric.notna().astype(int)
+    valid = numeric.notna().astype(np.int32)
     pair_counts = valid.T.dot(valid)
     correlation = correlation.mask(pair_counts < min_periods)
 
     method_label = "Пирсон" if method == "pearson" else "Спирмен"
     status = (
         f"Метод: {method_label} · Столбцов: {len(usable)} · "
-        f"Строк: {len(frame)} · Минимум наблюдений: {min_periods}"
+        f"Строк в расчёте: {len(source)}"
     )
+    status += f" · Минимум наблюдений: {min_periods}"
     if excluded:
         status += f" · Исключено столбцов: {len(excluded)}"
     return correlation, pair_counts, status, None
@@ -244,6 +251,7 @@ class CorrelationWorkspace:
             "status": f"{prefix}-status",
             "columns_drop": f"{prefix}-columns-drop",
             "columns_sync": f"{prefix}-columns-sync",
+            "result": f"{prefix}-result",
         }
         self._callbacks_registered = False
 
@@ -334,6 +342,7 @@ class CorrelationWorkspace:
                 html.Div(columns_drop_target, style={"marginTop": "6px"}),
                 dmc.Text(id=self.ids["status"], size="xs", c="dimmed", mt=4),
                 dcc.Store(id=self.ids["columns_sync"]),
+                dcc.Store(id=self.ids["result"]),
             ],
             p="xs",
             radius="md",
@@ -488,6 +497,59 @@ class CorrelationWorkspace:
             return numeric_columns[:DEFAULT_CORRELATION_COLUMNS]
 
         @app.callback(
+            Output(self.ids["result"], "data"),
+            Input("filtered-data", "data"),
+            Input(self.columns_control.id, "value"),
+            Input(self.ids["method"], "value"),
+            Input(self.ids["min_periods"], "value"),
+            Input("url", "pathname"),
+            State("meta-columns", "data"),
+        )
+        def calculate_correlation(filtered_json, columns, method, min_periods,
+                                  pathname, meta):
+            if pathname != "/correlation":
+                return no_update
+            request = {
+                "columns": list(columns or []),
+                "method": method if method in {"pearson", "spearman"} else "pearson",
+                "min_periods": max(int(min_periods or 2), 2),
+            }
+            if not filtered_json:
+                return {**request, "error": "Сначала загрузите датасет."}
+            if len(columns or []) > MAX_CORRELATION_COLUMNS:
+                return {
+                    **request,
+                    "error": (
+                        f"Выбрано {len(columns or [])} столбцов. Максимум для "
+                        f"одного анализа — {MAX_CORRELATION_COLUMNS}."
+                    ),
+                }
+            if len(columns or []) < 2:
+                return {**request, "error": "Выберите минимум два числовых канала."}
+            try:
+                # Scatter Matrix / Parcoords can be requested at the same
+                # moment. Serialize the two memory-heavy deserializations so
+                # large client stores are never expanded twice concurrently.
+                with CORRELATION_WORK_LOCK:
+                    frame = read_df_from_store(filtered_json, meta)
+                    correlation, pair_counts, status, error = compute_correlation(
+                        frame, columns, method, min_periods
+                    )
+                if error:
+                    return {**request, "error": error, "status": status}
+                return {
+                    **request,
+                    "correlation": correlation.to_json(orient="split"),
+                    "pair_counts": pair_counts.to_json(orient="split"),
+                    "status": status,
+                    "original_rows": len(frame),
+                    "calculation_rows": len(frame),
+                    "error": None,
+                }
+            except Exception as error:
+                return {**request, "error": f"Не удалось рассчитать корреляции: {error}"}
+
+        @app.callback(
             Output(self.ids["bar_primary_target"], "data"),
             Output(self.ids["bar_primary_target"], "value"),
             Output(self.ids["bar_secondary_target"], "data"),
@@ -507,38 +569,49 @@ class CorrelationWorkspace:
             Output(self.ids["bar_secondary"], "figure"),
             Output(self.ids["status"], "children"),
             Output(self.ids["status"], "c"),
-            Input("filtered-data", "data"),
+            Input(self.ids["result"], "data"),
             Input(self.columns_control.id, "value"),
-            Input(self.ids["method"], "value"),
-            Input(self.ids["min_periods"], "value"),
             Input(self.ids["bar_primary_target"], "value"),
             Input(self.ids["bar_secondary_target"], "value"),
             Input("url", "pathname"),
             Input("dropdown_style", "value"),
-            State("meta-columns", "data"),
         )
-        def update_analysis(filtered_json, columns, method, min_periods,
-                            primary_target, secondary_target, pathname,
-                            template, meta):
+        def update_analysis(result, columns, primary_target, secondary_target,
+                            pathname, template):
             if pathname != "/correlation":
                 return no_update, no_update, no_update, no_update
-            if not filtered_json:
-                empty = _empty_analysis_figure("Сначала загрузите датасет", template)
-                return empty, empty, "Сначала загрузите датасет.", "dimmed"
-            if len(columns or []) < 2:
-                empty = _empty_analysis_figure(
-                    "Выберите минимум два числовых канала", template
-                )
-                return empty, empty, "Выберите минимум два числовых канала.", "dimmed"
+            result = result or {}
+            requested_columns = list(columns or [])
+            if result.get("columns") != requested_columns:
+                return no_update, no_update, "Расчёт корреляций…", "dimmed"
+            error = result.get("error")
+            if error:
+                empty = _empty_analysis_figure(error, template)
+                return empty, empty, error, "red"
             try:
-                frame = read_df_from_store(filtered_json, meta)
-                # Матрица строится мультиграфиком (тип «Correlogram»);
-                # рейтинги корреляций используют тот же расчёт.
-                _matrix, first, second, status, error = _build_correlation_figures(
-                    frame, columns, method, min_periods, template or "plotly",
-                    primary_target, secondary_target,
+                correlation = pd.read_json(
+                    StringIO(result["correlation"]), orient="split"
                 )
-                return first, second, status, "red" if error else "dimmed"
+                pair_counts = pd.read_json(
+                    StringIO(result["pair_counts"]), orient="split"
+                )
+                available = list(correlation.columns)
+
+                def rating(requested, fallback_index):
+                    target = requested or available[min(fallback_index, len(available) - 1)]
+                    if target not in available:
+                        return _empty_analysis_figure(
+                            f"Канал «{target}» исключён из расчёта", template
+                        ), target
+                    return _correlation_bar(
+                        correlation, pair_counts, target, template or "plotly"
+                    ), target
+
+                first, first_target = rating(primary_target, 0)
+                second, second_target = rating(secondary_target, 1)
+                status = result.get("status", "")
+                status += f" · Рейтинги: {first_target} / {second_target}"
+                return first, second, status, "dimmed"
             except Exception as error:
                 message = f"Не удалось рассчитать корреляции: {error}"
                 empty = _empty_analysis_figure(message, template)

@@ -32,6 +32,7 @@ app.clientside_callback(
         // --- Показать только нужную страницу ---
         var pages = {
             "/": "page-graph",
+            "/multi-y": "page-multi-y",
             "/correlation": "page-correlation",
             "/data-engineering": "page-data-engineering",
             "/clustering": "page-clustering",

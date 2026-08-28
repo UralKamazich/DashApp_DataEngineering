@@ -19,7 +19,11 @@ if __name__ == "__main__":
         title="Выберите файл данных",
         filetypes=[
             ("Excel files", "*.xlsx"),
+            ("CSV files", "*.csv"),
+            ("Text tables", "*.txt *.tsv"),
+            ("ZIP archives", "*.zip"),
             ("Pickle files", "*.pkl"),
+            ("Supported datasets", "*.xlsx *.csv *.txt *.tsv *.zip *.pkl"),
             ("All files", "*.*"),
         ],
     )

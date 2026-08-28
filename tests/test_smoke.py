@@ -14,7 +14,10 @@ from callbacks.columns_sidebar import VIRTUALIZATION_THRESHOLD, update_column_ba
 from callbacks.dropdowns import _select_options, update_dropdown_options_all
 from callbacks.file_handling import _clicked_sheet, on_excel_upload
 from callbacks.modals import _normalize_main_chart_type
-from callbacks.multivariate import build_multivariate_figure
+from callbacks.multivariate import (
+    MAX_SCATTER_MATRIX_DIMENSIONS,
+    build_multivariate_figure,
+)
 from callbacks.filters import (
     _clean_filter_state,
     _default_filter_value,
@@ -25,6 +28,8 @@ from callbacks.filters import (
 from callbacks.graph import (
     MAX_BAR_LABELS,
     MAX_BAR_POINTS,
+    MAX_LINE_PLOT_ROWS,
+    MAX_SVG_PLOT_ROWS,
     Y_ONLY_CHART_TYPES,
     _build_pie_figure,
     _build_ridge_figure,
@@ -32,6 +37,7 @@ from callbacks.graph import (
     _graph_uirevision,
     _primary_axis_errors,
     _temporary_category_frame,
+    _visual_frame,
     update_main_graph,
 )
 from callbacks.pipeline import apply_filters
@@ -89,6 +95,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
     def test_application_pages_are_available(self):
         for path in (
             "/",
+            "/multi-y",
             "/correlation",
             "/data-engineering",
             "/clustering",
@@ -164,6 +171,27 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "rf-job-poll",
             "rf-metric-gap",
             "rf-overfit-status",
+            "nn-task",
+            "nn-input-dataset",
+            "nn-features",
+            "nn-hidden-layers",
+            "nn-engine",
+            "nn-compute-device",
+            "nn-compute-hint",
+            "nn-activation",
+            "nn-solver",
+            "nn-max-iter",
+            "nn-early-stopping",
+            "nn-analysis",
+            "nn-job-state",
+            "nn-job-poll",
+            "nn-learning-graph",
+            "nn-metric-gap",
+            "nn-overfit-status",
+            "online-dataset-menu",
+            "online-dataset-catalog",
+            "online-dataset-url",
+            "online-dataset-load",
         ):
             self.assertIn(component_id, component_ids)
 
@@ -313,7 +341,7 @@ class DashApplicationSmokeTests(unittest.TestCase):
         output_markers = (
             ("..graph.figure...", ("filtered-data", "data")),
             ("mv-graph.figure", ("filtered-data", "data")),
-            ("correlation-bar-primary.figure", ("filtered-data", "data")),
+            ("correlation-bar-primary.figure", ("correlation-result", "data")),
             ("cluster-projection-graph.figure", ("cluster-analysis", "data")),
         )
         for marker, source_input in output_markers:
@@ -412,6 +440,8 @@ class DashApplicationSmokeTests(unittest.TestCase):
             for dependency in rating_callback["inputs"]
         }
         self.assertIn(("dropdown_corr_columns", "value"), rating_inputs)
+        self.assertIn(("correlation-result", "data"), rating_inputs)
+        self.assertNotIn(("filtered-data", "data"), rating_inputs)
         self.assertIn(("correlation-bar-primary-target", "value"), rating_inputs)
         self.assertIn(("correlation-bar-secondary-target", "value"), rating_inputs)
         self.assertFalse(any(
@@ -902,7 +932,7 @@ class CorrelationAnalysisTests(unittest.TestCase):
         ):
             figure, notifications = build_multivariate_figure(
                 "Correlogram", ["x", "y"], "pearson", 2,
-                '{"large":"payload"}', "/", "plotly", {},
+                '{"large":"payload"}', "/", "plotly", None, {},
             )
         self.assertIs(figure, no_update)
         self.assertIs(notifications, no_update)
@@ -915,7 +945,7 @@ class CorrelationAnalysisTests(unittest.TestCase):
         })
         figure, notifications = build_multivariate_figure(
             "ScatterMatrix", ["c", "a", "b"], "pearson", 2,
-            source.to_json(orient="split"), "/correlation", "plotly",
+            source.to_json(orient="split"), "/correlation", "plotly", None,
             meta_from_df(source),
         )
 
@@ -924,6 +954,66 @@ class CorrelationAnalysisTests(unittest.TestCase):
             [dimension.label for dimension in figure.data[0].dimensions],
             ["c", "a", "b"],
         )
+
+    def test_scatter_matrix_rejects_too_many_dimensions_before_reading_data(self):
+        columns = [f"c{index}" for index in range(MAX_SCATTER_MATRIX_DIMENSIONS + 1)]
+        with patch(
+            "callbacks.multivariate.read_df_from_store",
+            side_effect=AssertionError("unsafe request must not deserialize data"),
+        ):
+            figure, notifications = build_multivariate_figure(
+                "ScatterMatrix", columns, "pearson", 2,
+                '{"large":"payload"}', "/correlation", "plotly", None, {},
+            )
+
+        self.assertEqual(len(figure.data), 0)
+        self.assertEqual(len(notifications), 1)
+        self.assertIn("Безопасный максимум", notifications[0]["message"])
+        self.assertEqual(notifications[0]["position"], "bottom-right")
+        self.assertIs(notifications[0]["autoClose"], False)
+        self.assertIs(notifications[0]["withCloseButton"], True)
+
+    def test_scatter_matrix_samples_rows_and_reports_persistent_notice(self):
+        source = pd.DataFrame({
+            "a": range(120),
+            "b": range(120, 240),
+        })
+        with patch("callbacks.multivariate.MAX_SCATTER_MATRIX_ROWS", 100):
+            figure, notifications = build_multivariate_figure(
+                "ScatterMatrix", ["a", "b"], "pearson", 2,
+                source.to_json(orient="split"), "/correlation", "plotly", None,
+                meta_from_df(source),
+            )
+
+        self.assertEqual(len(figure.data[0].dimensions[0].values), 100)
+        self.assertEqual(notifications[0]["position"], "bottom-right")
+        self.assertIs(notifications[0]["autoClose"], False)
+
+    def test_correlogram_does_not_report_a_calculation_sample(self):
+        correlation = pd.DataFrame(
+            [[1.0, 0.5], [0.5, 1.0]], columns=["a", "b"], index=["a", "b"]
+        )
+        counts = pd.DataFrame(
+            [[100, 100], [100, 100]], columns=["a", "b"], index=["a", "b"]
+        )
+        result = {
+            "columns": ["a", "b"],
+            "method": "pearson",
+            "min_periods": 2,
+            "correlation": correlation.to_json(orient="split"),
+            "pair_counts": counts.to_json(orient="split"),
+            "original_rows": 120,
+            "calculation_rows": 120,
+            "error": None,
+        }
+
+        figure, notifications = build_multivariate_figure(
+            "Correlogram", ["a", "b"], "pearson", 2,
+            '{"not":"read"}', "/correlation", "plotly", result, {},
+        )
+
+        self.assertEqual(figure.data[0].type, "heatmap")
+        self.assertEqual(notifications, [])
 
     def test_rating_targets_are_limited_to_shared_channels(self):
         options, primary, secondary = _rating_target_options(
@@ -1017,6 +1107,18 @@ class CorrelationAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(correlation.loc["a", "b"], -1.0)
         self.assertEqual(int(pair_counts.loc["a", "b"]), 4)
         self.assertIn("Метод: Пирсон", status)
+
+    def test_large_correlation_uses_every_row(self):
+        source = pd.DataFrame({"a": range(120), "b": range(120)})
+        correlation, pair_counts, status, error = compute_correlation(
+            source, ["a", "b"], "pearson", 2
+        )
+
+        self.assertIsNone(error)
+        self.assertAlmostEqual(correlation.loc["a", "b"], 1.0)
+        self.assertEqual(int(pair_counts.loc["a", "b"]), 120)
+        self.assertIn("Строк в расчёте: 120", status)
+        self.assertNotIn("расчётная выборка", status)
 
 
 class GraphAxisValidationTests(unittest.TestCase):
@@ -1657,6 +1759,54 @@ class GraphAxisValidationTests(unittest.TestCase):
             figure.layout.uirevision,
             _graph_uirevision("Scatter", "x", "y", None, None, None, 0),
         )
+
+    def test_large_categorical_scatter_is_sampled_before_svg_rendering(self):
+        row_count = MAX_SVG_PLOT_ROWS + 123
+        source = pd.DataFrame({
+            "category": [f"Группа {index % 7}" for index in range(row_count)],
+            "value": range(row_count),
+        })
+        figure, notifications = build_main_figure(
+            n_clicks=1, x_col="category", y_col="value", z_col=None,
+            color_col=None, size_col=None, text_col=None,
+            dropdown_text_pozition="middle center", chart_type="Scatter",
+            bubble=False, MaxSizeBubble=30, height=550, width=None,
+            selected_style="plotly", bar_text_auto=True, view_revision=0,
+            filtered_json=source.to_json(orient="split"), hover_cols=[],
+            facet_row=None, facet_col=None, filters_state={},
+            xaxis_font_size=14, yaxis_font_size=14, font_size_ticks=12,
+            title_font_size=16, dropdown_sort_column="trace",
+            axes_category="auto", dropdown_overlay="overlay",
+            legend="top-right-outside", custom_colors={}, tick_step_x=0,
+            tick_step_y=0, legend_order="original", legend_custom_order=None,
+            meta=meta_from_df(source), render_mode="hybrid",
+        )
+
+        self.assertEqual(len(notifications), 1)
+        sample_notice = notifications[0]
+        self.assertEqual(sample_notice["id"], "graph-visual-sample")
+        self.assertEqual(sample_notice["position"], "bottom-right")
+        self.assertIs(sample_notice["autoClose"], False)
+        self.assertIs(sample_notice["withCloseButton"], True)
+        self.assertEqual(figure.data[0].type, "scatter")
+        self.assertEqual(len(figure.data[0].x), MAX_SVG_PLOT_ROWS)
+        self.assertFalse(figure.layout.annotations)
+        self.assertIn(
+            f"из {row_count:,}".replace(",", " "),
+            sample_notice["message"],
+        )
+
+    def test_large_line_visual_sample_preserves_order_and_endpoints(self):
+        row_count = MAX_LINE_PLOT_ROWS + 101
+        source = pd.DataFrame({"x": range(row_count), "y": range(row_count)})
+
+        sampled, original_rows = _visual_frame(source, "Line")
+
+        self.assertEqual(original_rows, row_count)
+        self.assertEqual(len(sampled), MAX_LINE_PLOT_ROWS)
+        self.assertEqual(sampled.iloc[0]["x"], 0)
+        self.assertEqual(sampled.iloc[-1]["x"], row_count - 1)
+        self.assertTrue(sampled["x"].is_monotonic_increasing)
 
     def test_scatter_can_force_svg_and_apply_marker_size_in_pixels(self):
         row_count = 1200

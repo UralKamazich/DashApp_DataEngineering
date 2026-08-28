@@ -27,13 +27,37 @@ from dash_app import app
 # =========================
 # Layout
 # =========================
-from layout import CORRELATION_WORKSPACE, GRAPH_WORKSPACE, MULTIVARIATE_WORKSPACE, create_layout
+from layout import (
+    CORRELATION_WORKSPACE,
+    GRAPH_WORKSPACE,
+    MULTI_Y_WORKSPACE,
+    MULTIVARIATE_WORKSPACE,
+    create_layout,
+)
 app.layout = create_layout()
 GRAPH_WORKSPACE.register_callbacks(app)
+MULTI_Y_WORKSPACE.register_callbacks(app)
 CORRELATION_WORKSPACE.register_callbacks(app)
 MULTIVARIATE_WORKSPACE.register_callbacks(app)
 
 # =========================
 # Регистрация callbacks
 # =========================
-from callbacks import modals, file_handling, filters, pipeline, data_engineering, clustering, ml, ml_random_forest, dropdowns, graph, download, columns_sidebar, dataset_panel, datasets, multivariate
+from callbacks import (
+    clustering,
+    columns_sidebar,
+    data_engineering,
+    dataset_panel,
+    datasets,
+    download,
+    dropdowns,
+    file_handling,
+    filters,
+    graph,
+    ml,
+    ml_neural_networks,
+    ml_random_forest,
+    modals,
+    multivariate,
+    pipeline,
+)

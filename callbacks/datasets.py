@@ -36,6 +36,8 @@ def initialize_dataset_registry(stored_json, meta, source_name):
         source_meta = meta_from_df(read_df_from_store(stored_json, meta))
     except Exception:
         source_meta = meta or {}
+    if isinstance(meta, dict) and meta.get("import"):
+        source_meta["import"] = dict(meta["import"])
     registry = create_source_registry(stored_json, source_meta, source_name)
     return registry, SOURCE_DATASET_ID, stored_json
 
@@ -71,6 +73,7 @@ def render_dataset_controls(registry, active_id, graph_options, de_options):
         ml_operations = {
             "catboost_regression", "catboost_classification",
             "random_forest_regression", "random_forest_classification",
+            "neural_network_regression", "neural_network_classification",
         }
         if any(
             ((step or {}).get("type") or (step or {}).get("operation"))

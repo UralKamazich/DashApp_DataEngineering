@@ -1,4 +1,4 @@
-/** Drop local Excel/PKL files onto the dataset panel, its tab or file button. */
+/** Drop local Excel/CSV/TXT/TSV/ZIP/PKL files onto the dataset input targets. */
 (function () {
   "use strict";
 
@@ -54,7 +54,7 @@
 
     const files = Array.from(event.dataTransfer.files || []);
     const file = files.find(function (candidate) {
-      return /\.(xlsx|pkl)$/i.test(candidate.name || "");
+      return /\.(xlsx|csv|txt|tsv|zip|pkl)$/i.test(candidate.name || "");
     }) || files[0];
     const filePath = file?.path || "";
 

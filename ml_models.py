@@ -11,6 +11,10 @@ from random_forest_engine import (
     run_random_forest_classification,
     run_random_forest_regression,
 )
+from neural_network_engine import (
+    run_neural_network_classification,
+    run_neural_network_regression,
+)
 
 
 @dataclass(frozen=True)
@@ -80,9 +84,13 @@ MODEL_ADAPTERS = {
             title="Нейросети",
             family="Глубокое обучение",
             tasks=("regression", "classification"),
-            status="planned",
-            description="Отдельный контур подготовки, обучения и контроля переобучения.",
+            status="ready",
+            description="Табличный MLP с масштабированием, early stopping и контролем переобучения.",
         ),
+        runners={
+            "regression": run_neural_network_regression,
+            "classification": run_neural_network_classification,
+        },
     ),
 }
 

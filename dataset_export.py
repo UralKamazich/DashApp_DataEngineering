@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import re
 import tempfile
+from urllib.parse import urlparse
 
 import pandas as pd
 import joblib
@@ -60,15 +61,25 @@ def _available_path(path):
         index += 1
 
 
-def export_frame_to_excel(frame, *, source_path, source_name=None,
-                          dataset_name=None, created_at=None):
-    if frame is None or frame.empty:
-        raise ValueError("Dataset пустой — выгружать нечего.")
+def source_directory(source_path):
+    """Return the export folder; online inputs use the user's Downloads."""
+    parsed = urlparse(str(source_path or ""))
+    if parsed.scheme.lower() in {"http", "https"}:
+        downloads = Path.home() / "Downloads"
+        return downloads if downloads.is_dir() else Path.home()
     if not source_path:
         raise ValueError("Неизвестна директория исходного файла. Выберите файл заново.")
     directory = Path(source_path).expanduser().resolve().parent
     if not directory.is_dir():
         raise ValueError("Директория исходного файла недоступна.")
+    return directory
+
+
+def export_frame_to_excel(frame, *, source_path, source_name=None,
+                          dataset_name=None, created_at=None):
+    if frame is None or frame.empty:
+        raise ValueError("Dataset пустой — выгружать нечего.")
+    directory = source_directory(source_path)
     if len(frame.index) > 1_048_576 or len(frame.columns) > 16_384:
         raise ValueError("Dataset превышает ограничение одного листа Excel.")
     target = _available_path(directory / dataset_export_name(
@@ -99,11 +110,7 @@ def export_sklearn_model(model, *, source_path, source_name=None,
     """Atomically save a fitted scikit-learn pipeline as a joblib artifact."""
     if model is None:
         raise ValueError("Обученная модель недоступна.")
-    if not source_path:
-        raise ValueError("Неизвестна директория исходного файла. Выберите файл заново.")
-    directory = Path(source_path).expanduser().resolve().parent
-    if not directory.is_dir():
-        raise ValueError("Директория исходного файла недоступна.")
+    directory = source_directory(source_path)
     target = _available_path(directory / model_export_name(
         source_path, source_name, experiment_name, created_at, extension=".joblib"
     ))
@@ -127,11 +134,7 @@ def export_catboost_model(model, *, source_path, source_name=None,
     """Atomically save a native CatBoost artifact next to the source dataset."""
     if model is None:
         raise ValueError("Обученная модель недоступна.")
-    if not source_path:
-        raise ValueError("Неизвестна директория исходного файла. Выберите файл заново.")
-    directory = Path(source_path).expanduser().resolve().parent
-    if not directory.is_dir():
-        raise ValueError("Директория исходного файла недоступна.")
+    directory = source_directory(source_path)
     target = _available_path(directory / model_export_name(
         source_path, source_name, experiment_name, created_at
     ))

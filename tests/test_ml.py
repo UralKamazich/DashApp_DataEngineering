@@ -170,7 +170,7 @@ class CatBoostRegressionTests(unittest.TestCase):
             ("regression", "classification"),
         )
         self.assertTrue(MODEL_ADAPTERS["random-forest"].available)
-        self.assertFalse(MODEL_ADAPTERS["neural-networks"].available)
+        self.assertTrue(MODEL_ADAPTERS["neural-networks"].available)
 
 
 class CatBoostClassificationTests(unittest.TestCase):

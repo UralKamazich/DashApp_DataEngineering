@@ -8,8 +8,10 @@ Header + Footer общие на всех страницах.
 import dash
 from dash import dcc, html
 import dash_mantine_components as dmc
+from dash_iconify import DashIconify
 
 from config import APP_NAME, STYLE_CARD
+from data_import import POPULAR_DATASETS
 from correlation_workspace import CorrelationWorkspace
 from data_engineering_workspace import create_data_engineering_workspace
 from clustering_workspace import create_clustering_workspace
@@ -18,6 +20,7 @@ from dataset_panel import create_dataset_drawer
 from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
 from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
+from multi_axis_workspace import MultiYAxisWorkspace
 from components import (
     dropdown_style, graph_render_mode, graph_dataset_select,
     dropdown_x, dropdown_y, dropdown_z,
@@ -41,6 +44,7 @@ from components import (
 # Навигационные ссылки
 NAV_LINKS = [
     {"label": "График", "href": "/"},
+    {"label": "Multi‑Y", "href": "/multi-y"},
     {"label": "Корреляционный анализ", "href": "/correlation"},
     {"label": "Data Engineering", "href": "/data-engineering"},
     {"label": "Кластеризация", "href": "/clustering"},
@@ -116,9 +120,12 @@ MULTIVARIATE_WORKSPACE = GraphWorkspace(
     include_color_controls=False,
 )
 
+MULTI_Y_WORKSPACE = MultiYAxisWorkspace(graph_id="multi-y-graph")
+
 
 def create_layout():
     graph_workspace = GRAPH_WORKSPACE.render()
+    multi_y_workspace = MULTI_Y_WORKSPACE.render()
     multivariate_workspace = MULTIVARIATE_WORKSPACE.render()
     # Мультиграфик занимает место бывшей корреляционной матрицы:
     # тип «Коррелограмма» строит её по тем же «коррелируемым каналам».
@@ -173,13 +180,97 @@ def create_layout():
                         dmc.Text(APP_NAME, fw=700, size="lg", c="white", style={"letterSpacing": "0.5px"}),
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         dmc.Button(
-                            "Выбрать файл (.xlsx, .pkl)",
+                            "Выбрать файл",
                             id="pick-file-btn",
                             className="dataset-file-picker dataset-file-drop-target",
                             size="xs",
                             variant="outline",
                             color="gray",
+                            attributes={"title": "Excel, CSV, TXT, TSV, ZIP или Pickle"},
+                            leftSection=DashIconify(icon="tabler:file-upload", width=15),
                             style={"borderColor": "rgba(255,255,255,0.3)", "color": "#ccc"}
+                        ),
+                        dmc.Menu(
+                            id="online-dataset-menu",
+                            trigger="click",
+                            position="bottom-start",
+                            width=390,
+                            shadow="md",
+                            closeOnItemClick=True,
+                            withinPortal=True,
+                            zIndex=1200,
+                            children=[
+                                dmc.MenuTarget(
+                                    dmc.Button(
+                                        "Из интернета",
+                                        id="online-dataset-open",
+                                        size="xs",
+                                        variant="subtle",
+                                        color="gray",
+                                        leftSection=DashIconify(
+                                            icon="tabler:world-download", width=15
+                                        ),
+                                        style={"color": "#ccc"},
+                                    )
+                                ),
+                                dmc.MenuDropdown(
+                                    p="sm",
+                                    children=[
+                                        dmc.Text("Готовые datasets", size="xs", fw=700),
+                                        dmc.Select(
+                                            id="online-dataset-catalog",
+                                            data=[
+                                                {
+                                                    "label": item["label"],
+                                                    "value": item["value"],
+                                                }
+                                                for item in POPULAR_DATASETS
+                                            ],
+                                            value=POPULAR_DATASETS[0]["value"],
+                                            size="xs",
+                                            searchable=True,
+                                            allowDeselect=False,
+                                            mt=5,
+                                        ),
+                                        dmc.Text(
+                                            POPULAR_DATASETS[0]["description"],
+                                            id="online-dataset-description",
+                                            size="10px",
+                                            c="dimmed",
+                                            mt=4,
+                                            lh=1.25,
+                                        ),
+                                        dmc.Divider(
+                                            label="или прямая ссылка",
+                                            labelPosition="center",
+                                            my="xs",
+                                        ),
+                                        dmc.TextInput(
+                                            id="online-dataset-url",
+                                            placeholder="https://…/dataset.csv или .zip",
+                                            size="xs",
+                                            leftSection=DashIconify(
+                                                icon="tabler:link", width=14
+                                            ),
+                                        ),
+                                        dmc.Text(
+                                            "CSV, TXT, TSV или ZIP · ссылка имеет приоритет над каталогом",
+                                            size="9px",
+                                            c="dimmed",
+                                            mt=3,
+                                        ),
+                                        dmc.MenuItem(
+                                            "Загрузить dataset",
+                                            id="online-dataset-load",
+                                            color="blue",
+                                            mt="xs",
+                                            leftSection=DashIconify(
+                                                icon="tabler:download", width=15
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            ],
                         ),
                         dmc.Divider(orientation="vertical", style={"borderColor": "rgba(255,255,255,0.2)"}),
                         *[make_nav_link(item["label"], item["href"]) for item in NAV_LINKS],
@@ -227,6 +318,10 @@ def create_layout():
                     children=[
                     html.Div(id="page-graph", children=[
                         graph_workspace,
+                    ]),
+
+                    html.Div(id="page-multi-y", style={"display": "none"}, children=[
+                        multi_y_workspace,
                     ]),
 
                     html.Div(id="page-correlation", style={"display": "none"}, children=[
