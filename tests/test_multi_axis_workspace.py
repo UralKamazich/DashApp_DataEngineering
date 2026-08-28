@@ -12,6 +12,7 @@ from multi_axis_workspace import (
     _FRAME_CACHE_MAX_ENTRIES,
     _frame_for_payload,
     _sync_state_for_input,
+    empty_multi_axis_state,
 )
 
 
@@ -78,14 +79,16 @@ class MultiYAxisWorkspaceTests(unittest.TestCase):
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_y"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_side"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_series"], component_ids)
+        self.assertIn(MULTI_Y_WORKSPACE.ids["show_legend"], component_ids)
 
-    def test_individual_x_is_enabled_and_settings_stay_in_fullscreen_host(self):
+    def test_legend_is_enabled_in_a_new_workspace_state(self):
+        self.assertTrue(empty_multi_axis_state()["show_legend"])
+
+    def test_series_card_keeps_only_scale_as_advanced_axis_control(self):
         card = MULTI_Y_WORKSPACE._series_card(
             {
                 "id": "series-1",
                 "y": "pressure",
-                "x": "depth",
-                "x_mode": "individual",
                 "type": "line",
                 "color": "#228be6",
                 "axis_id": "axis-1",
@@ -98,15 +101,124 @@ class MultiYAxisWorkspaceTests(unittest.TestCase):
                 "autorange": True,
                 "visible": True,
             },
-            [{"label": "depth", "value": "depth"}],
             [{"label": "pressure", "value": "pressure"}],
         )
-        own_x = component_by_id(
+        pattern_ids = {
+            item_id.get("type")
+            for item in walk_components(card)
+            if isinstance((item_id := getattr(item, "id", None)), dict)
+        }
+        self.assertNotIn("x", MULTI_Y_WORKSPACE.pattern_types)
+        self.assertNotIn("x-mode", MULTI_Y_WORKSPACE.pattern_types)
+        self.assertNotIn(f"{MULTI_Y_WORKSPACE.graph_id}-series-x", pattern_ids)
+        self.assertNotIn(f"{MULTI_Y_WORKSPACE.graph_id}-series-x-mode", pattern_ids)
+        removed_axis_controls = {
+            "axis-title", "axis-autorange", "range-min", "range-max", "axis-visible"
+        }
+        self.assertTrue(removed_axis_controls.isdisjoint(MULTI_Y_WORKSPACE.pattern_types))
+        self.assertTrue(all(
+            f"{MULTI_Y_WORKSPACE.graph_id}-series-{key}" not in pattern_ids
+            for key in removed_axis_controls
+        ))
+        name_control = component_by_id(
             card,
-            MULTI_Y_WORKSPACE.pattern_id("x", "series-1"),
+            MULTI_Y_WORKSPACE.pattern_id("name", "series-1"),
         )
-        self.assertFalse(own_x.disabled)
-        self.assertFalse(own_x.comboboxProps["withinPortal"])
+        scale_control = component_by_id(
+            card,
+            MULTI_Y_WORKSPACE.pattern_id("axis-scale", "series-1"),
+        )
+        smooth_control = component_by_id(
+            card,
+            MULTI_Y_WORKSPACE.pattern_id("smooth", "series-1"),
+        )
+        self.assertEqual(name_control.label, "Подпись оси")
+        self.assertEqual(
+            {item["value"] for item in scale_control.data},
+            {"linear", "log"},
+        )
+        self.assertFalse(smooth_control.checked)
+        self.assertFalse(smooth_control.disabled)
+
+    def test_common_settings_are_collapsible_under_the_modebar_gear(self):
+        tree = MULTI_Y_WORKSPACE.render()
+        workspace = component_by_id(tree, MULTI_Y_WORKSPACE.workspace_id)
+        settings = component_by_id(tree, MULTI_Y_WORKSPACE.ids["settings"])
+        common_details = next(
+            item
+            for item in walk_components(settings)
+            if "multi-axis-common-details" in (
+                getattr(item, "className", "") or ""
+            ).split()
+        )
+        detail_ids = {
+            getattr(item, "id", None)
+            for item in walk_components(common_details)
+            if isinstance(getattr(item, "id", None), str)
+        }
+        self.assertTrue({
+            MULTI_Y_WORKSPACE.ids["dataset"],
+            MULTI_Y_WORKSPACE.ids["theme"],
+            MULTI_Y_WORKSPACE.ids["render_mode"],
+            MULTI_Y_WORKSPACE.ids["height"],
+            MULTI_Y_WORKSPACE.ids["width"],
+        }.issubset(detail_ids))
+        settings_classes = {
+            getattr(item, "className", "")
+            for item in walk_components(settings)
+        }
+        self.assertFalse(any(
+            "graph-settings-common" in (class_name or "").split()
+            for class_name in settings_classes
+        ))
+        workspace_props = workspace.to_plotly_json()["props"]
+        self.assertEqual(workspace_props["data-common-settings-in-specific"], "true")
+        self.assertNotIn("data-action-change-colors", workspace_props)
+
+    def test_state_sync_removes_legacy_per_series_x_and_axis_ui_state(self):
+        legacy = {
+            "dataset_id": "source",
+            "scope": "filtered",
+            "data_ref": "base-ref",
+            "shared_x": "time",
+            "series": [{
+                "id": "old-series",
+                "y": "pressure",
+                "x": "measured_depth",
+                "x_mode": "individual",
+                "line_shape": "spline",
+            }],
+            "axes": [{
+                "id": "axis-old-series",
+                "title": "Старая подпись",
+                "range": [1, 2],
+                "min": 1,
+                "max": 2,
+                "autorange": False,
+                "range_auto": False,
+                "visible": False,
+                "type": "log",
+                "side": "right",
+            }],
+        }
+        synced = _sync_state_for_input(
+            legacy,
+            "source",
+            "filtered",
+            {"dataset_id": "source", "data_ref": "base-ref"},
+        )
+
+        self.assertEqual(synced["shared_x"], "time")
+        self.assertNotIn("x", synced["series"][0])
+        self.assertNotIn("x_mode", synced["series"][0])
+        self.assertNotIn("line_shape", synced["series"][0])
+        self.assertTrue(synced["series"][0]["smooth"])
+        self.assertEqual(synced["axes"][0]["type"], "log")
+        self.assertEqual(synced["axes"][0]["side"], "right")
+        for removed in (
+            "title", "range", "min", "max", "autorange", "range_auto", "visible"
+        ):
+            self.assertNotIn(removed, synced["axes"][0])
 
     def test_instances_own_namespaced_state_and_callbacks(self):
         first = MultiYAxisWorkspace(graph_id="multi-a")

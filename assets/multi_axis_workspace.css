@@ -295,9 +295,9 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
-    gap: 7px;
-    margin-bottom: 8px;
-    padding: 8px;
+    gap: 2px 4px;
+    margin-bottom: 3px;
+    padding: 1px 5px 3px;
     background: #fff;
     border: 1px solid #e2e6ed;
     border-radius: 9px;
@@ -314,27 +314,74 @@
 }
 
 .multi-axis-manager-intro {
-    margin-bottom: 7px;
+    min-width: 0;
     color: #667085;
-    font-size: 10px;
+    font-size: 8.5px;
     line-height: 1.25;
+}
+
+.multi-axis-manager-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+
+.multi-axis-legend-switch {
+    flex: 0 0 auto;
+}
+
+.multi-axis-common-details {
+    margin-bottom: 3px;
+    padding: 3px 6px;
+    background: #f9fafc;
+    border: 1px solid #e2e6ed;
+    border-radius: 7px;
+}
+
+.multi-axis-common-details > summary {
+    color: #667085;
+    cursor: pointer;
+    font-size: 9px;
+    font-weight: 650;
+    user-select: none;
+}
+
+.multi-axis-common-details-body {
+    margin-top: 4px;
+}
+
+.multi-axis-common-details-body .multi-axis-settings-grid:last-child {
+    margin-bottom: 0;
 }
 
 .multi-axis-add-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
-    gap: 6px 7px;
-    margin-bottom: 8px;
-    padding: 8px;
+    gap: 1px 4px;
+    margin-bottom: 3px;
+    padding: 1px 4px 3px;
     background: #fff;
     border: 1px solid #dfe4ec;
-    border-radius: 10px;
+    border-radius: 7px;
 }
 
 .multi-axis-series-cards {
     display: grid;
-    gap: 8px;
+    gap: 3px;
+}
+
+.multi-axis-settings-popover.graph-settings-popover--specific .multi-axis-series-manager {
+    flex: 0 1 auto;
+    max-height: min(680px, calc(100vh - 108px));
+    max-height: min(680px, calc(100dvh - 108px));
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 
 .multi-axis-series-empty {
@@ -355,10 +402,10 @@
 }
 
 .multi-axis-series-card {
-    padding: 8px;
+    padding: 4px;
     background: #fff;
     border: 1px solid #dfe4ec;
-    border-radius: 10px;
+    border-radius: 7px;
     box-shadow: 0 3px 12px rgba(40, 55, 90, .045);
     transition: border-color 140ms, box-shadow 140ms;
 }
@@ -372,14 +419,14 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 7px;
-    margin-bottom: 7px;
+    gap: 4px;
+    margin-bottom: 2px;
 }
 
 .multi-axis-card-color {
-    width: 8px;
-    height: 26px;
-    flex: 0 0 8px;
+    width: 4px;
+    height: 18px;
+    flex: 0 0 4px;
     border-radius: 4px;
 }
 
@@ -398,19 +445,24 @@
 
 .multi-axis-card-heading strong {
     color: #344054;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .multi-axis-card-heading small {
     color: #98a2b3;
-    font-size: 9px;
+    font-size: 8px;
+}
+
+.multi-axis-card-side {
+    width: 108px;
+    flex: 0 0 108px;
 }
 
 .multi-axis-series-delete {
     display: grid;
-    width: 23px;
-    height: 23px;
-    flex: 0 0 23px;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
     place-items: center;
     padding: 0;
     color: #98a2b3;
@@ -418,7 +470,7 @@
     border: 0;
     border-radius: 6px;
     cursor: pointer;
-    font: 500 18px/1 Arial, sans-serif;
+    font: 500 15px/1 Arial, sans-serif;
 }
 
 .multi-axis-series-delete:hover {
@@ -430,7 +482,11 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
-    gap: 6px 7px;
+    gap: 2px 3px;
+}
+
+.multi-axis-series-card > .multi-axis-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .multi-axis-card-span-2 {
@@ -438,44 +494,58 @@
 }
 
 .multi-axis-settings-popover .mantine-InputWrapper-label {
-    margin-bottom: 2px;
-    font-size: 10px;
+    margin-bottom: 0;
+    min-height: 0;
+    padding: 0;
+    font-size: 8px;
+    line-height: 1;
 }
 
 .multi-axis-settings-popover .mantine-Input-input {
-    min-height: 27px;
-    height: 27px;
-    font-size: 10px;
+    min-height: 22px;
+    height: 22px;
+    font-size: 8.5px;
 }
 
 .multi-axis-settings-popover .mantine-SegmentedControl-label {
-    padding: 4px 6px;
+    padding: 1px 3px;
+    font-size: 8px;
+}
+
+.multi-axis-add-controls .mantine-Button-root {
+    align-self: end;
+    min-height: 22px;
+    height: 22px;
+    padding-block: 0;
     font-size: 9px;
+    line-height: 1;
 }
 
 .multi-axis-axis-details {
-    margin-top: 7px;
-    padding-top: 6px;
+    margin-top: 2px;
+    padding-top: 2px;
     border-top: 1px dashed #e2e6ed;
 }
 
 .multi-axis-axis-details summary {
     color: #667085;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 8.5px;
     font-weight: 650;
     user-select: none;
 }
 
-.multi-axis-axis-grid {
-    margin-top: 7px;
+.multi-axis-scale-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    margin-top: 3px;
 }
 
-.multi-axis-switch-field {
-    display: flex;
-    min-height: 27px;
-    align-items: center;
-    padding-bottom: 2px;
+.multi-axis-smooth-switch .mantine-Switch-label {
+    padding-inline-start: 4px;
+    font-size: 8.5px;
 }
 
 .multi-axis-settings-footer {
@@ -499,5 +569,16 @@
 
     .multi-axis-series-chips {
         max-width: 48%;
+    }
+}
+
+@container graph-settings (max-width: 380px) {
+    .multi-axis-series-card > .multi-axis-card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .multi-axis-card-side {
+        width: 92px;
+        flex-basis: 92px;
     }
 }

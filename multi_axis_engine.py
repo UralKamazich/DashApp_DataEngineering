@@ -20,7 +20,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
-STATE_VERSION = 1
+STATE_VERSION = 2
 # ``go.Scatter`` is SVG-based. This is a total budget across all visible
 # series, not a per-series allowance that grows dangerously with every axis.
 DEFAULT_MAX_VISUAL_POINTS = 20_000
@@ -98,6 +98,18 @@ def _finite_float(value: Any, default: float, minimum: float, maximum: float) ->
     if not math.isfinite(result):
         return default
     return min(maximum, max(minimum, result))
+
+
+def _boolean(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return bool(value)
 
 
 def _next_id(prefix: str, used: set[str]) -> str:
@@ -278,15 +290,10 @@ def normalize_multi_axis_state(
         if raw.get("side") and not nested_axis_inputs.get(axis_id, {}).get("side"):
             nested_axis_inputs.setdefault(axis_id, {})["side"] = raw["side"]
 
-        x_mode = str(raw.get("x_mode") or ("individual" if raw.get("x") is not None else "shared"))
-        x_mode = "individual" if x_mode.lower() in {"individual", "own", "series"} else "shared"
-        own_x = _column(raw.get("x")) if x_mode == "individual" else None
         color = str(raw.get("color") or DEFAULT_COLORS[ordinal % len(DEFAULT_COLORS)])
         normalized = {
             "id": series_id,
             "y": y_column,
-            "x_mode": x_mode,
-            "x": own_x,
             "type": _series_type(raw.get("type", raw.get("chart_type"))),
             "name": str(raw.get("name") or y_column),
             "color": color,
@@ -294,6 +301,9 @@ def normalize_multi_axis_state(
             "visible": bool(raw.get("visible", True)),
             "line_width": _finite_float(raw.get("line_width"), 2.0, 0.25, 20.0),
             "line_dash": str(raw.get("line_dash") or "solid"),
+            "smooth": _boolean(
+                raw.get("smooth", str(raw.get("line_shape") or "").lower() == "spline")
+            ),
             "marker_size": _finite_float(raw.get("marker_size"), 7.0, 1.0, 100.0),
             "opacity": _finite_float(raw.get("opacity"), 1.0, 0.05, 1.0),
             "fill_opacity": _finite_float(raw.get("fill_opacity"), 0.22, 0.02, 1.0),
@@ -302,8 +312,7 @@ def normalize_multi_axis_state(
                 True
                 if available is None
                 else y_column in available
-                and (x_mode != "individual" or own_x is None or own_x in available)
-                and (x_mode != "shared" or shared_x is None or shared_x in available)
+                and (shared_x is None or shared_x in available)
             ),
         }
         normalized_series.append(normalized)
@@ -380,12 +389,6 @@ def normalize_multi_axis_state(
     return normalized_state
 
 
-def _effective_x(series: Mapping[str, Any], shared_x: Any | None) -> Any | None:
-    if series.get("x_mode") == "individual" and series.get("x") is not None:
-        return series.get("x")
-    return shared_x
-
-
 def required_columns(state: Mapping[str, Any] | None, *, visible_only: bool = True) -> list[Any]:
     """Return de-duplicated source columns required to draw ``state``."""
     normalized = normalize_multi_axis_state(state)
@@ -393,7 +396,7 @@ def required_columns(state: Mapping[str, Any] | None, *, visible_only: bool = Tr
     for series in normalized["series"]:
         if visible_only and not series["visible"]:
             continue
-        for column in (_effective_x(series, normalized["shared_x"]), series["y"]):
+        for column in (normalized["shared_x"], series["y"]):
             if column is not None and column not in result:
                 result.append(column)
     return result
@@ -412,7 +415,6 @@ def multi_axis_uirevision(state: Mapping[str, Any] | None) -> str:
         "series": [
             {
                 "id": series["id"],
-                "x": _effective_x(series, normalized["shared_x"]),
                 "y": series["y"],
                 "axis": series["axis_id"],
             }
@@ -481,8 +483,10 @@ def _trace_for_series(
     }
     if chart_type == "step":
         line["shape"] = series["step_shape"] if series["step_shape"] in {
-            "hv", "vh", "hvh", "vhv", "linear", "spline",
+            "hv", "vh", "hvh", "vhv", "linear",
         } else "hv"
+    elif chart_type in {"line", "line+markers", "area"} and series["smooth"]:
+        line.update(shape="spline", smoothing=0.7)
     kwargs: dict[str, Any] = {
         "x": x,
         "y": y,
@@ -497,7 +501,10 @@ def _trace_for_series(
     }
     if chart_type == "area":
         kwargs.update(fill="tozeroy", fillcolor=_rgba(series["color"], series["fill_opacity"]))
-    trace_class = go.Scatter if render_mode == "svg" else go.Scattergl
+    needs_svg_spline = (
+        chart_type in {"line", "line+markers", "area"} and series["smooth"]
+    )
+    trace_class = go.Scatter if render_mode == "svg" or needs_svg_spline else go.Scattergl
     return trace_class(**kwargs)
 
 
@@ -534,7 +541,7 @@ def build_multi_axis_figure(
     for series in normalized["series"]:
         if not series["visible"]:
             continue
-        x_column = _effective_x(series, shared_x)
+        x_column = shared_x
         needed = [series["y"]] + ([x_column] if x_column is not None else [])
         missing = [column for column in needed if column not in columns]
         for column in missing:
@@ -545,7 +552,7 @@ def build_multi_axis_figure(
 
     selected_columns: list[Any] = []
     for series in valid_series:
-        for column in (_effective_x(series, shared_x), series["y"]):
+        for column in (shared_x, series["y"]):
             if column is not None and column not in selected_columns:
                 selected_columns.append(column)
 
@@ -578,7 +585,7 @@ def build_multi_axis_figure(
 
     figure = go.Figure()
     for series in valid_series:
-        x_column = _effective_x(series, shared_x)
+        x_column = shared_x
         x_values = visual[x_column] if x_column is not None else source_positions
         trace_axis, _ = plotly_axis_refs[series["axis_id"]]
         figure.add_trace(_trace_for_series(
@@ -602,8 +609,9 @@ def build_multi_axis_figure(
             axis.get("color") or related_series[0]["color"]
         )
         _, layout_key = plotly_axis_refs[axis_id]
+        axis_title = related_series[0].get("name") or axis.get("title") or "Y"
         axis_config: dict[str, Any] = {
-            "title": {"text": axis["title"], "font": {"color": color}},
+            "title": {"text": axis_title, "font": {"color": color}},
             "tickfont": {"color": color},
             "linecolor": color,
             "tickcolor": color,
@@ -637,15 +645,7 @@ def build_multi_axis_figure(
         axis_config.update(overlaying="y", anchor="free", autoshift=True)
         axis_layout[layout_key] = axis_config
 
-    effective_x = list(dict.fromkeys(
-        _effective_x(series, shared_x) for series in valid_series
-    ))
-    if not effective_x or effective_x == [None]:
-        x_title = "Номер строки"
-    elif len(effective_x) == 1:
-        x_title = str(effective_x[0])
-    else:
-        x_title = "X (индивидуальный)"
+    x_title = str(shared_x) if shared_x is not None else "Номер строки"
 
     left_axes = sum(axis_by_id[axis_id]["side"] == "left" for axis_id in used_axis_ids)
     right_axes = len(used_axis_ids) - left_axes
@@ -656,7 +656,7 @@ def build_multi_axis_figure(
         width=normalized["width"],
         autosize=normalized["width"] is None,
         showlegend=normalized["show_legend"],
-        hovermode="x unified" if len(effective_x) == 1 else "closest",
+        hovermode="x unified",
         uirevision=multi_axis_uirevision(normalized),
         xaxis={"title": {"text": x_title}, "automargin": True},
         # All visible series axes are y2+ and overlay this stable, hidden

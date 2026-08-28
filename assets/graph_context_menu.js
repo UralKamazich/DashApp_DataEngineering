@@ -77,12 +77,26 @@
 
     _menuOrigin = {x: x, y: y};
     const settingsItem = menu.querySelector('[data-action="open-settings"]');
+    const commonSettingsMovedToGear = Boolean(
+      _activeWorkspace &&
+      _activeWorkspace.getAttribute("data-common-settings-in-specific") === "true"
+    );
     if (settingsItem) {
-      settingsItem.hidden = !(_activeWorkspace && _activeWorkspace.getAttribute("data-settings-popup-id"));
+      settingsItem.hidden = commonSettingsMovedToGear || !(
+        _activeWorkspace && _activeWorkspace.getAttribute("data-settings-popup-id")
+      );
     }
     const colorsItem = menu.querySelector('[data-action="change-colors"]');
     if (colorsItem) {
       colorsItem.hidden = !(_activeWorkspace && _activeWorkspace.getAttribute("data-action-change-colors"));
+    }
+    const appearanceGroup = settingsItem && settingsItem.closest(".ctx-group");
+    if (appearanceGroup) {
+      appearanceGroup.hidden = Boolean(settingsItem.hidden && (!colorsItem || colorsItem.hidden));
+      const appearanceSeparator = appearanceGroup.previousElementSibling;
+      if (appearanceSeparator && appearanceSeparator.classList.contains("ctx-sep")) {
+        appearanceSeparator.hidden = appearanceGroup.hidden;
+      }
     }
     menu.style.display = "block";
     _menuVisible = true;

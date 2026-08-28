@@ -35,6 +35,7 @@
       scope: scope || "filtered",
       data_ref: null,
       shared_x: null,
+      show_legend: true,
       series: [],
       axes: []
     };
@@ -112,11 +113,10 @@
     state.series.push({
       id: seriesId,
       y: column,
-      x: null,
-      x_mode: "shared",
       type: "line",
       name: column,
       color: color,
+      smooth: false,
       side: side,
       axis_id: axisId,
       visible: true
@@ -124,12 +124,8 @@
     state.axes.push({
       id: axisId,
       plotly_ref: "y" + refNumber,
-      title: column,
       side: side,
-      type: "linear",
-      autorange: true,
-      range: null,
-      visible: true
+      type: "linear"
     });
     return state;
   }

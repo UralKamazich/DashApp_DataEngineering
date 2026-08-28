@@ -102,6 +102,7 @@ def empty_multi_axis_state(
         # belonged to the previous file without reacting to filter updates.
         "data_ref": data_ref,
         "shared_x": None,
+        "show_legend": True,
         "series": [],
         "axes": [],
     }
@@ -151,6 +152,30 @@ def _sync_state_for_input(current, dataset_id, scope, data_context):
         state["data_ref"] = requested_data_ref
     else:
         state.setdefault("data_ref", None)
+    # Older in-memory states may still contain the former per-series X mode.
+    # Multi-Y now has one shared X channel by definition.
+    for series in state.get("series") or []:
+        if isinstance(series, dict):
+            series.pop("x", None)
+            series.pop("x_mode", None)
+            legacy_line_shape = str(series.pop("line_shape", "") or "").lower()
+            if "smooth" not in series and legacy_line_shape == "spline":
+                series["smooth"] = True
+            if (
+                str(series.get("type") or "line").lower() == "step"
+                and str(series.get("step_shape") or "").lower() == "spline"
+            ):
+                series["step_shape"] = "hv"
+    for axis in state.get("axes") or []:
+        if not isinstance(axis, dict):
+            continue
+        # Manual bounds and independent axis visibility were removed from the
+        # workspace UI. Plotly zoom/reset now owns the visible range, while
+        # the series switch controls the pair as one unit.
+        for legacy_key in (
+            "title", "range", "min", "max", "autorange", "range_auto", "visible"
+        ):
+            axis.pop(legacy_key, None)
     return state
 
 
@@ -224,6 +249,7 @@ class MultiYAxisWorkspace:
             "series_cards": f"{graph_id}-series-cards",
             "series_chips": f"{graph_id}-series-chips",
             "shared_x": f"{graph_id}-shared-x",
+            "show_legend": f"{graph_id}-show-legend",
             "add_y": f"{graph_id}-add-y",
             "add_side": f"{graph_id}-add-side",
             "add_series": f"{graph_id}-add-series",
@@ -239,19 +265,13 @@ class MultiYAxisWorkspace:
             key: f"{graph_id}-series-{key}"
             for key in (
                 "y",
-                "x-mode",
-                "x",
                 "trace-type",
                 "name",
                 "color",
+                "smooth",
                 "side",
                 "visible",
-                "axis-title",
                 "axis-scale",
-                "axis-autorange",
-                "range-min",
-                "range-max",
-                "axis-visible",
                 "delete",
             )
         }
@@ -316,7 +336,7 @@ class MultiYAxisWorkspace:
                                             className="graph-settings-heading graph-settings-heading--common",
                                         ),
                                         html.Div(
-                                            "Серии и оси",
+                                            "Настройки Multi-Y",
                                             className="graph-settings-heading graph-settings-heading--specific",
                                         ),
                                         html.Small(
@@ -339,14 +359,32 @@ class MultiYAxisWorkspace:
                     className="graph-settings-popover-header",
                 ),
                 html.Div(
-                    self._common_settings(),
-                    className="graph-settings-common graph-settings-scroll multi-axis-common-settings",
-                ),
-                html.Div(
                     [
                         html.Div(
-                            "Каждая серия имеет собственные X, стиль и Y-ось.",
-                            className="multi-axis-manager-intro",
+                            [
+                                html.Span(
+                                    "Все серии используют общий X; стиль и Y-ось настраиваются отдельно.",
+                                    className="multi-axis-manager-intro",
+                                ),
+                                dmc.Switch(
+                                    id=self.ids["show_legend"],
+                                    label="Легенда",
+                                    checked=True,
+                                    size="xs",
+                                    className="multi-axis-legend-switch",
+                                ),
+                            ],
+                            className="multi-axis-manager-toolbar",
+                        ),
+                        html.Details(
+                            [
+                                html.Summary("Общие настройки"),
+                                html.Div(
+                                    self._common_settings(),
+                                    className="multi-axis-common-details-body",
+                                ),
+                            ],
+                            className="multi-axis-common-details",
                         ),
                         html.Div(
                             [
@@ -489,17 +527,10 @@ class MultiYAxisWorkspace:
             ),
         ]
 
-    def _series_card(self, series, axis, columns, numeric_columns):
+    def _series_card(self, series, axis, numeric_columns):
         series_id = str(series.get("id"))
-        x_mode = series.get("x_mode") or "shared"
-        if x_mode == "own":
-            x_mode = "individual"
-        axis_range = axis.get("range") if isinstance(axis.get("range"), (list, tuple)) else []
-        range_min = axis_range[0] if len(axis_range) > 0 else None
-        range_max = axis_range[1] if len(axis_range) > 1 else None
         color = series.get("color") or "#228be6"
         visible = series.get("visible", True) is not False
-        autorange = axis.get("autorange", True) is not False
 
         return html.Article(
             [
@@ -519,6 +550,16 @@ class MultiYAxisWorkspace:
                                 ),
                             ],
                             className="multi-axis-card-heading",
+                        ),
+                        dmc.SegmentedControl(
+                            id=self.pattern_id("side", series_id),
+                            value=axis.get("side") or series.get("side") or "left",
+                            data=[
+                                {"label": "Слева", "value": "left"},
+                                {"label": "Справа", "value": "right"},
+                            ],
+                            size="xs",
+                            className="multi-axis-card-side",
                         ),
                         dmc.Switch(
                             id=self.pattern_id("visible", series_id),
@@ -552,32 +593,9 @@ class MultiYAxisWorkspace:
                         ),
                         dmc.TextInput(
                             id=self.pattern_id("name", series_id),
-                            label="Название",
+                            label="Подпись оси",
                             value=series.get("name") or series.get("y") or "",
                             size="xs",
-                        ),
-                        dmc.SegmentedControl(
-                            id=self.pattern_id("x-mode", series_id),
-                            value=x_mode,
-                            data=[
-                                {"label": "Общий X", "value": "shared"},
-                                {"label": "Свой X", "value": "individual"},
-                            ],
-                            size="xs",
-                            fullWidth=True,
-                            className="multi-axis-card-span-2",
-                        ),
-                        dmc.Select(
-                            id=self.pattern_id("x", series_id),
-                            label="Индивидуальный X",
-                            data=columns,
-                            value=series.get("x"),
-                            searchable=True,
-                            clearable=True,
-                            disabled=x_mode != "individual",
-                            size="xs",
-                            className="multi-axis-card-span-2",
-                            comboboxProps={"shadow": "md", "withinPortal": False, "zIndex": 10060},
                         ),
                         dmc.Select(
                             id=self.pattern_id("trace-type", series_id),
@@ -590,80 +608,43 @@ class MultiYAxisWorkspace:
                         ),
                         dmc.ColorInput(
                             id=self.pattern_id("color", series_id),
-                            label="Цвет серии и оси",
+                            label="Цвет",
                             value=color,
                             format="hex",
                             size="xs",
                             popoverProps={"withinPortal": False, "zIndex": 10060},
-                        ),
-                        dmc.SegmentedControl(
-                            id=self.pattern_id("side", series_id),
-                            value=axis.get("side") or series.get("side") or "left",
-                            data=[
-                                {"label": "Слева", "value": "left"},
-                                {"label": "Справа", "value": "right"},
-                            ],
-                            size="xs",
-                            fullWidth=True,
-                            className="multi-axis-card-span-2",
                         ),
                     ],
                     className="multi-axis-card-grid",
                 ),
                 html.Details(
                     [
-                        html.Summary("Шкала и диапазон"),
+                        html.Summary("Шкала и линия"),
                         html.Div(
                             [
-                                dmc.TextInput(
-                                    id=self.pattern_id("axis-title", series_id),
-                                    label="Подпись оси",
-                                    value=axis.get("title") or series.get("name") or series.get("y") or "",
-                                    size="xs",
-                                    className="multi-axis-card-span-2",
-                                ),
-                                dmc.Select(
+                                dmc.SegmentedControl(
                                     id=self.pattern_id("axis-scale", series_id),
-                                    label="Шкала",
+                                    value=axis.get("type") or "linear",
                                     data=[
                                         {"label": "Линейная", "value": "linear"},
-                                        {"label": "Логарифмическая", "value": "log"},
+                                        {"label": "Логарифм.", "value": "log"},
                                     ],
-                                    value=axis.get("type") or "linear",
-                                    allowDeselect=False,
                                     size="xs",
-                                    comboboxProps={"shadow": "md", "withinPortal": False, "zIndex": 10060},
+                                    fullWidth=True,
+                                    className="multi-axis-scale-control",
                                 ),
                                 dmc.Switch(
-                                    id=self.pattern_id("axis-visible", series_id),
-                                    label="Показывать ось",
-                                    checked=axis.get("visible", True) is not False,
+                                    id=self.pattern_id("smooth", series_id),
+                                    label="Сглаживание",
+                                    checked=bool(series.get("smooth", False)),
+                                    disabled=(series.get("type") or "line") not in {
+                                        "line", "line+markers", "area"
+                                    },
                                     size="xs",
-                                    className="multi-axis-switch-field",
-                                ),
-                                dmc.Switch(
-                                    id=self.pattern_id("axis-autorange", series_id),
-                                    label="Автодиапазон",
-                                    checked=autorange,
-                                    size="xs",
-                                    className="multi-axis-switch-field multi-axis-card-span-2",
-                                ),
-                                dmc.NumberInput(
-                                    id=self.pattern_id("range-min", series_id),
-                                    label="Минимум",
-                                    value=range_min,
-                                    disabled=autorange,
-                                    size="xs",
-                                ),
-                                dmc.NumberInput(
-                                    id=self.pattern_id("range-max", series_id),
-                                    label="Максимум",
-                                    value=range_max,
-                                    disabled=autorange,
-                                    size="xs",
+                                    className="multi-axis-smooth-switch",
                                 ),
                             ],
-                            className="multi-axis-card-grid multi-axis-axis-grid",
+                            className="multi-axis-scale-options",
                         ),
                     ],
                     className="multi-axis-axis-details",
@@ -681,9 +662,9 @@ class MultiYAxisWorkspace:
             "data-multi-axis-state-id": self.ids["state"],
             "data-multi-axis-dataset-id": self.ids["dataset"],
             "data-settings-popup-id": self.ids["settings"],
-            "data-settings-button-title": "Настройки серий",
+            "data-settings-button-title": "Настройки Multi-Y",
+            "data-common-settings-in-specific": "true",
             "data-action-open-specific-settings": self.ids["open_settings"],
-            "data-action-change-colors": self.ids["open_settings"],
             "data-action-refresh": self.ids["update"],
             "data-action-download-html": self.ids["download_html"],
             "data-action-copy-png": self.ids["copy_png"],
@@ -858,7 +839,7 @@ class MultiYAxisWorkspace:
     def _register_state_callbacks(self, app):
         input_keys = list(self.pattern_types)
         dependencies = [Input(self.pattern_id(key), "n_clicks" if key == "delete" else (
-            "checked" if key in {"visible", "axis-autorange", "axis-visible"} else "value"
+            "checked" if key in {"visible", "smooth"} else "value"
         )) for key in input_keys]
 
         @app.callback(
@@ -909,61 +890,48 @@ class MultiYAxisWorkspace:
                 series["y"] = value
                 if not old_name or old_name == old_y:
                     series["name"] = value
-                if not axis.get("title") or axis.get("title") == old_y:
-                    axis["title"] = value
-            elif key == "x-mode":
-                series["x_mode"] = value or "shared"
-                if series["x_mode"] == "shared":
-                    series["x"] = None
-            elif key == "x":
-                series["x"] = value
+                axis.pop("title", None)
             elif key == "trace-type":
                 series["type"] = value or "line"
             elif key == "name":
                 series["name"] = value
+                axis.pop("title", None)
             elif key == "color":
                 series["color"] = value
+            elif key == "smooth":
+                series["smooth"] = bool(value)
             elif key == "side":
                 side = value or "left"
                 series["side"] = side
                 axis["side"] = side
             elif key == "visible":
                 series["visible"] = bool(value)
-            elif key == "axis-title":
-                axis["title"] = value
             elif key == "axis-scale":
                 axis["type"] = value or "linear"
-            elif key == "axis-autorange":
-                axis["autorange"] = bool(value)
-                if value:
-                    axis["range"] = None
-            elif key in {"range-min", "range-max"}:
-                current_range = axis.get("range")
-                current_range = list(current_range) if isinstance(current_range, (list, tuple)) else [None, None]
-                current_range[0 if key == "range-min" else 1] = value
-                axis["range"] = current_range
-                if current_range[0] is not None and current_range[1] is not None:
-                    axis["autorange"] = False
-            elif key == "axis-visible":
-                axis["visible"] = bool(value)
 
             return state if state != before else no_update
 
         @app.callback(
             Output(self.ids["state"], "data", allow_duplicate=True),
             Input(self.ids["shared_x"], "value"),
+            Input(self.ids["show_legend"], "checked"),
             State(self.location_id, "pathname"),
             State(self.ids["state"], "data"),
             prevent_initial_call=True,
         )
-        def update_shared_x(value, pathname, current):
+        def update_shared_x_and_legend(value, show_legend, pathname, current):
             if pathname != self.route_path:
                 raise PreventUpdate
             state = deepcopy(current or empty_multi_axis_state())
             normalized_value = value if value not in (None, "") else None
-            if state.get("shared_x") == normalized_value:
+            normalized_legend = show_legend is not False
+            if (
+                state.get("shared_x") == normalized_value
+                and state.get("show_legend", True) == normalized_legend
+            ):
                 raise PreventUpdate
             state["shared_x"] = normalized_value
+            state["show_legend"] = normalized_legend
             return state
 
         @app.callback(
@@ -1001,23 +969,18 @@ class MultiYAxisWorkspace:
             state.setdefault("series", []).append({
                 "id": series_id,
                 "y": y_column,
-                "x": None,
-                "x_mode": "shared",
                 "type": "line",
                 "name": y_column,
                 "color": color,
+                "smooth": False,
                 "side": selected_side,
                 "axis_id": axis_id,
                 "visible": True,
             })
             state.setdefault("axes", []).append({
                 "id": axis_id,
-                "title": y_column,
                 "side": selected_side,
                 "type": "linear",
-                "autorange": True,
-                "range": None,
-                "visible": True,
             })
             return state, None
 
@@ -1026,7 +989,7 @@ class MultiYAxisWorkspace:
             function(state, datasetId, scope) {{
                 var workspace = document.getElementById({self.workspace_id!r});
                 if (!workspace) return window.dash_clientside.no_update;
-                var normalized = state || {{shared_x: null, series: [], axes: []}};
+                var normalized = state || {{shared_x: null, show_legend: true, series: [], axes: []}};
                 workspace.setAttribute('data-multi-axis-state', JSON.stringify(normalized));
                 workspace.setAttribute('data-selected-dataset', datasetId || '');
                 workspace.setAttribute('data-selected-scope', scope || 'filtered');
@@ -1054,6 +1017,7 @@ class MultiYAxisWorkspace:
             Output(self.ids["shared_x"], "data"),
             Output(self.ids["shared_x"], "value"),
             Output(self.ids["add_y"], "data"),
+            Output(self.ids["show_legend"], "checked"),
             Input(self.location_id, "pathname"),
             Input(self.ids["state"], "data"),
             Input(self.ids["dataset"], "value"),
@@ -1061,7 +1025,7 @@ class MultiYAxisWorkspace:
         )
         def render_series_manager(pathname, state, dataset_id, registry):
             if pathname != self.route_path:
-                return (no_update,) * 5
+                return (no_update,) * 6
             state = state or empty_multi_axis_state()
             series_list = state.get("series") or []
             record = get_record(registry, dataset_id) or {}
@@ -1080,7 +1044,7 @@ class MultiYAxisWorkspace:
                     ],
                     className="multi-axis-series-empty",
                 )
-                return cards, [], columns, state.get("shared_x"), numeric
+                return cards, [], columns, state.get("shared_x"), numeric, state.get("show_legend", True)
 
             cards = []
             chips = []
@@ -1089,13 +1053,10 @@ class MultiYAxisWorkspace:
                 axis_id = str(series.get("axis_id") or f"axis-{series.get('id')}")
                 axis = dict(axes_by_id.get(axis_id) or {
                     "id": axis_id,
-                    "title": series.get("name") or series.get("y"),
                     "side": series.get("side") or "left",
                     "type": "linear",
-                    "autorange": True,
-                    "visible": True,
                 })
-                cards.append(self._series_card(series, axis, columns, numeric))
+                cards.append(self._series_card(series, axis, numeric))
                 color = series.get("color") or "#228be6"
                 chips.append(
                     html.Button(
@@ -1112,7 +1073,7 @@ class MultiYAxisWorkspace:
                         **{"data-series-id": str(series.get("id"))},
                     )
                 )
-            return cards, chips, columns, state.get("shared_x"), numeric
+            return cards, chips, columns, state.get("shared_x"), numeric, state.get("show_legend", True)
 
         @app.callback(
             Output(self.graph_id, "figure"),
@@ -1234,6 +1195,7 @@ class MultiYAxisWorkspace:
                     scope: scope || (state && state.scope) || 'filtered',
                     data_ref: (state && state.data_ref) || null,
                     shared_x: null,
+                    show_legend: true,
                     series: [],
                     axes: []
                 };

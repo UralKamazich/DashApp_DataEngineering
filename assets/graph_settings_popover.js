@@ -48,10 +48,16 @@
   function open(workspace, mode, x, y) {
     const popup = popupFor(workspace);
     if (!popup) return false;
+    const resolvedMode = workspace.getAttribute("data-common-settings-in-specific") === "true"
+      ? "specific"
+      : mode;
 
     closeOthers(popup);
     popup.classList.remove(COMMON_CLASS, SPECIFIC_CLASS);
-    popup.classList.add(OPEN_CLASS, mode === "specific" ? SPECIFIC_CLASS : COMMON_CLASS);
+    popup.classList.add(
+      OPEN_CLASS,
+      resolvedMode === "specific" ? SPECIFIC_CLASS : COMMON_CLASS
+    );
     popup.setAttribute("aria-hidden", "false");
     position(popup, x, y);
     return true;

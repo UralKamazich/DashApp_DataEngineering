@@ -244,6 +244,12 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("portal.appendChild(menu)", script)
         self.assertNotIn('menuItem("save-png"', script)
 
+    def test_graph_context_menu_can_hide_instance_specific_groups(self):
+        css_path = Path(__file__).resolve().parents[1] / "assets" / "context_menu.css"
+        css = css_path.read_text(encoding="utf-8")
+        self.assertIn("#graph-ctx-menu [hidden]", css)
+        self.assertIn("display: none !important", css)
+
     def test_graph_modebar_owns_compact_workspace_controls(self):
         script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_modebar.js"
         script = script_path.read_text(encoding="utf-8")

@@ -28,6 +28,7 @@ class MultiAxisStateTests(unittest.TestCase):
         second = normalize_multi_axis_state(first)
 
         self.assertEqual(first, second)
+        self.assertEqual(first["version"], 2)
         self.assertEqual(first["shared_x"], "depth")
         self.assertEqual(
             [series["id"] for series in first["series"]],
@@ -59,7 +60,7 @@ class MultiAxisStateTests(unittest.TestCase):
         self.assertEqual(normalized["series"][2]["id"], "series-2")
         self.assertEqual(normalized["axes"][0]["plotly_ref"], "y8")
 
-    def test_shared_axis_and_individual_x_are_canonicalized(self):
+    def test_legacy_individual_x_is_ignored_in_favor_of_shared_x(self):
         state = {
             "shared_x": "time",
             "axes": [{"id": "common", "side": "right"}],
@@ -79,10 +80,11 @@ class MultiAxisStateTests(unittest.TestCase):
         self.assertEqual(len(normalized["axes"]), 1)
         self.assertEqual(normalized["series"][0]["axis_id"], "common")
         self.assertEqual(normalized["series"][1]["axis_id"], "common")
-        self.assertEqual(normalized["series"][1]["x"], "measured_depth")
+        self.assertNotIn("x", normalized["series"][1])
+        self.assertNotIn("x_mode", normalized["series"][1])
         self.assertEqual(
             required_columns(normalized),
-            ["time", "pressure", "measured_depth", "rate"],
+            ["time", "pressure", "rate"],
         )
 
     def test_available_columns_do_not_destroy_stale_assignments(self):
@@ -120,7 +122,6 @@ class MultiAxisFigureTests(unittest.TestCase):
     def setUp(self):
         self.frame = pd.DataFrame({
             "time": np.arange(12),
-            "own_x": np.arange(12) * 10,
             "line": np.linspace(0, 1, 12),
             "scatter": np.linspace(10, 20, 12),
             "line_markers": np.linspace(20, 30, 12),
@@ -150,6 +151,20 @@ class MultiAxisFigureTests(unittest.TestCase):
         self.assertEqual(traces[4].fill, "tozeroy")
         self.assertEqual(traces[4].fillcolor, "rgba(18,52,86,0.220)")
 
+    def test_every_series_uses_shared_x_even_with_legacy_individual_state(self):
+        frame = self.frame.assign(legacy_x=np.arange(len(self.frame)) * 100)
+        result = build_multi_axis_figure(frame, {
+            "shared_x": "time",
+            "series": [{
+                "y": "line",
+                "x": "legacy_x",
+                "x_mode": "individual",
+            }],
+        })
+
+        self.assertEqual(list(result.figure.data[0].x), list(frame["time"]))
+        self.assertEqual(result.metadata["selected_columns"], ["time", "line"])
+
     def test_render_mode_supports_hybrid_and_forced_svg(self):
         state = {"x": "time", "series": [{"y": "scatter", "type": "scatter"}]}
         hybrid = build_multi_axis_figure(self.frame, state, render_mode="hybrid")
@@ -158,6 +173,87 @@ class MultiAxisFigureTests(unittest.TestCase):
         self.assertEqual(hybrid.figure.data[0].type, "scattergl")
         self.assertEqual(svg.figure.data[0].type, "scatter")
         self.assertEqual(hybrid.metadata["render_mode"], "hybrid")
+
+    def test_legend_visibility_is_owned_by_workspace_state(self):
+        hidden = build_multi_axis_figure(
+            self.frame,
+            {
+                "shared_x": "time",
+                "show_legend": False,
+                "series": [{"y": "line"}, {"y": "scatter"}],
+            },
+        ).figure
+        visible = build_multi_axis_figure(
+            self.frame,
+            {
+                "shared_x": "time",
+                "show_legend": True,
+                "series": [{"y": "line"}, {"y": "scatter"}],
+            },
+        ).figure
+
+        self.assertFalse(hidden.layout.showlegend)
+        self.assertTrue(visible.layout.showlegend)
+
+    def test_series_name_is_the_default_axis_label(self):
+        figure = build_multi_axis_figure(
+            self.frame,
+            {
+                "shared_x": "time",
+                "series": [{
+                    "id": "pressure-series",
+                    "axis_id": "axis-1",
+                    "y": "line",
+                    "name": "Подпись давления",
+                }],
+                "axes": [{
+                    "id": "axis-1",
+                    "title": "Устаревшая отдельная подпись",
+                    "side": "left",
+                    "type": "linear",
+                }],
+            },
+        ).figure
+
+        self.assertEqual(figure.layout.yaxis2.title.text, "Подпись давления")
+
+    def test_line_smoothing_uses_svg_spline_only_for_supported_types(self):
+        result = build_multi_axis_figure(
+            self.frame,
+            {
+                "shared_x": "time",
+                "series": [
+                    {"y": "line", "type": "line", "smooth": True},
+                    {"y": "line_markers", "type": "line+markers", "smooth": True},
+                    {"y": "area", "type": "area", "smooth": True},
+                    {"y": "scatter", "type": "scatter", "smooth": True},
+                    {
+                        "y": "step",
+                        "type": "step",
+                        "smooth": True,
+                        "step_shape": "spline",
+                    },
+                ],
+            },
+        )
+
+        for trace in result.figure.data[:3]:
+            self.assertEqual(trace.type, "scatter")
+            self.assertEqual(trace.line.shape, "spline")
+            self.assertEqual(trace.line.smoothing, 0.7)
+        self.assertEqual(result.figure.data[1].mode, "lines+markers")
+        self.assertEqual(result.figure.data[2].fill, "tozeroy")
+        self.assertEqual(result.figure.data[3].type, "scattergl")
+        self.assertNotEqual(result.figure.data[3].line.shape, "spline")
+        self.assertEqual(result.figure.data[4].type, "scattergl")
+        self.assertEqual(result.figure.data[4].line.shape, "hv")
+
+    def test_string_false_does_not_enable_line_smoothing(self):
+        normalized = normalize_multi_axis_state({
+            "series": [{"y": "line", "smooth": "false"}],
+        })
+
+        self.assertFalse(normalized["series"][0]["smooth"])
 
     def test_figure_dimensions_follow_workspace_paper(self):
         state = {
