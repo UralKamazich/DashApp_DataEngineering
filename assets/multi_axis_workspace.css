@@ -12,6 +12,29 @@
     isolation: isolate;
 }
 
+.multi-axis-axis-hit-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 28;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.multi-axis-axis-hit-zone {
+    position: absolute;
+    min-width: 14px;
+    background: transparent;
+    cursor: ns-resize;
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+}
+
+.multi-axis-workspace.multi-axis-dnd-active .multi-axis-axis-hit-zone,
+.multi-axis-workspace.dnd-active .multi-axis-axis-hit-zone {
+    pointer-events: none;
+}
+
 .multi-axis-drop-layer {
     position: absolute;
     inset: 0;

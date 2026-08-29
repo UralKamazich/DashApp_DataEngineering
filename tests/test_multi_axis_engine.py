@@ -127,6 +127,7 @@ class MultiAxisFigureTests(unittest.TestCase):
             "line_markers": np.linspace(20, 30, 12),
             "step": np.linspace(30, 40, 12),
             "area": np.linspace(40, 50, 12),
+            "box": np.tile([1.0, 2.0, 8.0], 4),
             "unused": ["large payload"] * 12,
         })
 
@@ -173,6 +174,98 @@ class MultiAxisFigureTests(unittest.TestCase):
         self.assertEqual(hybrid.figure.data[0].type, "scattergl")
         self.assertEqual(svg.figure.data[0].type, "scatter")
         self.assertEqual(hybrid.metadata["render_mode"], "hybrid")
+
+    def test_native_box_plot_has_transparent_body_and_requested_points(self):
+        frame = pd.DataFrame({
+            "group": ["A", "A", "A", "B", "B", "B"],
+            "value": [1, 2, 10, 3, 4, 20],
+        })
+        figure = build_multi_axis_figure(frame, {
+            "shared_x": "group",
+            "series": [{
+                "id": "box-a",
+                "y": "value",
+                "type": "box",
+                "box_points": "all",
+                "color": "#228be6",
+            }],
+        }).figure
+
+        trace = figure.data[0]
+        self.assertEqual(trace.type, "box")
+        self.assertEqual(trace.boxpoints, "all")
+        self.assertEqual(trace.fillcolor, "rgba(34,139,230,0.240)")
+        self.assertEqual(trace.line.color, "#228be6")
+        self.assertEqual(trace.yaxis, "y2")
+        self.assertEqual(list(figure.layout.xaxis.ticktext), ["A", "B"])
+
+    def test_native_boxes_on_different_axes_use_separate_horizontal_slots(self):
+        frame = pd.DataFrame({
+            "group": ["A", "A", "B", "B"],
+            "first": [1, 2, 3, 4],
+            "second": [100, 120, 140, 160],
+            "line": [10, 20, 30, 40],
+        })
+        figure = build_multi_axis_figure(frame, {
+            "shared_x": "group",
+            "series": [
+                {"id": "first-box", "y": "first", "type": "box"},
+                {"id": "second-box", "y": "second", "type": "box"},
+                {"id": "ordinary-line", "y": "line", "type": "line"},
+            ],
+        }).figure
+
+        first, second, line = figure.data
+        self.assertEqual([first.type, second.type], ["box", "box"])
+        self.assertNotEqual(first.x[0], second.x[0])
+        self.assertLess(first.x[0], second.x[0])
+        self.assertEqual(first.fillcolor, "rgba(34,139,230,0.240)")
+        self.assertTrue(second.fillcolor.endswith(",0.240)"))
+        self.assertEqual(figure.layout.plot_bgcolor, "rgba(0,0,0,0)")
+        self.assertEqual(line.mode, "lines")
+        self.assertEqual(list(line.y), list(frame["line"]))
+
+    def test_every_axis_gets_a_distinct_position_outside_the_data_domain(self):
+        figure = build_multi_axis_figure(self.frame, {
+            "shared_x": "time",
+            "series": [
+                {"y": "line", "side": "left"},
+                {"y": "scatter", "side": "left"},
+                {"y": "step", "side": "right"},
+                {"y": "area", "side": "right"},
+            ],
+        }).figure
+
+        left_first = figure.layout.yaxis2
+        left_second = figure.layout.yaxis3
+        right_first = figure.layout.yaxis4
+        right_second = figure.layout.yaxis5
+        self.assertEqual(list(figure.layout.xaxis.domain), [0.06, 0.94])
+        self.assertEqual((left_first.position, left_first.shift), (0.06, 0))
+        self.assertEqual((left_second.position, left_second.shift), (0.0, 0))
+        self.assertEqual((right_first.position, right_first.shift), (0.94, 0))
+        self.assertEqual((right_second.position, right_second.shift), (1.0, 0))
+        self.assertEqual(
+            {left_first.anchor, left_second.anchor, right_first.anchor, right_second.anchor},
+            {"free"},
+        )
+        self.assertEqual(left_first.title.standoff, 5)
+        self.assertTrue(figure.layout.xaxis.showline)
+        self.assertEqual(figure.layout.xaxis.ticks, "outside")
+        self.assertEqual(figure.layout.xaxis.ticklen, 5)
+        self.assertFalse(left_first.autoshift)
+        self.assertFalse(right_first.autoshift)
+
+    def test_box_without_shared_x_builds_one_native_distribution(self):
+        figure = build_multi_axis_figure(self.frame, {
+            "series": [{"y": "box", "type": "box", "box_points": "none"}],
+        }).figure
+
+        trace = figure.data[0]
+        self.assertEqual(trace.type, "box")
+        self.assertIsNone(trace.x)
+        self.assertFalse(trace.boxpoints)
+        self.assertEqual(list(trace.y), list(self.frame["box"]))
 
     def test_legend_visibility_is_owned_by_workspace_state(self):
         hidden = build_multi_axis_figure(
@@ -344,8 +437,8 @@ class MultiAxisFigureTests(unittest.TestCase):
         self.assertEqual([trace.yaxis for trace in figure.data], ["y2", "y3", "y4"])
         for axis in (figure.layout.yaxis2, figure.layout.yaxis3, figure.layout.yaxis4):
             self.assertEqual(axis.overlaying, "y")
+            self.assertFalse(axis.autoshift)
             self.assertEqual(axis.anchor, "free")
-            self.assertTrue(axis.autoshift)
         self.assertTrue(figure.layout.yaxis2.showgrid)
         self.assertFalse(figure.layout.yaxis3.showgrid)
         self.assertFalse(figure.layout.yaxis4.showgrid)

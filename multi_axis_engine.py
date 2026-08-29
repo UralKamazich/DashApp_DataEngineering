@@ -25,7 +25,7 @@ STATE_VERSION = 2
 # series, not a per-series allowance that grows dangerously with every axis.
 DEFAULT_MAX_VISUAL_POINTS = 20_000
 
-SERIES_TYPES = ("line", "scatter", "line+markers", "step", "area")
+SERIES_TYPES = ("line", "scatter", "line+markers", "step", "area", "box")
 AXIS_SIDES = ("left", "right")
 
 DEFAULT_COLORS = (
@@ -58,6 +58,20 @@ _TYPE_ALIASES = {
     "ступенчатая": "step",
     "area": "area",
     "область": "area",
+    "box": "box",
+    "boxplot": "box",
+    "box-plot": "box",
+    "ящиксусами": "box",
+}
+
+_BOX_POINT_MODES = {
+    "outliers": "outliers",
+    "suspectedoutliers": "suspectedoutliers",
+    "all": "all",
+    "none": False,
+    "false": False,
+    "off": False,
+    "": False,
 }
 
 
@@ -162,6 +176,14 @@ def _stable_plotly_ref(value: Any, used: set[str], *, axis_id: str) -> str:
 def _series_type(value: Any) -> str:
     key = str(value or "line").strip().lower().replace(" ", "")
     return _TYPE_ALIASES.get(key, "line")
+
+
+def _box_points(value: Any) -> str | bool:
+    if value is False:
+        return False
+    if value is None:
+        return "outliers"
+    return _BOX_POINT_MODES.get(str(value).strip().lower(), "outliers")
 
 
 def _axis_range(axis: Mapping[str, Any]) -> list[float] | None:
@@ -307,6 +329,7 @@ def normalize_multi_axis_state(
             "marker_size": _finite_float(raw.get("marker_size"), 7.0, 1.0, 100.0),
             "opacity": _finite_float(raw.get("opacity"), 1.0, 0.05, 1.0),
             "fill_opacity": _finite_float(raw.get("fill_opacity"), 0.22, 0.02, 1.0),
+            "box_points": _box_points(raw.get("box_points")),
             "step_shape": str(raw.get("step_shape") or "hv"),
             "available": (
                 True
@@ -467,8 +490,38 @@ def _trace_for_series(
     y: Any,
     yaxis: str,
     render_mode: str,
+    x_labels: Any | None = None,
+    box_width: float | None = None,
 ) -> go.BaseTraceType:
     chart_type = series["type"]
+    if chart_type == "box":
+        kwargs: dict[str, Any] = {
+            "y": y,
+            "name": series["name"],
+            "yaxis": yaxis,
+            "boxpoints": series["box_points"],
+            "line": {"color": series["color"], "width": series["line_width"]},
+            "marker": {"color": series["color"], "size": series["marker_size"]},
+            # Keep the standard Plotly box appearance. Visibility between
+            # overlaying Y-axis layers is handled by the transparent plotting
+            # surface rather than by removing the box body itself.
+            "fillcolor": _rgba(series["color"], 0.24),
+            "opacity": 1.0,
+            "alignmentgroup": "multi-y-boxes",
+            "offsetgroup": str(series["id"]),
+            "meta": {"series_id": series["id"], "axis_id": series["axis_id"]},
+        }
+        if x is not None:
+            kwargs["x"] = x
+        if x_labels is not None:
+            kwargs.update(
+                customdata=x_labels,
+                hovertemplate="%{customdata}<br>%{y}<extra>%{fullData.name}</extra>",
+            )
+        if box_width is not None:
+            kwargs["width"] = box_width
+        return go.Box(**kwargs)
+
     mode = {
         "line": "lines",
         "scatter": "markers",
@@ -584,9 +637,36 @@ def build_multi_axis_figure(
         plotly_axis_refs[axis_id] = (trace_ref, f"yaxis{trace_ref[1:]}")
 
     figure = go.Figure()
+    box_series = [series for series in valid_series if series["type"] == "box"]
+    grouped_box_x = shared_x is not None and bool(box_series)
+    grouped_x_positions = None
+    grouped_x_labels = None
+    grouped_x_categories: list[Any] = []
+    box_offsets: dict[str, float] = {}
+    box_width = None
+    if grouped_box_x:
+        grouped_x_labels = visual[shared_x]
+        codes, categories = pd.factorize(grouped_x_labels, sort=False)
+        grouped_x_positions = codes.astype(float)
+        grouped_x_positions[codes < 0] = np.nan
+        grouped_x_categories = categories.tolist()
+        slot = 0.72 / len(box_series)
+        box_width = slot * 0.82
+        midpoint = (len(box_series) - 1) / 2
+        box_offsets = {
+            str(series["id"]): (index - midpoint) * slot
+            for index, series in enumerate(box_series)
+        }
     for series in valid_series:
         x_column = shared_x
-        x_values = visual[x_column] if x_column is not None else source_positions
+        if grouped_box_x:
+            x_values = grouped_x_positions
+            if series["type"] == "box":
+                x_values = grouped_x_positions + box_offsets[str(series["id"])]
+        else:
+            x_values = visual[x_column] if x_column is not None else (
+                None if series["type"] == "box" else source_positions
+            )
         trace_axis, _ = plotly_axis_refs[series["axis_id"]]
         figure.add_trace(_trace_for_series(
             series,
@@ -594,14 +674,26 @@ def build_multi_axis_figure(
             y=visual[series["y"]],
             yaxis=trace_axis,
             render_mode=normalized_render_mode,
+            x_labels=grouped_x_labels if grouped_box_x else None,
+            box_width=box_width if grouped_box_x and series["type"] == "box" else None,
         ))
 
     series_by_axis: dict[str, list[dict[str, Any]]] = {}
     for series in valid_series:
         series_by_axis.setdefault(series["axis_id"], []).append(series)
+    left_axes = sum(axis_by_id[axis_id]["side"] == "left" for axis_id in used_axis_ids)
+    right_axes = len(used_axis_ids) - left_axes
+    max_extra_axes = max(max(0, left_axes - 1), max(0, right_axes - 1), 1)
+    axis_position_step = min(0.06, 0.30 / max_extra_axes)
+    x_domain_left = max(0, left_axes - 1) * axis_position_step
+    x_domain_right = 1.0 - max(0, right_axes - 1) * axis_position_step
     axis_layout: dict[str, Any] = {}
+    side_axis_counts = {"left": 0, "right": 0}
     for index, axis_id in enumerate(used_axis_ids):
         axis = axis_by_id[axis_id]
+        side = axis["side"]
+        side_ordinal = side_axis_counts[side]
+        side_axis_counts[side] += 1
         related_series = series_by_axis[axis_id]
         # A private axis always follows its data pair. A shared scale may use
         # an explicitly chosen neutral color.
@@ -611,18 +703,22 @@ def build_multi_axis_figure(
         _, layout_key = plotly_axis_refs[axis_id]
         axis_title = related_series[0].get("name") or axis.get("title") or "Y"
         axis_config: dict[str, Any] = {
-            "title": {"text": axis_title, "font": {"color": color}},
+            "title": {
+                "text": axis_title,
+                "font": {"color": color},
+                "standoff": 5,
+            },
             "tickfont": {"color": color},
             "linecolor": color,
             "tickcolor": color,
             "showline": True,
             "ticks": "outside",
-            "side": axis["side"],
+            "side": side,
             "type": axis["type"],
             "visible": axis["visible"],
             "showgrid": index == 0,
             "zeroline": False,
-            "automargin": True,
+            "automargin": False,
             "layer": "above traces",
         }
         if axis["tickformat"]:
@@ -642,13 +738,43 @@ def build_multi_axis_figure(
             axis_config["autorange"] = (
                 axis["autorange"] if axis["autorange"] is not False else True
             )
-        axis_config.update(overlaying="y", anchor="free", autoshift=True)
+        # Reserve a real horizontal strip for every axis. Unlike pixel
+        # ``shift``, an explicit free-axis position moves the line, ticks and
+        # title as one unit and keeps them outside the data domain.
+        position = (
+            x_domain_left - side_ordinal * axis_position_step
+            if side == "left"
+            else x_domain_right + side_ordinal * axis_position_step
+        )
+        axis_config.update(
+            overlaying="y",
+            anchor="free",
+            position=max(0.0, min(1.0, position)),
+            autoshift=False,
+            shift=0,
+        )
         axis_layout[layout_key] = axis_config
 
     x_title = str(shared_x) if shared_x is not None else "Номер строки"
 
-    left_axes = sum(axis_by_id[axis_id]["side"] == "left" for axis_id in used_axis_ids)
-    right_axes = len(used_axis_ids) - left_axes
+    xaxis_config: dict[str, Any] = {
+        "title": {"text": x_title},
+        "domain": [x_domain_left, x_domain_right],
+        "automargin": True,
+        "showline": True,
+        "ticks": "outside",
+        "ticklen": 5,
+        "tickwidth": 1,
+        "zeroline": False,
+    }
+    if grouped_box_x:
+        xaxis_config.update(
+            tickmode="array",
+            tickvals=list(range(len(grouped_x_categories))),
+            ticktext=[str(value) for value in grouped_x_categories],
+            range=[-0.55, max(0.55, len(grouped_x_categories) - 0.45)],
+        )
+
     figure.update_layout(
         template=template or "plotly",
         title={"text": normalized["title"] or None},
@@ -657,15 +783,19 @@ def build_multi_axis_figure(
         autosize=normalized["width"] is None,
         showlegend=normalized["show_legend"],
         hovermode="x unified",
+        boxmode="group",
+        # Plotly creates overlaying subplot layers for independent Y axes.
+        # Their backgrounds must not conceal traces rendered on earlier axes.
+        plot_bgcolor="rgba(0,0,0,0)",
         uirevision=multi_axis_uirevision(normalized),
-        xaxis={"title": {"text": x_title}, "automargin": True},
+        xaxis=xaxis_config,
         # All visible series axes are y2+ and overlay this stable, hidden
         # carrier. Removing/reordering another series therefore never changes
         # an existing trace's Plotly axis reference.
         yaxis={"visible": False, "showgrid": False, "zeroline": False},
         margin={
-            "l": min(280, 60 + max(0, left_axes - 1) * 42),
-            "r": min(280, 35 + max(0, right_axes - 1) * 42),
+            "l": 60,
+            "r": 45,
             "t": 55 if normalized["title"] else 25,
             "b": 55,
         },

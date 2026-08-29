@@ -70,6 +70,13 @@ TRACE_TYPES = [
     {"label": "Маркеры", "value": "scatter"},
     {"label": "Ступенчатая", "value": "step"},
     {"label": "Область", "value": "area"},
+    {"label": "Box Plot", "value": "box"},
+]
+
+BOX_POINT_OPTIONS = [
+    {"label": "Только выбросы", "value": "outliers"},
+    {"label": "Все точки", "value": "all"},
+    {"label": "Не показывать", "value": "none"},
 ]
 
 THEMES = [
@@ -269,6 +276,7 @@ class MultiYAxisWorkspace:
                 "name",
                 "color",
                 "smooth",
+                "box-points",
                 "side",
                 "visible",
                 "axis-scale",
@@ -643,6 +651,29 @@ class MultiYAxisWorkspace:
                                     size="xs",
                                     className="multi-axis-smooth-switch",
                                 ),
+                                dmc.Select(
+                                    id=self.pattern_id("box-points", series_id),
+                                    label="Точки Box Plot",
+                                    data=BOX_POINT_OPTIONS,
+                                    value=(
+                                        "none"
+                                        if series.get("box_points") is False
+                                        else series.get("box_points") or "outliers"
+                                    ),
+                                    allowDeselect=False,
+                                    size="xs",
+                                    className="multi-axis-box-points",
+                                    style={
+                                        "display": "block"
+                                        if (series.get("type") or "line") == "box"
+                                        else "none"
+                                    },
+                                    comboboxProps={
+                                        "shadow": "md",
+                                        "withinPortal": False,
+                                        "zIndex": 10060,
+                                    },
+                                ),
                             ],
                             className="multi-axis-scale-options",
                         ),
@@ -900,6 +931,8 @@ class MultiYAxisWorkspace:
                 series["color"] = value
             elif key == "smooth":
                 series["smooth"] = bool(value)
+            elif key == "box-points":
+                series["box_points"] = False if value == "none" else (value or "outliers")
             elif key == "side":
                 side = value or "left"
                 series["side"] = side
@@ -969,10 +1002,11 @@ class MultiYAxisWorkspace:
             state.setdefault("series", []).append({
                 "id": series_id,
                 "y": y_column,
-                "type": "line",
+                "type": "scatter",
                 "name": y_column,
                 "color": color,
                 "smooth": False,
+                "box_points": "outliers",
                 "side": selected_side,
                 "axis_id": axis_id,
                 "visible": True,

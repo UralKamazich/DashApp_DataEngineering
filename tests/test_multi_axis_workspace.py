@@ -132,6 +132,10 @@ class MultiYAxisWorkspaceTests(unittest.TestCase):
             card,
             MULTI_Y_WORKSPACE.pattern_id("smooth", "series-1"),
         )
+        trace_control = component_by_id(
+            card,
+            MULTI_Y_WORKSPACE.pattern_id("trace-type", "series-1"),
+        )
         self.assertEqual(name_control.label, "Подпись оси")
         self.assertEqual(
             {item["value"] for item in scale_control.data},
@@ -139,6 +143,28 @@ class MultiYAxisWorkspaceTests(unittest.TestCase):
         )
         self.assertFalse(smooth_control.checked)
         self.assertFalse(smooth_control.disabled)
+        self.assertIn("box", {item["value"] for item in trace_control.data})
+
+    def test_box_series_card_exposes_native_point_display_setting(self):
+        card = MULTI_Y_WORKSPACE._series_card(
+            {
+                "id": "series-box",
+                "y": "pressure",
+                "type": "box",
+                "box_points": "all",
+                "color": "#228be6",
+                "axis_id": "axis-box",
+            },
+            {"id": "axis-box", "side": "left", "type": "linear"},
+            [{"label": "pressure", "value": "pressure"}],
+        )
+        control = component_by_id(
+            card,
+            MULTI_Y_WORKSPACE.pattern_id("box-points", "series-box"),
+        )
+
+        self.assertEqual(control.value, "all")
+        self.assertEqual(control.style.get("display"), "block")
 
     def test_common_settings_are_collapsible_under_the_modebar_gear(self):
         tree = MULTI_Y_WORKSPACE.render()
