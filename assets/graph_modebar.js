@@ -87,6 +87,7 @@
     select.addEventListener("change", function () {
       var controlId = workspace.getAttribute("data-chart-type-id");
       workspace.setAttribute("data-chart-type-value", select.value);
+      window.graphFieldPicker?.updateFieldAvailability?.(workspace, select.value);
       if (controlId && window.dash_clientside?.set_props) {
         window.dash_clientside.set_props(controlId, { value: select.value });
       }
@@ -98,7 +99,10 @@
     var existing = modebar.querySelector(".modebar-group-workspace");
     if (existing) {
       var select = existing.querySelector(".modebar-chart-select");
-      if (select) select.value = chartValue(workspace, chartOptions(workspace));
+      if (select) {
+        select.value = chartValue(workspace, chartOptions(workspace));
+        window.graphFieldPicker?.updateFieldAvailability?.(workspace, select.value);
+      }
       return;
     }
 
@@ -145,6 +149,9 @@
     });
 
     if (group.children.length) modebar.insertBefore(group, modebar.firstChild);
+    if (chartSelect) {
+      window.graphFieldPicker?.updateFieldAvailability?.(workspace, chartSelect.value);
+    }
   }
 
   function addFullscreenButton(plot, modebar) {

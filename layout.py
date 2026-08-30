@@ -19,13 +19,14 @@ from ml_workspace import create_ml_workspace
 from dataset_panel import create_dataset_drawer
 from filter_panel import create_filter_drawer
 from graph_settings import GraphSettingsPanel
-from graph_workspace import GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
+from graph_workspace import DEFAULT_FIELDS, GraphWorkspace, LEGACY_GRAPH_ACTION_IDS
 from multi_axis_workspace import MultiYAxisWorkspace
 from components import (
     dropdown_style, graph_render_mode, graph_dataset_select,
     dropdown_x, dropdown_y, dropdown_z,
     dropdown_color, dropdown_size, dropdown_text,
     dropdown_hover_data, dropdown_corr_columns,
+    dropdown_hierarchy_levels, dropdown_hierarchy_value,
     dropdown_facet_row, dropdown_facet_col,
     agg_keys_select, agg_cols_select, agg_metrics_select,
     agg_exclude_zeros_switch, agg_exclude_empty_switch,
@@ -103,6 +104,71 @@ GRAPH_WORKSPACE = GraphWorkspace(
         "dropdown_facet_row": dropdown_facet_row,
         "dropdown_facet_col": dropdown_facet_col,
         "dropdown_hover_data": dropdown_hover_data,
+        "dropdown_hierarchy_levels": dropdown_hierarchy_levels,
+        "dropdown_hierarchy_value": dropdown_hierarchy_value,
+    },
+    fields=(
+        *DEFAULT_FIELDS,
+        {
+            "key": "hierarchy-levels",
+            "label": "Уровни",
+            "target": "dropdown_hierarchy_levels",
+            "zone": "secondary",
+            "mode": "append",
+        },
+        {
+            "key": "hierarchy-value",
+            "label": "Значение",
+            "target": "dropdown_hierarchy_value",
+            "zone": "secondary",
+        },
+    ),
+    field_chart_types={
+        "z": {"3D_Scatter", "Polar"},
+        "color": {
+            "Scatter", "3D_Scatter", "Box", "Bar", "Line", "Hist",
+            "Polar", "Pie", "Violin", "Ridge", "Sunburst", "Treemap",
+            "DensityContour",
+        },
+        "size": {"Scatter", "3D_Scatter", "Polar"},
+        "text": {"Scatter", "3D_Scatter", "Polar"},
+        "facet-row": {
+            "Scatter", "Box", "Bar", "Line", "Hist", "Violin",
+            "DensityHeat", "DensityContour",
+        },
+        "facet-col": {
+            "Scatter", "Box", "Bar", "Line", "Hist", "Violin",
+            "DensityHeat", "DensityContour",
+        },
+        "hover": {"Scatter", "3D_Scatter", "Polar", "Pie"},
+        "hierarchy-levels": {"Sunburst", "Treemap"},
+        "hierarchy-value": {"Sunburst", "Treemap"},
+    },
+    field_presentations={
+        "3D_Scatter": {
+            "x": {"label": "X", "placement": "top"},
+            "y": {"label": "Y", "placement": "top"},
+            "z": {"label": "Z", "placement": "top"},
+        },
+        "Polar": {
+            "x": {"label": "A", "placement": "top"},
+            "y": {"label": "B", "placement": "top"},
+            "z": {"label": "C", "placement": "top"},
+        },
+        "Pie": {
+            "x": {"label": "Категория", "placement": "top"},
+            "y": {"label": "Значение", "placement": "top"},
+        },
+        "Sunburst": {
+            "hierarchy-levels": {"label": "Уровни", "order": "0"},
+            "hierarchy-value": {"label": "Значение", "order": "1"},
+            "color": {"label": "Цвет", "order": "2"},
+        },
+        "Treemap": {
+            "hierarchy-levels": {"label": "Уровни", "order": "0"},
+            "hierarchy-value": {"label": "Значение", "order": "1"},
+            "color": {"label": "Цвет", "order": "2"},
+        },
     },
     settings_panel=GRAPH_SETTINGS_PANEL,
     action_ids=LEGACY_GRAPH_ACTION_IDS,

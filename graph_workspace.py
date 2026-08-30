@@ -111,6 +111,8 @@ class GraphWorkspace:
         field_controls: Mapping[str, object],
         settings_panel=None,
         fields=DEFAULT_FIELDS,
+        field_chart_types: Mapping[str, object] | None = None,
+        field_presentations: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
         action_ids: Mapping[str, str] | None = None,
         columns_container_id: str = "columns-badges",
         notifications_id: str = "notifications-container",
@@ -126,6 +128,20 @@ class GraphWorkspace:
         self.chart_type_id = _component_id(chart_type_control)
         self.field_controls = dict(field_controls)
         self.fields = tuple(fields)
+        self.field_chart_types = {
+            str(key): tuple(sorted(str(value) for value in values))
+            for key, values in (field_chart_types or {}).items()
+        }
+        self.field_presentations = {
+            str(chart_type): {
+                str(field_key): {
+                    str(option): str(value)
+                    for option, value in presentation.items()
+                }
+                for field_key, presentation in fields.items()
+            }
+            for chart_type, fields in (field_presentations or {}).items()
+        }
         self._fields_by_key = {}
         for field in self.fields:
             key = field.get("key")
@@ -222,6 +238,15 @@ class GraphWorkspace:
 
     def _drop_zone(self, field: Mapping[str, str]):
         target_id = self.field_ids[field["target"]]
+        zone_data = {
+            "data-drop-target": target_id,
+            "data-drop-mode": field.get("mode", "replace"),
+            "data-default-label": field["label"],
+            "data-field-key": field["key"],
+        }
+        supported_chart_types = self.field_chart_types.get(field["key"])
+        if supported_chart_types is not None:
+            zone_data["data-chart-types"] = json.dumps(supported_chart_types)
         return html.Div(
             [
                 html.Span(field["label"], className="graph-drop-zone-name"),
@@ -238,12 +263,7 @@ class GraphWorkspace:
                 f"graph-drop-zone graph-drop-zone--{field['zone']} "
                 f"graph-drop-zone--{field['key']}"
             ),
-            **{
-                "data-drop-target": target_id,
-                "data-drop-mode": field.get("mode", "replace"),
-                "data-default-label": field["label"],
-                "data-field-key": field["key"],
-            },
+            **zone_data,
         )
 
     def _render_paper(self):
@@ -291,6 +311,9 @@ class GraphWorkspace:
             ),
             "data-field-mode-store-id": self.ids["field_modes"],
             "data-field-modes": "{}",
+            "data-field-presentations": json.dumps(
+                self.field_presentations, ensure_ascii=False
+            ),
         }
         if self.include_color_controls:
             workspace_data["data-action-change-colors"] = self.ids["change_colors"]
@@ -578,12 +601,14 @@ class GraphWorkspace:
         targets = [self.field_ids[field["target"]] for field in self.fields]
         inputs = [Input(target, "value") for target in targets]
         inputs.append(Input(self.ids["field_modes"], "data"))
+        inputs.append(Input(self.chart_type_id, "value"))
 
         app.clientside_callback(
             f"""
             function() {{
                 var targets = {json.dumps(targets, ensure_ascii=False)};
                 var values = Array.prototype.slice.call(arguments);
+                var chartType = values.pop();
                 var fieldModes = values.pop() || {{}};
                 var byTarget = {{}};
                 targets.forEach(function(target, index) {{ byTarget[target] = values[index]; }});
@@ -609,6 +634,10 @@ class GraphWorkspace:
                     );
                 }});
                 workspace.setAttribute('data-field-modes', JSON.stringify(fieldModes));
+                workspace.setAttribute('data-chart-type-value', String(chartType || ''));
+                if (window.graphFieldPicker?.updateFieldAvailability) {{
+                    window.graphFieldPicker.updateFieldAvailability(workspace, chartType);
+                }}
                 return Date.now();
             }}
             """,

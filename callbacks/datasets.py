@@ -364,10 +364,12 @@ def recommend_dataset_output(scope):
     Output("dropdown_hover_data", "value", allow_duplicate=True),
     Output("dropdown_facet_row", "value", allow_duplicate=True),
     Output("dropdown_facet_col", "value", allow_duplicate=True),
+    Output("dropdown_hierarchy_levels", "value", allow_duplicate=True),
+    Output("dropdown_hierarchy_value", "value", allow_duplicate=True),
     Input("active-dataset-id", "data"),
     prevent_initial_call=True,
 )
 def clear_graph_fields_for_dataset(_active_id):
     if not _active_id:
         raise PreventUpdate
-    return None, None, None, None, None, None, [], None, None
+    return None, None, None, None, None, None, [], None, None, [], None
