@@ -19,6 +19,14 @@
     background: #ffffff;
 }
 
+.de-builder {
+    position: relative;
+}
+
+.de-builder .mantine-Tabs-list {
+    padding-right: 30px;
+}
+
 .de-routing-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     align-items: end;
@@ -59,8 +67,34 @@
 }
 
 .de-operation-panel {
+    box-sizing: border-box;
     min-height: 210px;
     padding-top: 10px;
+}
+
+.de-method-help-button {
+    position: absolute;
+    z-index: 4;
+    top: 8px;
+    right: 8px;
+}
+
+.de-help-window {
+    width: min(520px, calc(100vw - 16px));
+    max-height: min(720px, calc(100dvh - 16px));
+}
+
+.de-operation-panel--reshape {
+    min-height: 246px;
+}
+
+.de-reshape-direction-panel {
+    margin-top: 8px;
+}
+
+.de-field--reshape-separator {
+    width: min(260px, 100%);
+    margin-top: 8px;
 }
 
 .de-inline-option {

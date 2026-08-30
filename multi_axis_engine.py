@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
+from html import escape
 import json
 import math
 from typing import Any
@@ -20,7 +21,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
-STATE_VERSION = 2
+STATE_VERSION = 3
 # ``go.Scatter`` is SVG-based. This is a total budget across all visible
 # series, not a per-series allowance that grows dangerously with every axis.
 DEFAULT_MAX_VISUAL_POINTS = 20_000
@@ -392,6 +393,35 @@ def normalize_multi_axis_state(
             axis["color"] = related[0]["color"]
             axis["color_mode"] = "series"
 
+    shared_y_axes = _boolean(source.get("shared_y_axes"), False)
+    if shared_y_axes and normalized_series:
+        original_axis_by_id = {axis["id"]: axis for axis in normalized_axes}
+        shared_axes_by_side: dict[str, dict[str, Any]] = {}
+        for series in normalized_series:
+            original_axis = original_axis_by_id.get(series["axis_id"], {})
+            side = str(original_axis.get("side") or "left")
+            side = "right" if side == "right" else "left"
+            shared_id = f"axis-shared-{side}"
+            if side not in shared_axes_by_side:
+                shared_axis = dict(original_axis)
+                shared_axis.update({
+                    "id": shared_id,
+                    # Stable references prevent the right scale from changing
+                    # identity when a left scale is added later (and vice versa).
+                    "plotly_ref": "y3" if side == "right" else "y2",
+                    "side": side,
+                    "title": str(series.get("name") or series.get("y") or "Y"),
+                    "color": "#000000",
+                    "color_mode": "custom",
+                })
+                shared_axes_by_side[side] = shared_axis
+            series["axis_id"] = shared_id
+        normalized_axes = [
+            shared_axes_by_side[side]
+            for side in ("left", "right")
+            if side in shared_axes_by_side
+        ]
+
     normalized_state = {
         "version": STATE_VERSION,
         "shared_x": shared_x,
@@ -405,6 +435,7 @@ def normalize_multi_axis_state(
             else None
         ),
         "show_legend": bool(source.get("show_legend", True)),
+        "shared_y_axes": shared_y_axes,
         "view_revision": int(_finite_float(source.get("view_revision"), 0, 0, 1_000_000_000)),
     }
     if available is not None:
@@ -435,6 +466,7 @@ def multi_axis_uirevision(state: Mapping[str, Any] | None) -> str:
     axis_by_id = {axis["id"]: axis for axis in normalized["axes"]}
     structural = {
         "shared_x": normalized["shared_x"],
+        "shared_y_axes": normalized["shared_y_axes"],
         "series": [
             {
                 "id": series["id"],
@@ -470,6 +502,16 @@ def _rgba(color: str, opacity: float) -> str:
         except ValueError:
             pass
     return color
+
+
+def _composite_axis_title(series: Sequence[Mapping[str, Any]]) -> str:
+    """Return a Plotly-safe, individually colored title for a shared scale."""
+    parts = []
+    for item in series:
+        name = escape(str(item.get("name") or item.get("y") or "Y"))
+        color = escape(str(item.get("color") or "#000000"), quote=True)
+        parts.append(f'<span style="color:{color}">{name}</span>')
+    return "; ".join(parts)
 
 
 def _sample_positions(row_count: int, row_limit: int) -> tuple[np.ndarray | slice, bool]:
@@ -587,6 +629,7 @@ def build_multi_axis_figure(
     normalized_render_mode = "svg" if str(render_mode).lower() == "svg" else "hybrid"
 
     normalized = normalize_multi_axis_state(state, frame.columns.tolist())
+    shared_y_axes = normalized["shared_y_axes"]
     shared_x = normalized["shared_x"]
     columns = set(frame.columns.tolist())
     valid_series: list[dict[str, Any]] = []
@@ -700,8 +743,14 @@ def build_multi_axis_figure(
         color = related_series[0]["color"] if len(related_series) == 1 else (
             axis.get("color") or related_series[0]["color"]
         )
+        if shared_y_axes:
+            color = "#000000"
         _, layout_key = plotly_axis_refs[axis_id]
-        axis_title = related_series[0].get("name") or axis.get("title") or "Y"
+        axis_title = (
+            _composite_axis_title(related_series)
+            if shared_y_axes
+            else related_series[0].get("name") or axis.get("title") or "Y"
+        )
         axis_config: dict[str, Any] = {
             "title": {
                 "text": axis_title,
@@ -758,7 +807,10 @@ def build_multi_axis_figure(
     x_title = str(shared_x) if shared_x is not None else "Номер строки"
 
     xaxis_config: dict[str, Any] = {
-        "title": {"text": x_title},
+        "title": {"text": x_title, "font": {"color": "#000000"}},
+        "tickfont": {"color": "#000000"},
+        "linecolor": "#000000",
+        "tickcolor": "#000000",
         "domain": [x_domain_left, x_domain_right],
         "automargin": True,
         "showline": True,

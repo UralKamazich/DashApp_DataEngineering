@@ -265,6 +265,20 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertIn("data-field-mode-store-id", script)
         self.assertIn("writeFieldMode", script)
 
+    def test_primary_field_picker_uses_real_plotly_axes(self):
+        assets_path = Path(__file__).resolve().parents[1] / "assets"
+        picker = (assets_path / "graph_field_picker.js").read_text(encoding="utf-8")
+        menu = (assets_path / "graph_context_menu.js").read_text(encoding="utf-8")
+        styles = (assets_path / "context_menu.css").read_text(encoding="utf-8")
+
+        self.assertIn("function syncAxisDropZones", picker)
+        self.assertIn("function openAxisPickerForEvent", picker)
+        self.assertIn('gd.on("plotly_afterplot"', picker)
+        self.assertIn("openAxisPickerForEvent?.(e)", menu)
+        self.assertIn(".graph-workspace.dnd-active .graph-drop-zone--axis-x", styles)
+        self.assertIn(".graph-workspace.axis-y-drop-hover .yaxislayer-above", styles)
+        self.assertIn("field-picker-clear", picker)
+
     def test_clustering_help_windows_open_by_button_and_close_only_explicitly(self):
         script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_help_window.js"
         script = script_path.read_text(encoding="utf-8")
@@ -342,6 +356,66 @@ class DashApplicationSmokeTests(unittest.TestCase):
         }
         self.assertEqual(components["de-output-mode"].value, "new")
         self.assertFalse(getattr(components["de-output-name"], "disabled", False))
+
+    def test_data_engineering_methods_have_explicit_movable_help(self):
+        components = list(walk_components(app.layout))
+        expected = {
+            "de-help-binning",
+            "de-help-text",
+            "de-help-aggregate",
+            "de-help-reshape",
+        }
+        windows = {
+            getattr(component, "id", None): component
+            for component in components
+            if getattr(component, "id", None) in expected
+        }
+        self.assertEqual(set(windows), expected)
+        for window in windows.values():
+            self.assertIn("graph-help-window", getattr(window, "className", ""))
+            self.assertEqual(window.to_plotly_json()["props"]["aria-modal"], "false")
+
+        targets = {
+            component.to_plotly_json()["props"].get("data-help-window-target")
+            for component in components
+            if "de-method-help-button" in (getattr(component, "className", "") or "")
+        }
+        self.assertEqual(targets, expected)
+
+    def test_data_engineering_exposes_long_wide_controls(self):
+        component_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(app.layout)
+        }
+        self.assertTrue({
+            "reshape-direction",
+            "reshape-wide-index",
+            "reshape-wide-names",
+            "reshape-wide-values",
+            "reshape-wide-aggregation",
+            "reshape-long-id",
+            "reshape-long-values",
+            "reshape-long-variable-name",
+            "reshape-long-value-name",
+            "btn-reshape",
+        }.issubset(component_ids))
+
+    def test_ml_profile_charts_have_bounded_height(self):
+        charts = {
+            getattr(component, "id", None): component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None) in {
+                "ml-profile-missing-graph",
+                "ml-profile-target-graph",
+            }
+        }
+        self.assertEqual(set(charts), {
+            "ml-profile-missing-graph",
+            "ml-profile-target-graph",
+        })
+        for chart in charts.values():
+            self.assertEqual(chart.style.get("height"), "270px")
+            self.assertEqual(chart.style.get("maxHeight"), "270px")
 
     def test_every_plot_group_reacts_to_theme_changes(self):
         output_markers = (
@@ -1512,7 +1586,7 @@ class GraphAxisValidationTests(unittest.TestCase):
         self.assertEqual(len(notifications), 1)
         self.assertIn("должны быть числовыми", notifications[0]["message"])
 
-    def test_hierarchy_charts_tolerate_empty_path_values(self):
+    def test_semantic_hierarchy_fields_tolerate_empty_path_values(self):
         source = pd.DataFrame({
             "region": ["A", "A", None, "B"],
             "value": [10.0, 20.0, 30.0, 40.0],
@@ -1526,7 +1600,7 @@ class GraphAxisValidationTests(unittest.TestCase):
                     x_col=None,
                     y_col=None,
                     z_col=None,
-                    color_col="region",
+                    color_col=None,
                     size_col=None,
                     text_col=None,
                     dropdown_text_pozition="top right",
@@ -1558,6 +1632,8 @@ class GraphAxisValidationTests(unittest.TestCase):
                     legend_custom_order="",
                     meta=meta,
                     pie_aggregation="sum",
+                    hierarchy_levels=["region"],
+                    hierarchy_value="value",
                 )
                 self.assertEqual(notifications, [])
                 self.assertEqual([trace.type for trace in figure.data], [trace_type])
@@ -2019,6 +2095,27 @@ class GraphWorkspaceTests(unittest.TestCase):
         }
         self.assertTrue(any("graph-drop-zone--x" in value for value in classes))
         self.assertTrue(any("graph-drop-zone--hover" in value for value in classes))
+
+    def test_drop_zone_can_declare_supported_chart_types(self):
+        controls = self._field_controls("availability")
+        workspace = GraphWorkspace(
+            graph_id="availability",
+            chart_type_control=dmc.Select(
+                id="availability-chart",
+                data=[{"value": "3D_Scatter", "label": "3D"}],
+                value="3D_Scatter",
+            ),
+            field_controls=controls,
+            field_chart_types={"z": {"3D_Scatter", "Polar"}},
+        ).render()
+        z_zone = next(
+            component for component in walk_components(workspace)
+            if "graph-drop-zone--z" in (getattr(component, "className", "") or "")
+        )
+        supported = json.loads(
+            z_zone.to_plotly_json()["props"]["data-chart-types"]
+        )
+        self.assertEqual(set(supported), {"3D_Scatter", "Polar"})
 
     def test_z_zone_is_positioned_independently_from_secondary_fields(self):
         layer = next(

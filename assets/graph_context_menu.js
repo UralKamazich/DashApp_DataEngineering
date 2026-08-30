@@ -240,6 +240,12 @@
       const workspace = graphHost && graphHost.closest(".graph-workspace");
       if (!workspace) return;
 
+      if (window.graphFieldPicker?.openAxisPickerForEvent?.(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
       _activeWorkspace = workspace;

@@ -110,6 +110,7 @@ def empty_multi_axis_state(
         "data_ref": data_ref,
         "shared_x": None,
         "show_legend": True,
+        "shared_y_axes": False,
         "series": [],
         "axes": [],
     }
@@ -155,6 +156,7 @@ def _sync_state_for_input(current, dataset_id, scope, data_context):
 
     state["dataset_id"] = dataset_id
     state["scope"] = requested_scope
+    state["shared_y_axes"] = bool(state.get("shared_y_axes", False))
     if requested_data_ref is not None:
         state["data_ref"] = requested_data_ref
     else:
@@ -183,6 +185,31 @@ def _sync_state_for_input(current, dataset_id, scope, data_context):
             "title", "range", "min", "max", "autorange", "range_auto", "visible"
         ):
             axis.pop(legacy_key, None)
+    return state
+
+
+def _set_shared_y_axis_mode(current, enabled):
+    """Toggle shared Y scales while retaining reversible private axis IDs."""
+    state = deepcopy(current or empty_multi_axis_state())
+    state["shared_y_axes"] = bool(enabled)
+    if not enabled:
+        return state
+
+    axes = [axis for axis in (state.get("axes") or []) if isinstance(axis, dict)]
+    axes_by_id = {str(axis.get("id")): axis for axis in axes}
+    scale_by_side = {}
+    for series in state.get("series") or []:
+        if not isinstance(series, dict):
+            continue
+        axis = axes_by_id.get(str(series.get("axis_id") or ""))
+        if axis is None:
+            continue
+        side = "right" if (axis.get("side") or series.get("side")) == "right" else "left"
+        scale_by_side.setdefault(side, axis.get("type") or "linear")
+    for axis in axes:
+        side = "right" if axis.get("side") == "right" else "left"
+        if side in scale_by_side:
+            axis["type"] = scale_by_side[side]
     return state
 
 
@@ -257,6 +284,7 @@ class MultiYAxisWorkspace:
             "series_chips": f"{graph_id}-series-chips",
             "shared_x": f"{graph_id}-shared-x",
             "show_legend": f"{graph_id}-show-legend",
+            "shared_y_axes": f"{graph_id}-shared-y-axes",
             "add_y": f"{graph_id}-add-y",
             "add_side": f"{graph_id}-add-side",
             "add_series": f"{graph_id}-add-series",
@@ -374,12 +402,24 @@ class MultiYAxisWorkspace:
                                     "Все серии используют общий X; стиль и Y-ось настраиваются отдельно.",
                                     className="multi-axis-manager-intro",
                                 ),
-                                dmc.Switch(
-                                    id=self.ids["show_legend"],
-                                    label="Легенда",
-                                    checked=True,
-                                    size="xs",
-                                    className="multi-axis-legend-switch",
+                                html.Div(
+                                    [
+                                        dmc.Switch(
+                                            id=self.ids["shared_y_axes"],
+                                            label="Общие оси Y",
+                                            checked=False,
+                                            size="xs",
+                                            className="multi-axis-shared-y-switch",
+                                        ),
+                                        dmc.Switch(
+                                            id=self.ids["show_legend"],
+                                            label="Легенда",
+                                            checked=True,
+                                            size="xs",
+                                            className="multi-axis-legend-switch",
+                                        ),
+                                    ],
+                                    className="multi-axis-toolbar-switches",
                                 ),
                             ],
                             className="multi-axis-manager-toolbar",
@@ -937,10 +977,24 @@ class MultiYAxisWorkspace:
                 side = value or "left"
                 series["side"] = side
                 axis["side"] = side
+                if state.get("shared_y_axes"):
+                    target_axis = next((
+                        item for item in axes
+                        if item is not axis
+                        and ("right" if item.get("side") == "right" else "left") == side
+                    ), None)
+                    if target_axis is not None:
+                        axis["type"] = target_axis.get("type") or "linear"
             elif key == "visible":
                 series["visible"] = bool(value)
             elif key == "axis-scale":
                 axis["type"] = value or "linear"
+                if state.get("shared_y_axes"):
+                    side = "right" if axis.get("side") == "right" else "left"
+                    for other_axis in axes:
+                        other_side = "right" if other_axis.get("side") == "right" else "left"
+                        if other_side == side:
+                            other_axis["type"] = axis["type"]
 
             return state if state != before else no_update
 
@@ -948,24 +1002,29 @@ class MultiYAxisWorkspace:
             Output(self.ids["state"], "data", allow_duplicate=True),
             Input(self.ids["shared_x"], "value"),
             Input(self.ids["show_legend"], "checked"),
+            Input(self.ids["shared_y_axes"], "checked"),
             State(self.location_id, "pathname"),
             State(self.ids["state"], "data"),
             prevent_initial_call=True,
         )
-        def update_shared_x_and_legend(value, show_legend, pathname, current):
+        def update_shared_x_and_legend(
+            value, show_legend, shared_y_axes, pathname, current
+        ):
             if pathname != self.route_path:
                 raise PreventUpdate
             state = deepcopy(current or empty_multi_axis_state())
             normalized_value = value if value not in (None, "") else None
             normalized_legend = show_legend is not False
+            normalized_shared_y = shared_y_axes is True
             if (
                 state.get("shared_x") == normalized_value
                 and state.get("show_legend", True) == normalized_legend
+                and state.get("shared_y_axes", False) == normalized_shared_y
             ):
                 raise PreventUpdate
             state["shared_x"] = normalized_value
             state["show_legend"] = normalized_legend
-            return state
+            return _set_shared_y_axis_mode(state, normalized_shared_y)
 
         @app.callback(
             Output(self.ids["state"], "data", allow_duplicate=True),
@@ -1023,7 +1082,10 @@ class MultiYAxisWorkspace:
             function(state, datasetId, scope) {{
                 var workspace = document.getElementById({self.workspace_id!r});
                 if (!workspace) return window.dash_clientside.no_update;
-                var normalized = state || {{shared_x: null, show_legend: true, series: [], axes: []}};
+                var normalized = state || {{
+                    shared_x: null, show_legend: true, shared_y_axes: false,
+                    series: [], axes: []
+                }};
                 workspace.setAttribute('data-multi-axis-state', JSON.stringify(normalized));
                 workspace.setAttribute('data-selected-dataset', datasetId || '');
                 workspace.setAttribute('data-selected-scope', scope || 'filtered');
@@ -1052,6 +1114,7 @@ class MultiYAxisWorkspace:
             Output(self.ids["shared_x"], "value"),
             Output(self.ids["add_y"], "data"),
             Output(self.ids["show_legend"], "checked"),
+            Output(self.ids["shared_y_axes"], "checked"),
             Input(self.location_id, "pathname"),
             Input(self.ids["state"], "data"),
             Input(self.ids["dataset"], "value"),
@@ -1059,7 +1122,7 @@ class MultiYAxisWorkspace:
         )
         def render_series_manager(pathname, state, dataset_id, registry):
             if pathname != self.route_path:
-                return (no_update,) * 6
+                return (no_update,) * 7
             state = state or empty_multi_axis_state()
             series_list = state.get("series") or []
             record = get_record(registry, dataset_id) or {}
@@ -1078,7 +1141,10 @@ class MultiYAxisWorkspace:
                     ],
                     className="multi-axis-series-empty",
                 )
-                return cards, [], columns, state.get("shared_x"), numeric, state.get("show_legend", True)
+                return (
+                    cards, [], columns, state.get("shared_x"), numeric,
+                    state.get("show_legend", True), state.get("shared_y_axes", False),
+                )
 
             cards = []
             chips = []
@@ -1107,7 +1173,10 @@ class MultiYAxisWorkspace:
                         **{"data-series-id": str(series.get("id"))},
                     )
                 )
-            return cards, chips, columns, state.get("shared_x"), numeric, state.get("show_legend", True)
+            return (
+                cards, chips, columns, state.get("shared_x"), numeric,
+                state.get("show_legend", True), state.get("shared_y_axes", False),
+            )
 
         @app.callback(
             Output(self.graph_id, "figure"),
@@ -1230,6 +1299,7 @@ class MultiYAxisWorkspace:
                     data_ref: (state && state.data_ref) || null,
                     shared_x: null,
                     show_legend: true,
+                    shared_y_axes: false,
                     series: [],
                     axes: []
                 };

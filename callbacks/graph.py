@@ -660,14 +660,15 @@ def _bar_aggregation_caption(aggregation, y_col, group_columns, automatic=False)
     return f"<b>{prefix}:</b> {meaning}{suffix}"
 
 
-def _prepare_hierarchy_frame(plot_df, path, values):
+def _prepare_hierarchy_frame(plot_df, path, values, color=None):
     """Рабочий кадр для Sunburst/Treemap без пропусков в уровнях пути.
 
     Plotly превращает NaN в пустые метки и отказывается строить иерархию
     («Non-leaves rows are not permitted»), поэтому пропуски каждого уровня
     помечаются «(пусто)» — как в круговой диаграмме.
     """
-    frame = plot_df[list(dict.fromkeys([*path, *( [values] if values else [])]))].copy()
+    selected = [*path, *([values] if values else []), *([color] if color else [])]
+    frame = plot_df[list(dict.fromkeys(selected))].copy()
     for column in path:
         frame[column] = (
             frame[column]
@@ -694,7 +695,9 @@ def _graph_uirevision(
     return "graph-view:" + "|".join("" if value is None else str(value) for value in parts)
 
 
-def _primary_axis_errors(chart_type, x_col, y_col, color_col, columns):
+def _primary_axis_errors(
+    chart_type, x_col, y_col, color_col, columns, hierarchy_levels=None,
+):
     """Validate X/Y while allowing ordinary charts to use only Y."""
     errors = []
     x_valid = bool(x_col) and x_col in columns
@@ -705,8 +708,18 @@ def _primary_axis_errors(chart_type, x_col, y_col, color_col, columns):
     if y_col and not y_valid:
         errors.append(f"Не существует столбец Y: {y_col}")
     if chart_type in HIERARCHY_CHART_TYPES:
-        if not any((color_col, x_col, y_col)):
-            errors.append("Для Sunburst/Treemap выберите хотя бы один столбец из Цвет/X/Y")
+        requested_levels = (
+            [color_col, x_col, y_col]
+            if hierarchy_levels is None
+            else hierarchy_levels
+        )
+        valid_levels = [level for level in requested_levels if level in columns]
+        if not valid_levels:
+            errors.append(
+                "Для Sunburst/Treemap выберите хотя бы один столбец из Цвет/X/Y"
+                if hierarchy_levels is None
+                else "Для Sunburst/Treemap выберите хотя бы один уровень"
+            )
     elif not x_col and not (chart_type in Y_ONLY_CHART_TYPES and y_valid):
         errors.append("Не выбран столбец X")
 
@@ -724,7 +737,9 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       bar_aggregation="sum",
                       categorical_fields=None,
                       render_mode="hybrid",
-                      marker_size=8):
+                      marker_size=8,
+                      hierarchy_levels=None,
+                      hierarchy_value=None):
 
     empty = _empty_fig(selected_style)
     try:
@@ -737,16 +752,18 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         # does not need to read all Excel rows merely to draw an empty figure.
         assigned_fields = (
             x_col, y_col, z_col, color_col, size_col, text_col,
-            facet_row, facet_col,
+            facet_row, facet_col, hierarchy_value,
         )
-        if not any(assigned_fields) and not hover_cols:
+        if not any(assigned_fields) and not hover_cols and not hierarchy_levels:
             return empty, []
 
         dff = read_df_from_store(filtered_json, meta)
         if dff is None or dff.empty:
             return empty, []
 
-        errors = _primary_axis_errors(chart_type, x_col, y_col, color_col, dff.columns)
+        errors = _primary_axis_errors(
+            chart_type, x_col, y_col, color_col, dff.columns, hierarchy_levels
+        )
         if chart_type == "3D_Scatter" and (not z_col or z_col not in dff.columns):
             errors.append("Для 3D требуется столбец Z")
         if errors:
@@ -949,17 +966,29 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         # анализа: их строит callbacks/multivariate.py в MULTIVARIATE_WORKSPACE.
 
         elif chart_type in ("Sunburst", "Treemap"):
-            path = [c for c in [color_col, x_col, y_col] if c and (c in plot_df.columns)]
-            if not path:
-                notif = _make_error_notif("Для Sunburst/Treemap нужен хотя бы один категориальный столбец из Color/X/Y.")
-                return empty, notif
-            values = None
-            if y_col and (y_col in plot_df.columns) and pd.api.types.is_numeric_dtype(plot_df[y_col]):
-                values = y_col
+            requested_levels = (
+                [color_col, x_col, y_col]
+                if hierarchy_levels is None
+                else hierarchy_levels
+            )
+            path = list(dict.fromkeys(
+                column for column in requested_levels
+                if column and column in plot_df.columns
+            ))
+            requested_value = hierarchy_value if hierarchy_levels is not None else y_col
+            values = (
+                requested_value
+                if requested_value
+                and requested_value in plot_df.columns
+                and pd.api.types.is_numeric_dtype(plot_df[requested_value])
+                else None
+            )
             color_kw = {}
             if carg and (carg in plot_df.columns) and (carg not in path):
                 color_kw["color"] = carg
-            hierarchy_df = _prepare_hierarchy_frame(plot_df, path, values)
+            hierarchy_df = _prepare_hierarchy_frame(
+                plot_df, path, values, color_kw.get("color")
+            )
             if chart_type == "Treemap":
                 fig = px.treemap(
                     hierarchy_df, path=path, values=values,
@@ -1137,6 +1166,8 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
     Input(GRAPH_WORKSPACE.ids["field_modes"], "data"),
     Input(GRAPH_WORKSPACE.settings_control_id("render_mode"), "value"),
     Input(GRAPH_WORKSPACE.settings_id("InputMarkerSize"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("hierarchy-levels"), "value"),
+    Input(GRAPH_WORKSPACE.field_id("hierarchy-value"), "value"),
     prevent_initial_call=True,
 )
 def update_main_graph(*args, **kwargs):

@@ -416,7 +416,7 @@ def missingness_figure(profile, template="plotly"):
         hovertemplate="%{y}<br>Пропуски: %{x:.2f}%<extra></extra>",
     ))
     figure.update_layout(
-        template=template or "plotly", height=max(270, 19 * len(rows) + 85),
+        template=template or "plotly", height=270,
         margin=dict(l=145, r=15, t=25, b=40), xaxis_title="Пропуски, %",
     )
     return figure

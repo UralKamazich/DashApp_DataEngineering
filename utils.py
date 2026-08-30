@@ -69,6 +69,11 @@ def meta_from_df(df: pd.DataFrame) -> dict:
         "numeric": num,
         "categorical": cat,
         "datetime": dt,
+        # JSON does not preserve pandas dtypes.  In particular, a StringDtype
+        # column containing only values such as "1", "2", "3" is inferred by
+        # read_json as numeric.  Keep compact dtype hints so display-only text
+        # copies remain categorical after a store round-trip.
+        "dtypes": {str(column): str(df[column].dtype) for column in df.columns},
         "columns": list(map(str, df.columns)),
         # Keep cheap shape information next to the column metadata.  Several
         # UI callbacks only need these values and should not deserialize a
@@ -79,24 +84,56 @@ def meta_from_df(df: pd.DataFrame) -> dict:
 
 
 def read_df_from_store(json_str: str | None, meta: dict | None = None, *, dayfirst: bool = True) -> pd.DataFrame:
-    """Читает DataFrame из dcc.Store (orient='split') и восстанавливает datetime-колонки по meta.
+    """Читает DataFrame из dcc.Store и восстанавливает семантические типы по meta.
 
     Round-trip df.to_json(date_format='iso') -> pd.read_json(...) нередко возвращает datetime как строки.
-    Поэтому после чтения принудительно парсим колонки из meta['datetime'] обратно в datetime64.
+    Аналогично числоподобные строки могут быть ошибочно выведены как числа. Поэтому даты и явно
+    строковые pandas-колонки восстанавливаются из метаданных.
     """
     if not json_str:
         return pd.DataFrame()
 
-    df = pd.read_json(StringIO(json_str), orient="split")
-
     dt_cols = []
+    dtype_hints = {}
+    categorical_cols = []
     if isinstance(meta, dict):
         dt_cols = meta.get("datetime") or []
+        dtype_hints = meta.get("dtypes") or {}
+        categorical_cols = meta.get("categorical") or []
+
+    # Supply categorical columns to the parser itself.  Casting only after
+    # read_json is too late for values such as "001" or "1.0": numeric
+    # inference has already changed their textual representation by then.
+    datetime_set = set(dt_cols)
+    string_columns = {
+        str(c) for c in categorical_cols if c not in datetime_set
+    }
+    string_columns.update(
+        str(c)
+        for c, dtype_name in dtype_hints.items()
+        if str(dtype_name).startswith("string") and c not in datetime_set
+    )
+    json_dtypes = {column: "string" for column in string_columns}
+    df = pd.read_json(
+        StringIO(json_str), orient="split", dtype=json_dtypes or None
+    )
 
     for c in dt_cols:
         if c in df.columns:
             # iso-строки корректно распарсятся; dayfirst полезен, если в данных встречаются локальные форматы дат
             df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=dayfirst)
+
+    for c, dtype_name in dtype_hints.items():
+        if c in df.columns and str(dtype_name).startswith("string"):
+            df[c] = df[c].astype("string")
+
+    # Backward-compatible fallback for metadata created before dtype hints
+    # existed.  Only override an unwanted numeric inference; ordinary object
+    # columns keep their original representation.
+    if not dtype_hints:
+        for c in categorical_cols:
+            if c in df.columns and is_numeric_dtype(df[c]):
+                df[c] = df[c].astype("string")
 
     return df
 

@@ -118,6 +118,23 @@ def summarize_transformation_steps(steps):
             key_text = ", ".join(keys[:2]) or "группам"
             metric_text = ", ".join(metrics[:3]) or "метрики"
             summary = f"Агрегация: по {key_text} · {metric_text}"
+        elif operation == "long_to_wide":
+            index_columns = [str(value) for value in (params.get("index") or [])]
+            names_from = str(params.get("names_from") or "заголовок")
+            value_columns = [str(value) for value in (params.get("values_from") or [])]
+            index_text = ", ".join(index_columns[:2]) or "ID"
+            values_text = ", ".join(value_columns[:2]) or "значения"
+            summary = (
+                f"Long → Wide: строки {index_text} · заголовки {names_from} · "
+                f"значения {values_text}"
+            )
+        elif operation == "wide_to_long":
+            id_columns = [str(value) for value in (params.get("id_columns") or [])]
+            value_columns = [str(value) for value in (params.get("value_columns") or [])]
+            id_text = ", ".join(id_columns[:2]) or "без ID"
+            summary = (
+                f"Wide → Long: {id_text} · развёрнуто каналов {len(value_columns)}"
+            )
         elif operation == "clustering":
             algorithm = str(params.get("algorithm") or "kmeans")
             clusters = params.get("k")
@@ -202,6 +219,8 @@ def suggest_dataset_name(registry, queued_steps, scope="base"):
         "binning": "Биннинг",
         "text_copy": "Текст",
         "group_aggregates": "Агрегат",
+        "long_to_wide": "LongToWide",
+        "wide_to_long": "WideToLong",
         "clustering": "Кластеризация",
         "catboost_regression": "CatBoost",
         "catboost_classification": "CatBoostКласс",

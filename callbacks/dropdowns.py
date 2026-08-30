@@ -70,6 +70,8 @@ def update_dropdown_options_all(filtered_json, meta):
         Output("dropdown_facet_row", "options"),
         Output("dropdown_facet_col", "options"),
         Output("dropdown_text", "options"),
+        Output("dropdown_hierarchy_levels", "data"),
+        Output("dropdown_hierarchy_value", "options"),
     ],
     Input("filtered-data", "data"),
     Input("url", "pathname"),
@@ -80,7 +82,7 @@ def update_graph_dropdown_options(filtered_json, pathname, meta):
     if pathname not in GRAPH_PATHS:
         raise PreventUpdate
     options = update_dropdown_options_all(filtered_json, meta)
-    return (*options[:6], *options[7:10])
+    return (*options[:6], *options[7:10], options[0], options[1])
 
 
 @app.callback(
@@ -101,6 +103,11 @@ def update_correlation_dropdown_options(filtered_json, pathname, meta):
     Output("agg-keys", "data"),
     Output("agg-cols", "data"),
     Output("txtcopy-cols", "data"),
+    Output("reshape-wide-index", "data"),
+    Output("reshape-wide-names", "data"),
+    Output("reshape-wide-values", "data"),
+    Output("reshape-long-id", "data"),
+    Output("reshape-long-values", "data"),
     Input("filtered-data", "data"),
     Input("url", "pathname"),
     State("meta-columns", "data"),
@@ -110,4 +117,5 @@ def update_engineering_dropdown_options(filtered_json, pathname, meta):
     if pathname != "/data-engineering":
         raise PreventUpdate
     options = update_dropdown_options_all(filtered_json, meta)
-    return options[10:14]
+    all_columns = options[11]
+    return (*options[10:14], all_columns, all_columns, all_columns, all_columns, all_columns)

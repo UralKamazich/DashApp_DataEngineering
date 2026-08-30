@@ -355,6 +355,19 @@
     flex: 0 0 auto;
 }
 
+.multi-axis-toolbar-switches {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 9px;
+}
+
+.multi-axis-toolbar-switches .mantine-Switch-label {
+    font-size: 8px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
 .multi-axis-common-details {
     margin-bottom: 3px;
     padding: 3px 6px;

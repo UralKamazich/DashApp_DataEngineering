@@ -165,6 +165,12 @@ dropdown_facet_row = create_dropdown("dropdown_facet_row", [], None, clearable=T
 dropdown_facet_col = create_dropdown("dropdown_facet_col", [], None, clearable=True)
 
 dropdown_hover_data = create_multiselect("dropdown_hover_data", [], value=[], clearable=True)
+dropdown_hierarchy_levels = create_multiselect(
+    "dropdown_hierarchy_levels", [], value=[], clearable=True, persistence=True
+)
+dropdown_hierarchy_value = create_dropdown(
+    "dropdown_hierarchy_value", [], None, clearable=True
+)
 dropdown_corr_columns = create_multiselect("dropdown_corr_columns", [], value=[], clearable=True)
 dropdown_corr_columns.className = "correlation-channels-select"
 dropdown_corr_columns.style = {

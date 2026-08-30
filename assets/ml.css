@@ -138,11 +138,20 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+  align-items: start;
 }
 .ml-profile-charts > * { min-width: 0; }
+.ml-profile-chart-card {
+  box-sizing: border-box;
+  height: 300px;
+  min-height: 300px;
+  max-height: 300px;
+  overflow: hidden;
+}
 .ml-profile-charts .dash-graph {
   height: 270px;
   min-height: 270px;
+  max-height: 270px;
 }
 .ml-profile-table { min-width: 0; }
 @media (max-width: 1080px) {

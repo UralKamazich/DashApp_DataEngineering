@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 
 
+MAX_RESHAPE_COLUMNS = 5_000
+
+
 def _unique_name(columns, base):
     if base not in columns:
         return base
@@ -172,6 +175,198 @@ def apply_group_aggregates(
     }
 
 
+def _validated_columns(df, columns, label, *, required=True):
+    selected = list(dict.fromkeys(str(column) for column in (columns or [])))
+    missing = [column for column in selected if column not in df.columns]
+    if missing:
+        raise ValueError(f"Не найдены каналы {label}: {', '.join(missing[:4])}.")
+    if required and not selected:
+        raise ValueError(f"Выберите {label}.")
+    return selected
+
+
+def _flatten_pivot_columns(columns, separator, reserved):
+    """Flatten pandas pivot columns without silently creating duplicates."""
+    separator = str(separator or "__")
+    used = set(str(column) for column in reserved)
+    flattened = []
+    for column in columns:
+        parts = column if isinstance(column, tuple) else (column,)
+        base = separator.join(
+            str(part) for part in parts if part is not None and str(part) != ""
+        ) or "Значение"
+        name = _unique_name(used, base)
+        used.add(name)
+        flattened.append(name)
+    return flattened
+
+
+def apply_long_to_wide(
+    df,
+    index_columns,
+    names_from,
+    value_columns,
+    aggregation="error",
+    separator="__",
+):
+    """Pivot a long table into a wide table with explicit duplicate handling."""
+    if not df.columns.is_unique:
+        raise ValueError("Long → Wide требует уникальные названия каналов.")
+    index_columns = _validated_columns(df, index_columns, "идентификаторы строк")
+    value_columns = _validated_columns(df, value_columns, "каналы значений")
+    if not names_from or names_from not in df.columns:
+        raise ValueError("Выберите канал, из значений которого будут созданы заголовки.")
+
+    overlap = set(index_columns) & ({names_from} | set(value_columns))
+    if overlap or names_from in value_columns:
+        raise ValueError("Идентификаторы, заголовки и значения должны быть разными каналами.")
+
+    aggregation = str(aggregation or "error")
+    allowed = {"error", "first", "last", "sum", "mean", "min", "max", "count"}
+    if aggregation not in allowed:
+        raise ValueError("Неизвестная политика обработки повторяющихся строк.")
+
+    unique_headers = int(df[names_from].nunique(dropna=False))
+    projected_columns = unique_headers * len(value_columns)
+    if projected_columns > MAX_RESHAPE_COLUMNS:
+        raise ValueError(
+            f"Long → Wide создаст около {projected_columns} каналов. "
+            f"Допустимо не более {MAX_RESHAPE_COLUMNS}; отфильтруйте значения заголовка."
+        )
+
+    selected = [*index_columns, names_from, *value_columns]
+    working = df[selected].copy()
+    header_empty = "__DASHAPP_EMPTY_HEADER__"
+    working[names_from] = working[names_from].where(
+        pd.notna(working[names_from]), header_empty
+    )
+
+    pivot_keys = [*index_columns, names_from]
+    if aggregation == "error":
+        duplicate_count = int(working.duplicated(pivot_keys, keep=False).sum())
+        if duplicate_count:
+            raise ValueError(
+                f"Найдено {duplicate_count} строк с повторяющейся комбинацией "
+                "идентификаторов и заголовка. Выберите способ агрегации."
+            )
+        pivoted = working.pivot(
+            index=index_columns,
+            columns=names_from,
+            values=value_columns[0] if len(value_columns) == 1 else value_columns,
+        )
+    else:
+        pivoted = working.pivot_table(
+            index=index_columns,
+            columns=names_from,
+            values=value_columns[0] if len(value_columns) == 1 else value_columns,
+            aggfunc=aggregation,
+            sort=False,
+            observed=True,
+        )
+
+    header_order = list(pd.unique(working[names_from]))
+    if len(value_columns) == 1:
+        desired_columns = [
+            header for header in header_order if header in pivoted.columns
+        ]
+    else:
+        desired_columns = [
+            (value_column, header)
+            for value_column in value_columns
+            for header in header_order
+            if (value_column, header) in pivoted.columns
+        ]
+    pivoted = pivoted.reindex(columns=desired_columns)
+
+    pivoted.columns = _flatten_pivot_columns(
+        pivoted.columns, separator, reserved=index_columns
+    )
+    pivoted.columns.name = None
+    result = pivoted.reset_index()
+    result = result.rename(columns={header_empty: "(пусто)"})
+    # The empty-header marker is normally embedded in a flattened string.
+    result.columns = [
+        str(column).replace(header_empty, "(пусто)") for column in result.columns
+    ]
+    outputs = [column for column in result.columns if column not in index_columns]
+    return result, outputs, {
+        "type": "long_to_wide",
+        "label": "Long → Wide",
+        "inputs": selected,
+        "outputs": outputs,
+        "params": {
+            "index": index_columns,
+            "names_from": names_from,
+            "values_from": value_columns,
+            "aggregation": aggregation,
+            "separator": str(separator or "__"),
+            "rows_before": len(df),
+            "rows_after": len(result),
+        },
+    }
+
+
+def apply_wide_to_long(
+    df,
+    id_columns,
+    value_columns=None,
+    variable_name="Переменная",
+    value_name="Значение",
+    drop_empty=False,
+):
+    """Unpivot selected wide columns into variable/value rows."""
+    if not df.columns.is_unique:
+        raise ValueError("Wide → Long требует уникальные названия каналов.")
+    id_columns = _validated_columns(
+        df, id_columns, "идентификаторы строк", required=False
+    )
+    value_columns = _validated_columns(
+        df, value_columns, "разворачиваемые каналы", required=False
+    )
+    if not value_columns:
+        value_columns = [column for column in df.columns if column not in id_columns]
+    if not value_columns:
+        raise ValueError("Нет каналов, которые можно развернуть в Long.")
+    if set(id_columns) & set(value_columns):
+        raise ValueError("Идентификаторы не должны входить в разворачиваемые каналы.")
+
+    variable_name = str(variable_name or "Переменная").strip() or "Переменная"
+    value_name = str(value_name or "Значение").strip() or "Значение"
+    if variable_name == value_name:
+        raise ValueError("Имена каналов переменной и значения должны различаться.")
+    collisions = ({variable_name, value_name} & set(id_columns))
+    if collisions:
+        raise ValueError(
+            "Новые имена каналов совпадают с идентификаторами: "
+            + ", ".join(sorted(collisions))
+        )
+
+    result = df.melt(
+        id_vars=id_columns,
+        value_vars=value_columns,
+        var_name=variable_name,
+        value_name=value_name,
+    )
+    if drop_empty:
+        result = result.dropna(subset=[value_name]).reset_index(drop=True)
+    outputs = [variable_name, value_name]
+    return result, outputs, {
+        "type": "wide_to_long",
+        "label": "Wide → Long",
+        "inputs": [*id_columns, *value_columns],
+        "outputs": outputs,
+        "params": {
+            "id_columns": id_columns,
+            "value_columns": value_columns,
+            "variable_name": variable_name,
+            "value_name": value_name,
+            "drop_empty": bool(drop_empty),
+            "rows_before": len(df),
+            "rows_after": len(result),
+        },
+    }
+
+
 def execute_pipeline(df, queued_steps):
     """Execute queued feature operations on one copy and return one result."""
     result = df.copy()
@@ -205,6 +400,24 @@ def execute_pipeline(df, queued_steps):
                     params.get("metrics"),
                     bool(params.get("exclude_zeros")),
                     bool(params.get("exclude_empty", True)),
+                )
+            elif operation == "long_to_wide":
+                result, outputs, committed = apply_long_to_wide(
+                    result,
+                    params.get("index_columns"),
+                    params.get("names_from"),
+                    params.get("value_columns"),
+                    params.get("aggregation") or "error",
+                    params.get("separator") or "__",
+                )
+            elif operation == "wide_to_long":
+                result, outputs, committed = apply_wide_to_long(
+                    result,
+                    params.get("id_columns"),
+                    params.get("value_columns"),
+                    params.get("variable_name") or "Переменная",
+                    params.get("value_name") or "Значение",
+                    bool(params.get("drop_empty")),
                 )
             else:
                 raise ValueError("Неизвестный тип операции.")
