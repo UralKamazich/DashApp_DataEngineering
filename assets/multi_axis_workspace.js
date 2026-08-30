@@ -252,6 +252,17 @@
     return Math.abs(Number(first) - Number(second)) <= (tolerance || 0.001);
   }
 
+  function scheduleSettledAxisSync(workspace, gd) {
+    if (!workspace?.isConnected || !gd?.isConnected) return;
+    if (workspace._multiAxisSettledSyncFrame) return;
+    workspace._multiAxisSettledSyncFrame = requestAnimationFrame(function () {
+      workspace._multiAxisSettledSyncFrame = requestAnimationFrame(function () {
+        workspace._multiAxisSettledSyncFrame = 0;
+        syncAxisHitZones(workspace, gd);
+      });
+    });
+  }
+
   function syncAxisRailLayout(workspace, gd) {
     const layout = gd?._fullLayout;
     if (!layout || !window.Plotly || workspace.dataset.multiAxisRailRelayout === "true") {
@@ -286,7 +297,7 @@
         ? Math.max(bounds.right, titleBounds?.right || bounds.right)
         : Math.min(bounds.left, titleBounds?.left || bounds.left);
       const envelope = entry.axis.side === "right" ? outerEdge - lineX : lineX - outerEdge;
-      const measured = Math.max(60, Math.min(128, envelope + 10));
+      const measured = Math.ceil(Math.max(60, Math.min(128, envelope + 10)));
       cached[entry.axisName] = Math.max(Number(cached[entry.axisName]) || 0, measured);
       entry.railWidth = cached[entry.axisName];
     });
@@ -362,13 +373,30 @@
       Date.now() - (workspace._multiAxisRailAppliedAt || 0) < 400;
     if (!changed || repeatedImmediately) return false;
 
+    const axisSetSignature = entries.map(function (entry) { return entry.axisName; }).sort().join("|");
+    const now = Date.now();
+    if (workspace._multiAxisRailAxisSet !== axisSetSignature ||
+        now - (workspace._multiAxisRailAppliedAt || 0) > 800) {
+      workspace._multiAxisRailConvergencePasses = 0;
+      workspace._multiAxisRailAxisSet = axisSetSignature;
+    }
+    // A real geometry update normally converges in two passes. Keep a hard
+    // ceiling as protection against browser font metrics oscillating by a px.
+    if ((workspace._multiAxisRailConvergencePasses || 0) >= 4) return false;
+    workspace._multiAxisRailConvergencePasses =
+      (workspace._multiAxisRailConvergencePasses || 0) + 1;
+
     workspace._multiAxisRailSignature = signature;
-    workspace._multiAxisRailAppliedAt = Date.now();
+    workspace._multiAxisRailAppliedAt = now;
     workspace.dataset.multiAxisRailRelayout = "true";
     Promise.resolve(window.Plotly.relayout(gd, updates)).catch(function () {
       delete workspace._multiAxisRailSignature;
     }).finally(function () {
       delete workspace.dataset.multiAxisRailRelayout;
+      // Plotly emits afterplot before the relayout promise has fully settled.
+      // That event is intentionally ignored by the guard above, so perform a
+      // fresh measurement once the new tick/title geometry is actually in DOM.
+      scheduleSettledAxisSync(workspace, gd);
     });
     return true;
   }
