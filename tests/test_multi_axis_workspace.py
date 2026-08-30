@@ -11,6 +11,7 @@ from multi_axis_workspace import (
     _FRAME_CACHE,
     _FRAME_CACHE_MAX_ENTRIES,
     _frame_for_payload,
+    _set_shared_y_axis_mode,
     _sync_state_for_input,
     empty_multi_axis_state,
 )
@@ -80,9 +81,43 @@ class MultiYAxisWorkspaceTests(unittest.TestCase):
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_side"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_series"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["show_legend"], component_ids)
+        self.assertIn(MULTI_Y_WORKSPACE.ids["shared_y_axes"], component_ids)
 
     def test_legend_is_enabled_in_a_new_workspace_state(self):
         self.assertTrue(empty_multi_axis_state()["show_legend"])
+        self.assertFalse(empty_multi_axis_state()["shared_y_axes"])
+
+    def test_shared_y_mode_retains_private_axes_and_synchronizes_each_side(self):
+        state = {
+            "series": [
+                {"id": "a", "axis_id": "axis-a"},
+                {"id": "b", "axis_id": "axis-b"},
+                {"id": "c", "axis_id": "axis-c"},
+            ],
+            "axes": [
+                {"id": "axis-a", "side": "left", "type": "log"},
+                {"id": "axis-b", "side": "left", "type": "linear"},
+                {"id": "axis-c", "side": "right", "type": "linear"},
+            ],
+        }
+
+        shared = _set_shared_y_axis_mode(state, True)
+        restored = _set_shared_y_axis_mode(shared, False)
+
+        self.assertTrue(shared["shared_y_axes"])
+        self.assertEqual(
+            [axis["id"] for axis in shared["axes"]],
+            ["axis-a", "axis-b", "axis-c"],
+        )
+        self.assertEqual(
+            [axis["type"] for axis in shared["axes"]],
+            ["log", "log", "linear"],
+        )
+        self.assertFalse(restored["shared_y_axes"])
+        self.assertEqual(
+            [axis["id"] for axis in restored["axes"]],
+            ["axis-a", "axis-b", "axis-c"],
+        )
 
     def test_series_card_keeps_only_scale_as_advanced_axis_control(self):
         card = MULTI_Y_WORKSPACE._series_card(

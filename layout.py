@@ -267,16 +267,25 @@ def create_layout():
                             zIndex=1200,
                             children=[
                                 dmc.MenuTarget(
-                                    dmc.Button(
-                                        "Из интернета",
-                                        id="online-dataset-open",
-                                        size="xs",
-                                        variant="subtle",
-                                        color="gray",
-                                        leftSection=DashIconify(
-                                            icon="tabler:world-download", width=15
+                                    dmc.Tooltip(
+                                        label="Загрузить dataset из интернета",
+                                        position="bottom",
+                                        withArrow=True,
+                                        openDelay=350,
+                                        children=dmc.ActionIcon(
+                                            DashIconify(
+                                                icon="tabler:world-download", width=16
+                                            ),
+                                            id="online-dataset-open",
+                                            size=26,
+                                            variant="subtle",
+                                            color="gray",
+                                            radius="sm",
+                                            attributes={
+                                                "aria-label": "Загрузить dataset из интернета"
+                                            },
+                                            style={"color": "#ccc"},
                                         ),
-                                        style={"color": "#ccc"},
                                     )
                                 ),
                                 dmc.MenuDropdown(

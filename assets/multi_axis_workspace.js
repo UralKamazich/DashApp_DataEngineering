@@ -36,6 +36,7 @@
       data_ref: null,
       shared_x: null,
       show_legend: true,
+      shared_y_axes: false,
       series: [],
       axes: []
     };

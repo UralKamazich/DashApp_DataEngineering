@@ -28,7 +28,7 @@ class MultiAxisStateTests(unittest.TestCase):
         second = normalize_multi_axis_state(first)
 
         self.assertEqual(first, second)
-        self.assertEqual(first["version"], 2)
+        self.assertEqual(first["version"], 3)
         self.assertEqual(first["shared_x"], "depth")
         self.assertEqual(
             [series["id"] for series in first["series"]],
@@ -85,6 +85,29 @@ class MultiAxisStateTests(unittest.TestCase):
         self.assertEqual(
             required_columns(normalized),
             ["time", "pressure", "rate"],
+        )
+
+    def test_shared_y_mode_collapses_axes_by_side_without_losing_series(self):
+        normalized = normalize_multi_axis_state({
+            "shared_y_axes": True,
+            "series": [
+                {"id": "left-a", "y": "a", "side": "left"},
+                {"id": "left-b", "y": "b", "side": "left"},
+                {"id": "right-a", "y": "c", "side": "right"},
+            ],
+        })
+
+        self.assertTrue(normalized["shared_y_axes"])
+        self.assertEqual(
+            [series["axis_id"] for series in normalized["series"]],
+            ["axis-shared-left", "axis-shared-left", "axis-shared-right"],
+        )
+        self.assertEqual(
+            [(axis["id"], axis["plotly_ref"], axis["side"]) for axis in normalized["axes"]],
+            [
+                ("axis-shared-left", "y2", "left"),
+                ("axis-shared-right", "y3", "right"),
+            ],
         )
 
     def test_available_columns_do_not_destroy_stale_assignments(self):
@@ -309,6 +332,48 @@ class MultiAxisFigureTests(unittest.TestCase):
         ).figure
 
         self.assertEqual(figure.layout.yaxis2.title.text, "Подпись давления")
+
+    def test_shared_y_axes_have_black_scales_and_multicolor_composite_titles(self):
+        result = build_multi_axis_figure(
+            self.frame,
+            {
+                "shared_x": "time",
+                "shared_y_axes": True,
+                "series": [
+                    {
+                        "y": "line", "name": "Давление",
+                        "color": "#ff0000", "side": "left",
+                    },
+                    {
+                        "y": "scatter", "name": "Температура",
+                        "color": "#0000ff", "side": "left",
+                    },
+                    {
+                        "y": "area", "name": "Расход",
+                        "color": "#00aa00", "side": "right",
+                    },
+                ],
+            },
+        )
+
+        figure = result.figure
+        self.assertEqual([trace.yaxis for trace in figure.data], ["y2", "y2", "y3"])
+        self.assertEqual(set(result.metadata["axis_refs"]), {
+            "axis-shared-left", "axis-shared-right",
+        })
+        left_title = figure.layout.yaxis2.title.text
+        self.assertIn("Давление", left_title)
+        self.assertIn("Температура", left_title)
+        self.assertIn("#ff0000", left_title)
+        self.assertIn("#0000ff", left_title)
+        self.assertIn("; ", left_title)
+        for axis in (figure.layout.yaxis2, figure.layout.yaxis3):
+            self.assertEqual(axis.linecolor, "#000000")
+            self.assertEqual(axis.tickcolor, "#000000")
+            self.assertEqual(axis.tickfont.color, "#000000")
+        self.assertEqual(figure.layout.xaxis.linecolor, "#000000")
+        self.assertEqual(figure.layout.xaxis.tickcolor, "#000000")
+        self.assertEqual(figure.layout.xaxis.tickfont.color, "#000000")
 
     def test_line_smoothing_uses_svg_spline_only_for_supported_types(self):
         result = build_multi_axis_figure(
