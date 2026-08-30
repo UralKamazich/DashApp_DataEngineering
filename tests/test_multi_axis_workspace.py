@@ -81,6 +81,7 @@ class MultiYAxisWorkspaceTests(unittest.TestCase):
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_side"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["add_series"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["show_legend"], component_ids)
+        self.assertIn(MULTI_Y_WORKSPACE.ids["legend_font_size"], component_ids)
         self.assertIn(MULTI_Y_WORKSPACE.ids["shared_y_axes"], component_ids)
 
     def test_legend_is_enabled_in_a_new_workspace_state(self):

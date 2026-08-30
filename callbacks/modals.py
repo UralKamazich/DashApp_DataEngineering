@@ -31,7 +31,8 @@ app.clientside_callback(
     function(pathname) {
         // --- Показать только нужную страницу ---
         var pages = {
-            "/": "page-graph",
+        "/": "page-graph",
+        "/dashboard": "page-dashboard",
             "/multi-y": "page-multi-y",
             "/correlation": "page-correlation",
             "/data-engineering": "page-data-engineering",

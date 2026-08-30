@@ -29,6 +29,7 @@ from dash_app import app
 # =========================
 from layout import (
     CORRELATION_WORKSPACE,
+    DASHBOARD_WORKSPACES,
     GRAPH_WORKSPACE,
     MULTI_Y_WORKSPACE,
     MULTIVARIATE_WORKSPACE,
@@ -36,6 +37,8 @@ from layout import (
 )
 app.layout = create_layout()
 GRAPH_WORKSPACE.register_callbacks(app)
+for dashboard_workspace in DASHBOARD_WORKSPACES:
+    dashboard_workspace.register_callbacks(app)
 MULTI_Y_WORKSPACE.register_callbacks(app)
 CORRELATION_WORKSPACE.register_callbacks(app)
 MULTIVARIATE_WORKSPACE.register_callbacks(app)
@@ -47,6 +50,7 @@ from callbacks import (
     clustering,
     columns_sidebar,
     data_engineering,
+    dashboard,
     dataset_panel,
     datasets,
     download,

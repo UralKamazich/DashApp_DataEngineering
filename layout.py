@@ -14,6 +14,7 @@ from config import APP_NAME, STYLE_CARD
 from data_import import POPULAR_DATASETS
 from correlation_workspace import CorrelationWorkspace
 from data_engineering_workspace import create_data_engineering_workspace
+from dashboard_workspace import DASHBOARD_WORKSPACES, create_dashboard_workspace
 from clustering_workspace import create_clustering_workspace
 from ml_workspace import create_ml_workspace
 from dataset_panel import create_dataset_drawer
@@ -45,6 +46,7 @@ from components import (
 # Навигационные ссылки
 NAV_LINKS = [
     {"label": "График", "href": "/"},
+    {"label": "Дашборд", "href": "/dashboard"},
     {"label": "Multi‑Y", "href": "/multi-y"},
     {"label": "Корреляционный анализ", "href": "/correlation"},
     {"label": "Data Engineering", "href": "/data-engineering"},
@@ -193,6 +195,7 @@ def create_layout():
     graph_workspace = GRAPH_WORKSPACE.render()
     multi_y_workspace = MULTI_Y_WORKSPACE.render()
     multivariate_workspace = MULTIVARIATE_WORKSPACE.render()
+    dashboard_workspace = create_dashboard_workspace()
     # Мультиграфик занимает место бывшей корреляционной матрицы:
     # тип «Коррелограмма» строит её по тем же «коррелируемым каналам».
     correlation_workspace = CORRELATION_WORKSPACE.render(
@@ -393,6 +396,10 @@ def create_layout():
                     children=[
                     html.Div(id="page-graph", children=[
                         graph_workspace,
+                    ]),
+
+                    html.Div(id="page-dashboard", style={"display": "none"}, children=[
+                        dashboard_workspace,
                     ]),
 
                     html.Div(id="page-multi-y", style={"display": "none"}, children=[

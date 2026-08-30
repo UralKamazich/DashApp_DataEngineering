@@ -110,6 +110,7 @@ def empty_multi_axis_state(
         "data_ref": data_ref,
         "shared_x": None,
         "show_legend": True,
+        "legend_font_size": 12,
         "shared_y_axes": False,
         "series": [],
         "axes": [],
@@ -284,6 +285,7 @@ class MultiYAxisWorkspace:
             "series_chips": f"{graph_id}-series-chips",
             "shared_x": f"{graph_id}-shared-x",
             "show_legend": f"{graph_id}-show-legend",
+            "legend_font_size": f"{graph_id}-legend-font-size",
             "shared_y_axes": f"{graph_id}-shared-y-axes",
             "add_y": f"{graph_id}-add-y",
             "add_side": f"{graph_id}-add-side",
@@ -548,6 +550,18 @@ class MultiYAxisWorkspace:
                     ),
                 ],
                 className="multi-axis-settings-grid",
+            ),
+            html.Div(
+                dmc.NumberInput(
+                    id=self.ids["legend_font_size"],
+                    label="Размер шрифта легенды",
+                    value=12,
+                    min=6,
+                    max=48,
+                    step=1,
+                    size="xs",
+                ),
+                className="multi-axis-settings-grid multi-axis-settings-grid--single",
             ),
             html.Div(
                 [
@@ -1188,6 +1202,7 @@ class MultiYAxisWorkspace:
             Input(self.ids["render_mode"], "value"),
             Input(self.ids["height"], "value"),
             Input(self.ids["width"], "value"),
+            Input(self.ids["legend_font_size"], "value"),
             Input(self.ids["revision"], "data"),
             State(self.dataset_registry_id, "data"),
             prevent_initial_call="initial_duplicate",
@@ -1200,6 +1215,7 @@ class MultiYAxisWorkspace:
             render_mode,
             height,
             width,
+            legend_font_size,
             _revision,
             registry,
         ):
@@ -1254,6 +1270,7 @@ class MultiYAxisWorkspace:
                 render_state = deepcopy(state or empty_multi_axis_state())
                 render_state["height"] = height or self.initial_height
                 render_state["width"] = width
+                render_state["legend_font_size"] = legend_font_size
                 result = build_multi_axis_figure(
                     frame,
                     render_state,
@@ -1299,6 +1316,7 @@ class MultiYAxisWorkspace:
                     data_ref: (state && state.data_ref) || null,
                     shared_x: null,
                     show_legend: true,
+                    legend_font_size: 12,
                     shared_y_axes: false,
                     series: [],
                     axes: []

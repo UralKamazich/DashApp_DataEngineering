@@ -435,6 +435,9 @@ def normalize_multi_axis_state(
             else None
         ),
         "show_legend": bool(source.get("show_legend", True)),
+        "legend_font_size": int(_finite_float(
+            source.get("legend_font_size"), 12, 6, 48
+        )),
         "shared_y_axes": shared_y_axes,
         "view_revision": int(_finite_float(source.get("view_revision"), 0, 0, 1_000_000_000)),
     }
@@ -834,6 +837,7 @@ def build_multi_axis_figure(
         width=normalized["width"],
         autosize=normalized["width"] is None,
         showlegend=normalized["show_legend"],
+        legend={"font": {"size": normalized["legend_font_size"]}},
         hovermode="x unified",
         boxmode="group",
         # Plotly creates overlaying subplot layers for independent Y axes.

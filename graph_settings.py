@@ -48,6 +48,7 @@ SETTINGS_COMPONENT_IDS = (
     "tick-step-yaxis",
     "font-size-title",
     "font-size-ticks",
+    "font-size-legend",
     "InputMaxSizeBubble",
     "InputMarkerSize",
 )
@@ -58,9 +59,18 @@ SETTINGS_COMBOBOX_Z_INDEX = 10030
 class GraphSettingsPanel:
     """Build a scalable, single-level graph settings inspector."""
 
-    def __init__(self, controls: Mapping[str, object], ids: Mapping[str, str] | None = None):
+    def __init__(
+        self,
+        controls: Mapping[str, object],
+        ids: Mapping[str, str] | None = None,
+        *,
+        initial_height: int = 750,
+        initial_width: int | None = None,
+    ):
         self.controls = controls
         self.width = 340
+        self.initial_height = initial_height
+        self.initial_width = initial_width
         self._namespace = None
         self._explicit_ids = set((ids or {}).keys())
         self.ids = {component_id: component_id for component_id in SETTINGS_COMPONENT_IDS}
@@ -201,7 +211,7 @@ class GraphSettingsPanel:
                         self._number_input(
                             "InputSizePlot",
                             "Высота",
-                            750,
+                            self.initial_height,
                             min=50,
                             max=20000,
                             step=50,
@@ -210,7 +220,7 @@ class GraphSettingsPanel:
                         self._number_input(
                             "InputSizePlotW",
                             "Ширина",
-                            None,
+                            self.initial_width,
                             min=50,
                             max=20000,
                             step=50,
@@ -312,9 +322,13 @@ class GraphSettingsPanel:
                     [
                         html.Div(self.controls["legend_position"], className="graph-settings-control"),
                         html.Div(self.controls["legend_order"], className="graph-settings-control"),
+                        self._number_input(
+                            "font-size-legend", "Размер шрифта", 12,
+                            min=6, max=48, step=1,
+                        ),
                         html.Div(
                             self.controls["legend_custom_order"],
-                            className="graph-settings-control graph-settings-span-2",
+                            className="graph-settings-control",
                         ),
                     ],
                     cols=2,

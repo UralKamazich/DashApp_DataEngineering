@@ -304,12 +304,14 @@ class MultiAxisFigureTests(unittest.TestCase):
             {
                 "shared_x": "time",
                 "show_legend": True,
+                "legend_font_size": 19,
                 "series": [{"y": "line"}, {"y": "scatter"}],
             },
         ).figure
 
         self.assertFalse(hidden.layout.showlegend)
         self.assertTrue(visible.layout.showlegend)
+        self.assertEqual(visible.layout.legend.font.size, 19)
 
     def test_series_name_is_the_default_axis_label(self):
         figure = build_multi_axis_figure(

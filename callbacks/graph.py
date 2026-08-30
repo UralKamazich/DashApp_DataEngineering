@@ -739,7 +739,8 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
                       render_mode="hybrid",
                       marker_size=8,
                       hierarchy_levels=None,
-                      hierarchy_value=None):
+                      hierarchy_value=None,
+                      legend_font_size=12):
 
     empty = _empty_fig(selected_style)
     try:
@@ -1071,8 +1072,18 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
         elif axes_category == "y" and y_as_text:
             fig.update_yaxes(categoryorder=dropdown_sort_column)
 
+        try:
+            normalized_legend_font_size = min(48, max(6, float(legend_font_size)))
+        except (TypeError, ValueError):
+            normalized_legend_font_size = 12
+        legend_style = dict(legend_config.get(legend, {}))
+        legend_style["font"] = {
+            **dict(legend_style.get("font") or {}),
+            "size": normalized_legend_font_size,
+        }
+
         fig.update_layout(
-            legend=legend_config.get(legend, {}),
+            legend=legend_style,
             legend_title_text=None,
             xaxis_title_font=dict(size=font_size_ticks),
             yaxis_title_font=dict(size=font_size_ticks),
@@ -1168,6 +1179,7 @@ def build_main_figure(n_clicks, x_col, y_col, z_col, color_col, size_col, text_c
     Input(GRAPH_WORKSPACE.settings_id("InputMarkerSize"), "value"),
     Input(GRAPH_WORKSPACE.field_id("hierarchy-levels"), "value"),
     Input(GRAPH_WORKSPACE.field_id("hierarchy-value"), "value"),
+    Input(GRAPH_WORKSPACE.settings_id("font-size-legend"), "value"),
     prevent_initial_call=True,
 )
 def update_main_graph(*args, **kwargs):

@@ -1436,11 +1436,13 @@ class GraphAxisValidationTests(unittest.TestCase):
             pie_aggregation="sum",
             bar_aggregation="sum",
             categorical_fields={"x": True},
+            legend_font_size=17,
         )
 
         self.assertEqual(notifications, [])
         self.assertEqual(list(figure.data[0].x), ["10", "20", "10"])
         self.assertEqual(figure.layout.xaxis.type, "category")
+        self.assertEqual(figure.layout.legend.font.size, 17)
 
     def test_y_only_is_allowed_for_regular_charts(self):
         for chart_type in Y_ONLY_CHART_TYPES:
@@ -2515,6 +2517,7 @@ class GraphSettingsPanelTests(unittest.TestCase):
             "graph-settings-specific-pie",
             "graph-settings-specific-empty",
             "graph-settings-close-on-outside",
+            "font-size-legend",
         ):
             self.assertIn(expected, component_ids)
         self.assertTrue(
