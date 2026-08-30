@@ -103,6 +103,11 @@ def update_correlation_dropdown_options(filtered_json, pathname, meta):
     Output("agg-keys", "data"),
     Output("agg-cols", "data"),
     Output("txtcopy-cols", "data"),
+    Output("reshape-wide-index", "data"),
+    Output("reshape-wide-names", "data"),
+    Output("reshape-wide-values", "data"),
+    Output("reshape-long-id", "data"),
+    Output("reshape-long-values", "data"),
     Input("filtered-data", "data"),
     Input("url", "pathname"),
     State("meta-columns", "data"),
@@ -112,4 +117,5 @@ def update_engineering_dropdown_options(filtered_json, pathname, meta):
     if pathname != "/data-engineering":
         raise PreventUpdate
     options = update_dropdown_options_all(filtered_json, meta)
-    return options[10:14]
+    all_columns = options[11]
+    return (*options[10:14], all_columns, all_columns, all_columns, all_columns, all_columns)

@@ -15,10 +15,12 @@ from dataset_registry import (
 from engineering_ops import (
     apply_binning,
     apply_group_aggregates,
+    apply_long_to_wide,
     apply_text_copy,
+    apply_wide_to_long,
     execute_pipeline,
 )
-from utils import meta_from_df
+from utils import classify_simple, meta_from_df, read_df_from_store
 
 
 class DatasetRegistryTests(unittest.TestCase):
@@ -89,6 +91,35 @@ class DatasetRegistryTests(unittest.TestCase):
         )
         self.assertTrue(suggest_dataset_name(derived, queued, "base").endswith("_2"))
 
+    def test_reshape_operations_are_named_and_summarized(self):
+        queued = [
+            {"operation": "long_to_wide"},
+            {"operation": "wide_to_long"},
+        ]
+        self.assertEqual(
+            suggest_dataset_name(self.registry, queued, "base"),
+            "LongToWide_WideToLong_До фильтров_1",
+        )
+        summaries = summarize_transformation_steps([
+            {
+                "type": "long_to_wide",
+                "params": {
+                    "index": ["well"],
+                    "names_from": "metric",
+                    "values_from": ["value"],
+                },
+            },
+            {
+                "type": "wide_to_long",
+                "params": {
+                    "id_columns": ["well"],
+                    "value_columns": ["oil", "gas"],
+                },
+            },
+        ])
+        self.assertIn("Long → Wide", summaries[0])
+        self.assertIn("Wide → Long", summaries[1])
+
     def test_transformation_summary_uses_committed_step_details(self):
         steps = [
             {
@@ -129,6 +160,22 @@ class EngineeringOperationTests(unittest.TestCase):
         self.assertEqual(bin_outputs, ["Группа(value)"])
         self.assertEqual(text_outputs, ["value_txt"])
         self.assertEqual(frame["Группа(value)"].tolist(), ["Группа 1", "Группа 1", "Группа 2"])
+
+    def test_text_copy_stays_categorical_after_json_roundtrip(self):
+        frame, outputs, _ = apply_text_copy(
+            self.frame.copy(), ["value"], "_txt", True
+        )
+        output = outputs[0]
+        meta = meta_from_df(frame)
+        restored = read_df_from_store(
+            frame.to_json(date_format="iso", orient="split"), meta
+        )
+
+        numeric, categorical, _datetime = classify_simple(restored)
+        self.assertEqual(str(restored[output].dtype), "string")
+        self.assertIn(output, categorical)
+        self.assertNotIn(output, numeric)
+        self.assertEqual(restored[output].tolist(), ["1.0", "3.0", "8.0"])
 
     def test_group_aggregate_is_row_aligned(self):
         frame, outputs, _ = apply_group_aggregates(
@@ -189,6 +236,77 @@ class EngineeringOperationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Шаг 1"):
             execute_pipeline(self.frame, queued)
         self.assertEqual(list(self.frame.columns), ["group", "value"])
+
+    def test_long_to_wide_and_back_preserves_values(self):
+        source = pd.DataFrame({
+            "well": ["A", "A", "B", "B"],
+            "metric": ["oil", "gas", "oil", "gas"],
+            "value": [10.0, 2.0, 20.0, 4.0],
+        })
+        wide, outputs, committed = apply_long_to_wide(
+            source, ["well"], "metric", ["value"], "error", "__"
+        )
+        self.assertEqual(list(wide.columns), ["well", "oil", "gas"])
+        self.assertEqual(outputs, ["oil", "gas"])
+        self.assertEqual(committed["type"], "long_to_wide")
+        self.assertEqual(wide["oil"].tolist(), [10.0, 20.0])
+
+        restored, restored_outputs, restored_step = apply_wide_to_long(
+            wide, ["well"], ["oil", "gas"], "metric", "value", False
+        )
+        restored = restored.sort_values(["well", "metric"]).reset_index(drop=True)
+        expected = source.sort_values(["well", "metric"]).reset_index(drop=True)
+        pd.testing.assert_frame_equal(restored, expected)
+        self.assertEqual(restored_outputs, ["metric", "value"])
+        self.assertEqual(restored_step["type"], "wide_to_long")
+
+    def test_long_to_wide_requires_duplicate_policy(self):
+        source = pd.DataFrame({
+            "well": ["A", "A"],
+            "metric": ["oil", "oil"],
+            "value": [10.0, 5.0],
+        })
+        with self.assertRaisesRegex(ValueError, "повторяющейся комбинацией"):
+            apply_long_to_wide(source, ["well"], "metric", ["value"], "error")
+        wide, _, _ = apply_long_to_wide(
+            source, ["well"], "metric", ["value"], "sum"
+        )
+        self.assertEqual(wide.loc[0, "oil"], 15.0)
+
+    def test_wide_to_long_can_use_all_non_identifier_columns(self):
+        source = pd.DataFrame({
+            "well": ["A", "B"],
+            "oil": [10.0, None],
+            "gas": [2.0, 4.0],
+        })
+        long, _, _ = apply_wide_to_long(
+            source, ["well"], [], "metric", "value", True
+        )
+        self.assertEqual(len(long), 3)
+        self.assertEqual(set(long["metric"]), {"oil", "gas"})
+
+    def test_reshape_steps_run_inside_atomic_pipeline(self):
+        source = pd.DataFrame({
+            "well": ["A", "A", "B", "B"],
+            "metric": ["oil", "gas", "oil", "gas"],
+            "value": [10.0, 2.0, 20.0, 4.0],
+        })
+        queued = [{
+            "operation": "long_to_wide",
+            "label": "Long → Wide",
+            "scope": "base",
+            "params": {
+                "index_columns": ["well"],
+                "names_from": "metric",
+                "value_columns": ["value"],
+                "aggregation": "error",
+                "separator": "__",
+            },
+        }]
+        result, outputs, committed = execute_pipeline(source, queued)
+        self.assertEqual(result.shape, (2, 3))
+        self.assertEqual(outputs, ["oil", "gas"])
+        self.assertEqual(committed[0]["scope"], "base")
 
 
 if __name__ == "__main__":

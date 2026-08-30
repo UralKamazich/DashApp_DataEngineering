@@ -357,6 +357,66 @@ class DashApplicationSmokeTests(unittest.TestCase):
         self.assertEqual(components["de-output-mode"].value, "new")
         self.assertFalse(getattr(components["de-output-name"], "disabled", False))
 
+    def test_data_engineering_methods_have_explicit_movable_help(self):
+        components = list(walk_components(app.layout))
+        expected = {
+            "de-help-binning",
+            "de-help-text",
+            "de-help-aggregate",
+            "de-help-reshape",
+        }
+        windows = {
+            getattr(component, "id", None): component
+            for component in components
+            if getattr(component, "id", None) in expected
+        }
+        self.assertEqual(set(windows), expected)
+        for window in windows.values():
+            self.assertIn("graph-help-window", getattr(window, "className", ""))
+            self.assertEqual(window.to_plotly_json()["props"]["aria-modal"], "false")
+
+        targets = {
+            component.to_plotly_json()["props"].get("data-help-window-target")
+            for component in components
+            if "de-method-help-button" in (getattr(component, "className", "") or "")
+        }
+        self.assertEqual(targets, expected)
+
+    def test_data_engineering_exposes_long_wide_controls(self):
+        component_ids = {
+            getattr(component, "id", None)
+            for component in walk_components(app.layout)
+        }
+        self.assertTrue({
+            "reshape-direction",
+            "reshape-wide-index",
+            "reshape-wide-names",
+            "reshape-wide-values",
+            "reshape-wide-aggregation",
+            "reshape-long-id",
+            "reshape-long-values",
+            "reshape-long-variable-name",
+            "reshape-long-value-name",
+            "btn-reshape",
+        }.issubset(component_ids))
+
+    def test_ml_profile_charts_have_bounded_height(self):
+        charts = {
+            getattr(component, "id", None): component
+            for component in walk_components(app.layout)
+            if getattr(component, "id", None) in {
+                "ml-profile-missing-graph",
+                "ml-profile-target-graph",
+            }
+        }
+        self.assertEqual(set(charts), {
+            "ml-profile-missing-graph",
+            "ml-profile-target-graph",
+        })
+        for chart in charts.values():
+            self.assertEqual(chart.style.get("height"), "270px")
+            self.assertEqual(chart.style.get("maxHeight"), "270px")
+
     def test_every_plot_group_reacts_to_theme_changes(self):
         output_markers = (
             ("..graph.figure...", ("filtered-data", "data")),

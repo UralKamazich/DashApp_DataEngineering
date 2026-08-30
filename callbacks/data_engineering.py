@@ -7,7 +7,13 @@ from dash import ALL, Input, Output, State, ctx, html, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
-from dataset_registry import commit_result, get_record, input_payload, suggest_dataset_name
+from dataset_registry import (
+    commit_result,
+    get_record,
+    input_payload,
+    save_runtime_state,
+    suggest_dataset_name,
+)
 from engineering_ops import execute_pipeline
 from utils import meta_from_df, read_df_from_store
 
@@ -43,6 +49,17 @@ def _queued_step(
     aggregate_metrics,
     exclude_zeros,
     exclude_empty,
+    reshape_direction,
+    wide_index,
+    wide_names,
+    wide_values,
+    wide_aggregation,
+    wide_separator,
+    long_ids,
+    long_values,
+    long_variable_name,
+    long_value_name,
+    long_dropna,
 ):
     if trigger == "btn-grouping":
         if not bin_column:
@@ -78,24 +95,77 @@ def _queued_step(
             },
         }
 
-    keys = list(dict.fromkeys(aggregate_keys or []))
-    columns = list(dict.fromkeys(aggregate_columns or []))
-    metrics = list(dict.fromkeys(aggregate_metrics or []))
-    if not keys or not columns or not metrics:
-        raise ValueError("Выберите ключи, каналы и метрики.")
+    if trigger == "btn-agg":
+        keys = list(dict.fromkeys(aggregate_keys or []))
+        columns = list(dict.fromkeys(aggregate_columns or []))
+        metrics = list(dict.fromkeys(aggregate_metrics or []))
+        if not keys or not columns or not metrics:
+            raise ValueError("Выберите ключи, каналы и метрики.")
+        return {
+            "operation": "group_aggregates",
+            "label": f"Агрегаты · {len(metrics)}",
+            "summary": f"По: {', '.join(keys[:2])} · {', '.join(metrics[:3])}",
+            "scope": scope,
+            "params": {
+                "keys": keys,
+                "columns": columns,
+                "metrics": metrics,
+                "exclude_zeros": bool(exclude_zeros),
+                "exclude_empty": bool(exclude_empty),
+            },
+        }
+
+    if reshape_direction == "wide_to_long":
+        ids = list(dict.fromkeys(long_ids or []))
+        values = list(dict.fromkeys(long_values or []))
+        return {
+            "operation": "wide_to_long",
+            "label": "Wide → Long",
+            "summary": (
+                f"ID: {', '.join(ids[:2]) or 'нет'} · "
+                f"{len(values) if values else 'все остальные'} каналов"
+            ),
+            "scope": scope,
+            "params": {
+                "id_columns": ids,
+                "value_columns": values,
+                "variable_name": long_variable_name or "Переменная",
+                "value_name": long_value_name or "Значение",
+                "drop_empty": bool(long_dropna),
+            },
+        }
+
+    index_columns = list(dict.fromkeys(wide_index or []))
+    value_columns = list(dict.fromkeys(wide_values or []))
+    if not index_columns or not wide_names or not value_columns:
+        raise ValueError("Выберите идентификаторы, канал заголовков и каналы значений.")
     return {
-        "operation": "group_aggregates",
-        "label": f"Агрегаты · {len(metrics)}",
-        "summary": f"По: {', '.join(keys[:2])} · {', '.join(metrics[:3])}",
+        "operation": "long_to_wide",
+        "label": "Long → Wide",
+        "summary": (
+            f"Строки: {', '.join(index_columns[:2])} · "
+            f"заголовки: {wide_names}"
+        ),
         "scope": scope,
         "params": {
-            "keys": keys,
-            "columns": columns,
-            "metrics": metrics,
-            "exclude_zeros": bool(exclude_zeros),
-            "exclude_empty": bool(exclude_empty),
+            "index_columns": index_columns,
+            "names_from": wide_names,
+            "value_columns": value_columns,
+            "aggregation": wide_aggregation or "error",
+            "separator": wide_separator or "__",
         },
     }
+
+
+@app.callback(
+    Output("reshape-long-to-wide-panel", "style"),
+    Output("reshape-wide-to-long-panel", "style"),
+    Input("reshape-direction", "value"),
+)
+def toggle_reshape_direction(direction):
+    if direction == "wide_to_long":
+        return {"display": "none"}, {"display": "block"}
+    return {"display": "block"}, {"display": "none"}
 
 
 @app.callback(
@@ -106,6 +176,7 @@ def _queued_step(
     Input("btn-grouping", "n_clicks"),
     Input("btn-txtcopy", "n_clicks"),
     Input("btn-agg", "n_clicks"),
+    Input("btn-reshape", "n_clicks"),
     Input("de-clear-pipeline", "n_clicks"),
     Input("stored-data", "data"),
     Input({"type": "de-remove-step", "index": ALL}, "n_clicks"),
@@ -122,6 +193,17 @@ def _queued_step(
     State("agg-metrics", "value"),
     State("agg-exclude-zeros", "checked"),
     State("agg-exclude-empty", "checked"),
+    State("reshape-direction", "value"),
+    State("reshape-wide-index", "value"),
+    State("reshape-wide-names", "value"),
+    State("reshape-wide-values", "value"),
+    State("reshape-wide-aggregation", "value"),
+    State("reshape-wide-separator", "value"),
+    State("reshape-long-id", "value"),
+    State("reshape-long-values", "value"),
+    State("reshape-long-variable-name", "value"),
+    State("reshape-long-value-name", "value"),
+    State("reshape-long-dropna", "checked"),
     State("de-draft-pipeline", "data"),
     State("dataset-registry", "data"),
     State("active-dataset-id", "data"),
@@ -133,6 +215,7 @@ def stage_feature_step(
     _bin_clicks,
     _text_clicks,
     _aggregate_clicks,
+    _reshape_clicks,
     _clear_clicks,
     _stored_json,
     remove_clicks,
@@ -149,6 +232,17 @@ def stage_feature_step(
     aggregate_metrics,
     exclude_zeros,
     exclude_empty,
+    reshape_direction,
+    wide_index,
+    wide_names,
+    wide_values,
+    wide_aggregation,
+    wide_separator,
+    long_ids,
+    long_values,
+    long_variable_name,
+    long_value_name,
+    long_dropna,
     draft,
     registry,
     active_id,
@@ -176,7 +270,7 @@ def stage_feature_step(
             current = _empty_draft()
         return current, no_update, no_update, no_update
 
-    if trigger not in {"btn-grouping", "btn-txtcopy", "btn-agg"}:
+    if trigger not in {"btn-grouping", "btn-txtcopy", "btn-agg", "btn-reshape"}:
         raise PreventUpdate
 
     input_id = str(input_id or active_id or "")
@@ -215,6 +309,17 @@ def stage_feature_step(
             aggregate_metrics=aggregate_metrics,
             exclude_zeros=exclude_zeros,
             exclude_empty=exclude_empty,
+            reshape_direction=reshape_direction,
+            wide_index=wide_index,
+            wide_names=wide_names,
+            wide_values=wide_values,
+            wide_aggregation=wide_aggregation,
+            wide_separator=wide_separator,
+            long_ids=long_ids,
+            long_values=long_values,
+            long_variable_name=long_variable_name,
+            long_value_name=long_value_name,
+            long_dropna=long_dropna,
         )
     except (TypeError, ValueError) as error:
         message = str(error)
@@ -399,8 +504,24 @@ def run_feature_pipeline(
         output_mode=output_mode or "current",
         output_name=resolved_output_name,
     )
+    shape_changing = any(
+        (step or {}).get("type") in {"long_to_wide", "wide_to_long"}
+        for step in committed_steps
+    )
+    if (output_mode or "current") != "new" and shape_changing:
+        updated_registry = save_runtime_state(
+            updated_registry,
+            result_id,
+            filters_state={},
+            filters_applied_state={},
+            filter_logic="and",
+            filter_applied_logic="and",
+        )
     result = get_record(updated_registry, result_id) or {}
-    message = f"Выполнено шагов: {len(committed_steps)} · каналов добавлено: {len(outputs)}"
+    message = (
+        f"Выполнено шагов: {len(committed_steps)} · "
+        f"результат: {len(result_frame):,} строк × {len(result_frame.columns):,} каналов"
+    ).replace(",", " ")
 
     if (output_mode or "current") == "new":
         return (

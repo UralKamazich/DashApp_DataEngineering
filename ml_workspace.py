@@ -979,12 +979,18 @@ def create_data_profile_workspace():
     charts = html.Div([
         dmc.Paper([
             dmc.Text("Пропуски · топ 20", fw=700, size="xs"),
-            dcc.Graph(id="ml-profile-missing-graph", config=GRAPH_CONFIG),
-        ], p="xs", withBorder=True, shadow="xs"),
+            dcc.Graph(
+                id="ml-profile-missing-graph", config=GRAPH_CONFIG,
+                style={"height": "270px", "maxHeight": "270px"},
+            ),
+        ], p="xs", withBorder=True, shadow="xs", className="ml-profile-chart-card"),
         dmc.Paper([
             dmc.Text("Распределение цели", fw=700, size="xs"),
-            dcc.Graph(id="ml-profile-target-graph", config=GRAPH_CONFIG),
-        ], p="xs", withBorder=True, shadow="xs"),
+            dcc.Graph(
+                id="ml-profile-target-graph", config=GRAPH_CONFIG,
+                style={"height": "270px", "maxHeight": "270px"},
+            ),
+        ], p="xs", withBorder=True, shadow="xs", className="ml-profile-chart-card"),
     ], className="ml-profile-charts")
 
     table = dmc.Paper([
