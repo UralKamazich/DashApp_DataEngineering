@@ -8,7 +8,9 @@
     "dev": "electron . --dev",
     "build": "electron-builder --mac",
     "build:dmg": "electron-builder --mac dmg",
-    "build:dir": "electron-builder --mac dir"
+    "build:dir": "electron-builder --mac dir",
+    "build:win": "electron-builder --win",
+    "build:win:dir": "electron-builder --win dir"
   },
   "author": "Ural Muslimov",
   "license": "MIT",
@@ -21,13 +23,41 @@
     "productName": "DataAnalize",
     "mac": {
       "category": "public.app-category.business",
-      "icon": "assets/icon.icns",
+      "icon": "icon.icns",
       "target": [
         "dmg",
         "zip"
       ],
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extraResources": [
+        {
+          "from": ".venv",
+          "to": "app/.venv",
+          "filter": ["**/*"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "favicon.ico",
+      "target": [
+        {"target": "nsis", "arch": ["x64"]},
+        {"target": "zip", "arch": ["x64"]}
+      ],
+      "extraResources": [
+        {
+          "from": "python-dist/dataanalize-server",
+          "to": "server",
+          "filter": ["**/*"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DataAnalize"
     },
     "files": [
       "electron/**/*",
@@ -38,7 +68,7 @@
       {
         "from": ".",
         "to": "app",
-        "filters": [
+        "filter": [
           "*.py",
           "callbacks/**/*",
           "assets/**/*",
@@ -49,7 +79,7 @@
           "dash_app.py",
           "layout.py",
           "utils.py",
-          ".venv/**/*"
+          "!tests/**/*"
         ]
       }
     ],
