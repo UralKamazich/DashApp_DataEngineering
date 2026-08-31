@@ -9,7 +9,7 @@
     "build": "electron-builder --mac",
     "build:dmg": "electron-builder --mac dmg",
     "build:dir": "electron-builder --mac dir",
-    "build:win": "electron-builder --win",
+    "build:win": "electron-builder --win --publish never",
     "build:win:dir": "electron-builder --win dir"
   },
   "author": "Ural Muslimov",
