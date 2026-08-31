@@ -217,7 +217,10 @@ class DashApplicationSmokeTests(unittest.TestCase):
             with self.subTest(path=path):
                 with self.client.get(path) as response:
                     self.assertEqual(response.status_code, 200)
-                self.assertIn(content_type, response.content_type)
+                expected_content_types = {content_type}
+                if content_type == "text/javascript":
+                    expected_content_types.add("application/javascript")
+                self.assertIn(response.mimetype, expected_content_types)
 
     def test_settings_dropdown_portal_is_treated_as_part_of_popover(self):
         script_path = Path(__file__).resolve().parents[1] / "assets" / "graph_settings_popover.js"
