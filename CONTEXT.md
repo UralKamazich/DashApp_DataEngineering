@@ -25,7 +25,6 @@ DashApp_DataEngineering/
 │   ├── data_engineering.py # Текстовые копии столбцов
 │   ├── dropdowns.py     # Обновление опций всех дропдаунов при смене данных
 │   ├── graph.py         # Основной график (update_main_graph) + нижние (update_lower_graphs)
-│   ├── colors.py        # Диалог выбора цветов
 │   └── download.py      # Скачивание HTML/Excel/PNG
 └── .venv/              # Python 3.14, виртуальное окружение
 ```
