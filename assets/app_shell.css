@@ -11,7 +11,7 @@
     color: #9aa0aa;
     background: #22252b;
     border-top: 1px solid #343a40;
-    font-family: monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Mono", "Courier New", monospace;
     font-size: 10px;
     line-height: 1;
     white-space: nowrap;
