@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, session } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -11,6 +11,24 @@ const APP_ROOT = app.isPackaged
     ? path.join(process.resourcesPath, 'app')
     : path.join(__dirname, '..');
 const APP_ICON = path.join(APP_ROOT, 'assets', 'icon.png');
+
+function pythonLaunch() {
+    if (app.isPackaged && process.platform === 'win32') {
+        return {
+            command: path.join(process.resourcesPath, 'server', 'dataanalize-server.exe'),
+            args: [],
+            cwd: path.join(process.resourcesPath, 'app'),
+        };
+    }
+    const venvPython = process.platform === 'win32'
+        ? path.join(APP_ROOT, '.venv', 'Scripts', 'python.exe')
+        : path.join(APP_ROOT, '.venv', 'bin', 'python');
+    return {
+        command: venvPython,
+        args: [path.join(APP_ROOT, 'run_server.py')],
+        cwd: APP_ROOT,
+    };
+}
 
 // Проверка готовности сервера
 function waitForServer(url, callback, retries = 30) {
@@ -33,14 +51,20 @@ function waitForServer(url, callback, retries = 30) {
 
 // Запуск Python Dash сервера
 function startPythonServer() {
-    const scriptPath = path.join(__dirname, '..', 'run_server.py');
-    const venvPython = path.join(__dirname, '..', '.venv', 'bin', 'python');
+    // Development uses the platform-specific venv. Packaged Windows uses a
+    // self-contained PyInstaller sidecar; packaged macOS keeps its venv in
+    // Contents/Resources/app. None of these runtimes live inside app.asar.
+    const launch = pythonLaunch();
     
     console.log('Starting Dash server...');
     
-    pythonProcess = spawn(venvPython, [scriptPath], {
-        cwd: path.join(__dirname, '..'),
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+    pythonProcess = spawn(launch.command, launch.args, {
+        cwd: launch.cwd,
+        env: {
+            ...process.env,
+            PYTHONUNBUFFERED: '1',
+            DATAANALIZE_ELECTRON: '1',
+        },
         stdio: ['ignore', 'pipe', 'pipe']
     });
     
@@ -78,6 +102,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js'),
         },
     });
     
@@ -110,6 +135,24 @@ app.whenReady().then(() => {
             createWindow();
         }
     });
+});
+
+ipcMain.handle('dataset:pick-file', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Выберите файл данных',
+        properties: ['openFile'],
+        filters: [
+            { name: 'Поддерживаемые datasets', extensions: ['xlsx', 'csv', 'txt', 'tsv', 'zip', 'pkl'] },
+            { name: 'Excel', extensions: ['xlsx'] },
+            { name: 'Текстовые таблицы', extensions: ['csv', 'txt', 'tsv'] },
+            { name: 'Архивы ZIP', extensions: ['zip'] },
+            { name: 'Pickle', extensions: ['pkl'] },
+            { name: 'Все файлы', extensions: ['*'] },
+        ],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    const filePath = result.filePaths[0];
+    return { path: filePath, name: path.basename(filePath) };
 });
 
 app.on('window-all-closed', () => {

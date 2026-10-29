@@ -35,6 +35,36 @@ npm ci
 npm start
 ```
 
+В Windows полный debug-режим подготавливается и запускается одной командой из
+PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev_windows.ps1
+```
+
+Скрипт создаёт `.venv` через Python 3.14, ставит Python/Node-зависимости и
+запускает Electron. При следующих запусках установку можно пропустить:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev_windows.ps1 -SkipInstall
+```
+
+Electron автоматически использует `.venv\\Scripts\\python.exe`. Кнопка выбора
+файла открывает нативный диалог Electron, одинаковый по возможностям с
+macOS-версией.
+
+## Windows-сборка
+
+Workflow `.github/workflows/build-windows.yml` запускается вручную через
+GitHub Actions (`Run workflow`), когда потребуется готовая сборка. Windows-runner:
+
+1. устанавливает все Python-зависимости и выполняет полный набор тестов;
+2. собирает самостоятельный `dataanalize-server.exe` через PyInstaller;
+3. упаковывает полный Electron-интерфейс в NSIS installer и ZIP;
+4. публикует результаты как artifact `DataAnalize-2.0.0-Windows-x64`.
+
+На компьютере пользователя отдельная установка Python не требуется.
+
 ## Проверка
 
 Smoke-тесты используют стандартный модуль `unittest`, поэтому отдельная тестовая

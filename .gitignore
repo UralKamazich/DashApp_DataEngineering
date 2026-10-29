@@ -9,5 +9,7 @@ venv/
 dash_app.log
 node_modules/
 dist/
+python-build/
+python-dist/
 *.code-workspace
 tmp_*

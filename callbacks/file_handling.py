@@ -123,6 +123,11 @@ def pick_local_file(n_clicks, dropped_file, online_clicks, catalog_url, custom_u
 
     if not n_clicks:
         raise PreventUpdate
+    # Electron owns the native file dialog through preload/IPC. In a frozen
+    # Windows build sys.executable is the server .exe, not a Python interpreter,
+    # so the tkinter subprocess fallback must only remain available in browsers.
+    if os.environ.get("DATAANALIZE_ELECTRON") == "1":
+        raise PreventUpdate
     try:
         import subprocess
         import sys
