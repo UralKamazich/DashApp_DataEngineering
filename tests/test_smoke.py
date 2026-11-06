@@ -10,9 +10,10 @@ from dash import Dash, Input, dcc, html, no_update
 import dash_mantine_components as dmc
 
 from app import app
-from callbacks.columns_sidebar import VIRTUALIZATION_THRESHOLD, update_column_badges
+from callbacks.columns_sidebar import update_column_badges
 from callbacks.dropdowns import _select_options, update_dropdown_options_all
 from callbacks.file_handling import _clicked_sheet, on_excel_upload
+from data_import import EXCEL_ENGINE
 from callbacks.modals import _normalize_main_chart_type
 from callbacks.multivariate import (
     MAX_SCATTER_MATRIX_DIMENSIONS,
@@ -211,7 +212,6 @@ class DashApplicationSmokeTests(unittest.TestCase):
             "/assets/app_shell.css": "text/css",
             "/assets/filter_panel.js": "text/javascript",
             "/assets/clustering.css": "text/css",
-            "/assets/dataset_virtual_list.js": "text/javascript",
         }
         for path, content_type in assets.items():
             with self.subTest(path=path):
@@ -689,10 +689,7 @@ class DropdownOptionTests(unittest.TestCase):
     def test_numeric_column_labels_are_safe_for_mantine_controls(self):
         self.assertEqual(
             _select_options(["depth", 1]),
-            [
-                {"label": "depth", "value": "depth"},
-                {"label": "1", "value": "1"},
-            ],
+            ["depth", "1"],
         )
 
     def test_metadata_builds_options_without_deserializing_dataset(self):
@@ -714,55 +711,21 @@ class DropdownOptionTests(unittest.TestCase):
             "callbacks.columns_sidebar.read_df_from_store",
             side_effect=AssertionError("dataset should not be deserialized"),
         ):
-            badges, catalog, status = update_column_badges(
-                payload,
-                True,
-                {"start": 0, "size": 48},
-                meta,
-            )
-        self.assertEqual(
-            [badge.to_plotly_json()["props"]["data-column-name"] for badge in badges],
-            ["value", "category"],
-        )
-        self.assertEqual(json.loads(catalog), ["value", "category"])
-        self.assertEqual(status, "")
+            model = update_column_badges(payload, meta)
+        self.assertEqual(model["columns"], ["value", "category"])
+        self.assertEqual(model["types"], ["numeric", "categorical"])
+        self.assertEqual(model["derived"], [])
 
-    def test_wide_dataset_badges_are_windowed_only_when_enabled(self):
-        columns = [f"channel_{index}" for index in range(VIRTUALIZATION_THRESHOLD + 5)]
+    def test_wide_dataset_rail_is_a_compact_model_not_components(self):
+        columns = [f"channel_{index}" for index in range(1200)]
         source = pd.DataFrame([range(len(columns))], columns=columns)
         meta = meta_from_df(source)
-        payload = source.to_json(orient="split")
-
-        windowed, catalog, status = update_column_badges(
-            payload,
-            True,
-            {"start": 10, "size": 24},
-            meta,
-        )
-        visible = [
-            child.to_plotly_json()["props"].get("data-column-name")
-            for child in windowed
-            if child.to_plotly_json()["props"].get("data-column-name")
-        ]
-        self.assertEqual(visible, columns[10:34])
-        self.assertEqual(json.loads(catalog), columns)
-        self.assertIn(str(len(columns)), status)
-
-        full, _catalog, status = update_column_badges(
-            payload,
-            False,
-            {"start": 10, "size": 24},
-            meta,
-        )
-        self.assertEqual(len(full), len(columns))
-        self.assertEqual(status, "")
-
-    def test_disabled_virtualization_stops_scroll_window_publication(self):
-        script_path = Path(__file__).resolve().parents[1] / "assets" / "dataset_virtual_list.js"
-        script = script_path.read_text(encoding="utf-8")
-        self.assertIn("function virtualizationEnabled(sidebar)", script)
-        self.assertIn('data-virtualization-enabled', script)
-        self.assertIn("if (!virtualizationEnabled(sidebar))", script)
+        registry = {"d1": {"steps": [{"outputs": ["channel_7"]}]}}
+        model = update_column_badges(source.to_json(orient="split"), meta, registry, "d1")
+        self.assertEqual(model["columns"], columns)
+        self.assertEqual(model["derived"], [7])
+        self.assertEqual(model["datasetId"], "d1")
+        json.dumps(model)  # plain data only
 
 
 class ExcelLoadingTests(unittest.TestCase):
@@ -775,14 +738,59 @@ class ExcelLoadingTests(unittest.TestCase):
         manager.__enter__.return_value = workbook
 
         with patch("callbacks.file_handling.pd.ExcelFile", return_value=manager) as excel_file:
-            result = on_excel_upload("/tmp/example.xlsx", "example.xlsx")
+            result = on_excel_upload("/tmp/example.xlsx", None, "example.xlsx")
 
-        excel_file.assert_called_once_with("/tmp/example.xlsx", engine="openpyxl")
+        excel_file.assert_called_once_with("/tmp/example.xlsx", engine=EXCEL_ENGINE)
         workbook.parse.assert_called_once_with("Data")
         self.assertEqual(result[2], ["Data"])
         self.assertEqual(result[3], "Data")
         self.assertIs(result[5], no_update)
         self.assertEqual(result[6]["row_count"], 2)
+
+    def _multi_sheet_workbook(self, frame):
+        workbook = MagicMock()
+        workbook.sheet_names = ["First", "Second"]
+        workbook.parse.return_value = frame
+        manager = MagicMock()
+        manager.__enter__.return_value = workbook
+        return workbook, manager
+
+    def test_reload_rereads_previously_selected_sheet_without_modal(self):
+        frame = pd.DataFrame({"depth": [1.0, 2.0, 3.0]})
+        workbook, manager = self._multi_sheet_workbook(frame)
+        with patch("callbacks.file_handling.pd.ExcelFile", return_value=manager), \
+                patch("callbacks.file_handling._triggered_id", return_value="reload-file-btn"), \
+                patch("callbacks.file_handling.os.path.exists", return_value=True):
+            result = on_excel_upload(
+                "/tmp/example.xlsx", 1, "example.xlsx", "Second", {}
+            )
+
+        workbook.parse.assert_called_once_with("Second")
+        self.assertIs(result[1], no_update)
+        self.assertEqual(result[3], "Second")
+        self.assertEqual(result[6]["row_count"], 3)
+        self.assertEqual(result[7][0]["color"], "green")
+
+    def test_new_multi_sheet_file_still_asks_for_sheet(self):
+        workbook, manager = self._multi_sheet_workbook(pd.DataFrame())
+        with patch("callbacks.file_handling.pd.ExcelFile", return_value=manager):
+            result = on_excel_upload(
+                "/tmp/example.xlsx", None, "example.xlsx", "Second", {}
+            )
+
+        workbook.parse.assert_not_called()
+        self.assertIs(result[4], no_update)
+
+    def test_reload_without_file_reports_error(self):
+        with patch("callbacks.file_handling._triggered_id", return_value="reload-file-btn"):
+            result = on_excel_upload(None, 1, None, None, {})
+        self.assertEqual(result[7][0]["color"], "red")
+
+    def test_reload_of_missing_local_file_reports_error(self):
+        with patch("callbacks.file_handling._triggered_id", return_value="reload-file-btn"):
+            result = on_excel_upload("/nonexistent/x.csv", 1, "x.csv", None, {})
+        self.assertIs(result[4], no_update)
+        self.assertIn("не найден", result[7][0]["message"])
 
     def test_triggered_sheet_wins_when_other_buttons_were_clicked_before(self):
         ids = [

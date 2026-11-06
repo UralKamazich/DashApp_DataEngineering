@@ -6,6 +6,7 @@ Header + Footer общие на всех страницах.
 """
 
 import dash
+from lazy_options import lazy_sig_stores
 from dash import dcc, html
 import dash_mantine_components as dmc
 from dash_iconify import DashIconify
@@ -237,6 +238,7 @@ def create_layout():
             dcc.Store(id='active-dataset-data'),
             dcc.Store(id='de-draft-pipeline', data={"input_id": None, "scope": "base", "steps": []}),
             dcc.Store(id='de-auto-output-name'),
+            *lazy_sig_stores(),
 
             dmc.NotificationContainer(id="notifications-container"),
 
@@ -258,6 +260,22 @@ def create_layout():
                             attributes={"title": "Excel, CSV, TXT, TSV, ZIP или Pickle"},
                             leftSection=DashIconify(icon="tabler:file-upload", width=15),
                             style={"borderColor": "rgba(255,255,255,0.3)", "color": "#ccc"}
+                        ),
+                        dmc.Tooltip(
+                            label="Перезагрузить файл с диска (после правок)",
+                            position="bottom",
+                            withArrow=True,
+                            openDelay=350,
+                            children=dmc.ActionIcon(
+                                DashIconify(icon="tabler:refresh", width=16),
+                                id="reload-file-btn",
+                                size=26,
+                                variant="subtle",
+                                color="gray",
+                                radius="sm",
+                                attributes={"aria-label": "Перезагрузить файл"},
+                                style={"color": "#ccc"},
+                            ),
                         ),
                         dmc.Menu(
                             id="online-dataset-menu",

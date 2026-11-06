@@ -50,3 +50,34 @@ app = Dash(
     index_string=CUSTOM_INDEX_STRING,
 )
 server = app.server
+
+
+# Optional per-callback profiling: DATAANALIZE_PROFILE=1 logs every
+# _dash-update-component request with its duration and response size.
+import os as _os
+
+if _os.environ.get("DATAANALIZE_PROFILE") == "1":
+    import time as _time
+    from flask import g as _g, request as _request
+
+    @server.before_request
+    def _profile_start():
+        _g._profile_t0 = _time.perf_counter()
+
+    @server.after_request
+    def _profile_end(response):
+        if _request.path.endswith("_dash-update-component"):
+            elapsed = _time.perf_counter() - getattr(_g, "_profile_t0", _time.perf_counter())
+            try:
+                body = _request.get_json(silent=True) or {}
+                output = str(body.get("output", "?"))[:110]
+                req_kb = (_request.content_length or 0) / 1024
+            except Exception:
+                output, req_kb = "?", 0
+            resp_kb = (response.calculate_content_length() or 0) / 1024
+            print(
+                f"[PROFILE] {elapsed*1000:8.0f} ms  req {req_kb:8.0f} KB  "
+                f"resp {resp_kb:8.0f} KB  {output}",
+                flush=True,
+            )
+        return response

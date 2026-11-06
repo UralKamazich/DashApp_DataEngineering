@@ -12,6 +12,7 @@ import dash_mantine_components as dmc
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
+from lazy_options import lazy_callback
 from dataset_export import export_catboost_model, export_frame_to_excel
 from dataset_registry import (
     commit_result,
@@ -25,7 +26,7 @@ from ml_jobs import cancel_ml_job, ml_job_snapshot, submit_ml_job, take_ml_job_r
 from ml_data_profile import missingness_figure, profile_dataset, target_figure
 from ml_models import get_model_adapter
 from ml_tuning import tune_catboost_parameters
-from utils import meta_from_df, read_df_from_store
+from utils import frame_to_store, meta_from_df, read_df_from_store
 
 
 def _notification(message, *, color="green", notification_id="ml"):
@@ -400,7 +401,8 @@ def sync_profile_dataset_selector(registry, active_id, current):
     return options, selected
 
 
-@app.callback(
+@lazy_callback(
+    "/ml/data-profile", "ml-profile-target",
     Output("ml-profile-target", "data"), Output("ml-profile-target", "value"),
     Input("ml-profile-dataset", "value"), Input("dataset-registry", "data"),
     State("ml-profile-target", "value"),
@@ -412,7 +414,8 @@ def sync_profile_target_options(input_id, registry, current):
     return options, current if current in columns else None
 
 
-@app.callback(
+@lazy_callback(
+    "/ml/data-profile", "ml-profile",
     Output("ml-profile-status", "children"), Output("ml-profile-status", "color"),
     Output("ml-profile-rows", "children"), Output("ml-profile-columns", "children"),
     Output("ml-profile-numeric", "children"), Output("ml-profile-categorical", "children"),
@@ -482,7 +485,8 @@ def render_data_profile(input_id, scope, target, task_mode, registry, active_id,
     )
 
 
-@app.callback(
+@lazy_callback(
+    "/ml/catboost", "ml-columns",
     Output("ml-target", "data"), Output("ml-target", "value"),
     Output("ml-id-column", "data"), Output("ml-id-column", "value"),
     Output("ml-features", "data"), Output("ml-features", "value"),
@@ -1373,7 +1377,7 @@ def commit_prediction(_clicks, store, registry, output_name, *values):
         result = (no_update,) * 8
         return *result, _notification("Результат недоступен. Повторите обучение.", color="red")
     input_id, scope = values[0], values[1]
-    payload = cached.frame.to_json(date_format="iso", orient="split")
+    payload = frame_to_store(cached.frame)
     meta = meta_from_df(cached.frame)
     resolved_name = output_name
     if not str(output_name or "").strip():

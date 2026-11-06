@@ -15,7 +15,7 @@ from dataset_registry import (
     suggest_dataset_name,
 )
 from engineering_ops import execute_pipeline
-from utils import meta_from_df, read_df_from_store
+from utils import frame_to_store, meta_from_df, read_df_from_store
 
 
 def _empty_draft():
@@ -491,7 +491,7 @@ def run_feature_pipeline(
         )
 
     result_meta = meta_from_df(result_frame)
-    result_payload = result_frame.to_json(date_format="iso", orient="split")
+    result_payload = frame_to_store(result_frame)
     resolved_output_name = output_name
     if (output_mode or "current") == "new" and not str(output_name or "").strip():
         resolved_output_name = suggest_dataset_name(registry, queued_steps, input_scope)

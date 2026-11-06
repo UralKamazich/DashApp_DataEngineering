@@ -7,6 +7,7 @@ import dash
 from dash import dcc, html
 from dash_iconify import DashIconify
 import dash_mantine_components as dmc
+from config import COLUMN_LIST_LIMIT
 
 from config import PLOTLY_STYLES, COLOR_THRESHOLD
 
@@ -101,6 +102,7 @@ def create_multiselect(id, options, value=None, searchable=True, clearable=True,
         clearable=clearable,
         nothingFoundMessage="Ничего не найдено",
         maxDropdownHeight=500,
+        limit=COLUMN_LIST_LIMIT,
         comboboxProps={"shadow": "md"},
         persistence=persistence,
         style={
@@ -198,7 +200,7 @@ mv_chart_type = dmc.Select(
 # Cluster / Data Engineering колонки
 # =========================
 dropdown_cluster_cols = dmc.MultiSelect(
-    id="cluster-cols",
+    id="cluster-cols", limit=COLUMN_LIST_LIMIT,
     data=[],  # наполним из meta.numeric
     value=[],
     searchable=True,
@@ -211,7 +213,7 @@ dropdown_cluster_cols = dmc.MultiSelect(
 
 # === Data Engineering: агрегаты по группам (Group Aggregations) ===
 agg_keys_select = dmc.MultiSelect(
-    id="agg-keys",
+    id="agg-keys", limit=COLUMN_LIST_LIMIT,
     data=[],          # наполним из meta (все столбцы)
     value=[],
     searchable=True,
@@ -224,7 +226,7 @@ agg_keys_select = dmc.MultiSelect(
 )
 
 agg_cols_select = dmc.MultiSelect(
-    id="agg-cols",
+    id="agg-cols", limit=COLUMN_LIST_LIMIT,
     data=[],          # наполним из meta (все столбцы)
     value=[],
     searchable=True,
@@ -274,7 +276,7 @@ agg_exclude_empty_switch = dmc.Switch(
 
 # ========= Data Engineering: text copy module =========
 txtcopy_cols_select = dmc.MultiSelect(
-    id="txtcopy-cols",
+    id="txtcopy-cols", limit=COLUMN_LIST_LIMIT,
     data=[],
     value=[],
     searchable=True,

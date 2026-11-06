@@ -13,15 +13,42 @@ import pandas as pd
 
 from dash_app import app
 from data_import import (
+    EXCEL_ENGINE,
     inspect_archive,
+    is_remote_source,
     popular_dataset_by_url,
     read_archive_table,
     read_delimited_dataset,
     source_name_from_location,
     validate_remote_url,
 )
-from utils import meta_from_df, _make_error_notif, read_df_from_store
+from utils import frame_to_store, meta_from_df, _make_error_notif, read_df_from_store
 from config import STYLE_CARD
+from dataset_registry import SOURCE_DATASET_ID
+
+
+def _reload_notif(filename):
+    return [{
+        "action": "show",
+        "id": "file-reload-notif",
+        "title": "Файл перезагружен",
+        "message": f"{filename} прочитан заново с диска.",
+        "color": "green",
+        "autoClose": 2500,
+    }]
+
+
+def _triggered_id():
+    try:
+        return dash.ctx.triggered_id
+    except Exception:  # called outside a Dash request (tests, scripts)
+        return None
+
+
+def _previous_archive_member(registry):
+    record = (registry or {}).get(SOURCE_DATASET_ID) or {}
+    import_info = (record.get("meta") or {}).get("import") or {}
+    return import_info.get("archive_member")
 
 
 def _clicked_sheet(n_clicks, ids, triggered_id=None):
@@ -171,45 +198,73 @@ def describe_online_dataset(value):
     Output('meta-columns', 'data', allow_duplicate=True),
     Output('notifications-container', 'sendNotifications', allow_duplicate=True),
     Input('source-file-path', 'data'),
+    Input('reload-file-btn', 'n_clicks'),
     State('source-file-name', 'data'),
+    State('selected-sheet', 'data'),
+    State('dataset-registry', 'data'),
     prevent_initial_call=True
 )
-def on_excel_upload(local_path, local_name):
+def on_excel_upload(local_path, reload_clicks, local_name, previous_sheet=None, registry=None):
     """Загрузить локальный или удалённый источник в единый data pipeline.
 
     Сам файл здесь НЕ читаем: только узнаём список листов и выставляем
     selected-sheet. Чтение делает единственный callback load_selected_sheet —
     иначе файл грузился бы дважды и график перерисовывался лишние разы.
+
+    Кнопка «Перезагрузить» перечитывает тот же источник с диска. Если в книге
+    несколько листов (или в ZIP несколько таблиц), повторно читается ранее
+    выбранный лист/таблица без повторного показа окна выбора.
     """
+    is_reload = _triggered_id() == 'reload-file-btn'
+    if is_reload and not reload_clicks:
+        raise PreventUpdate
     if not local_path:
+        if is_reload:
+            return (
+                dash.no_update, dash.no_update, dash.no_update, dash.no_update,
+                dash.no_update, dash.no_update, dash.no_update,
+                _make_error_notif("Сначала выберите файл."),
+            )
         raise PreventUpdate
 
     filename = local_name or os.path.basename(local_path)
     ext = os.path.splitext(filename)[1].lower()
+    done_notif = _reload_notif(filename) if is_reload else []
+
+    if is_reload and not is_remote_source(local_path) and not os.path.exists(local_path):
+        return (
+            dash.no_update, dash.no_update, dash.no_update, dash.no_update,
+            dash.no_update, dash.no_update, dash.no_update,
+            _make_error_notif(f"Файл не найден: {local_path}"),
+        )
 
     try:
         if ext == '.xlsx':
             # ВАЖНО: ExcelFile нужно закрывать, иначе на Windows исходный .xlsx может оставаться 'занятым'.
-            with pd.ExcelFile(local_path, engine='openpyxl') as xl:
+            with pd.ExcelFile(local_path, engine=EXCEL_ENGINE) as xl:
                 sheets = xl.sheet_names
 
                 # Для одно-листовой книги используем уже открытую книгу. Раньше
                 # после получения sheet_names она закрывалась и тут же
                 # открывалась повторно в load_selected_sheet.
+                sheet_name = None
                 if len(sheets) == 1:
                     sheet_name = sheets[0]
+                elif is_reload and previous_sheet in sheets:
+                    sheet_name = previous_sheet
+                if sheet_name is not None:
                     df = xl.parse(sheet_name)
 
-            # Один лист прочитан одним проходом; callback выбора листа на этот
-            # случай больше не подписан и повторного чтения не будет.
-            if len(sheets) == 1:
+            # Лист прочитан одним проходом; callback выбора листа на этот
+            # случай не срабатывает и повторного чтения не будет.
+            if sheet_name is not None:
                 meta = meta_from_df(df)
-                js = df.to_json(date_format='iso', orient='split')
+                js = frame_to_store(df)
                 # filtered-data has a single owner: callbacks.pipeline.  It will
                 # receive active-dataset-data after the source registry is
                 # initialized.  Publishing the same payload here used to start
                 # the expensive UI cascade twice for wide workbooks.
-                return "", dash.no_update, sheets, sheet_name, js, dash.no_update, meta, []
+                return "", dash.no_update, sheets, sheet_name, js, dash.no_update, meta, done_notif
 
             # несколько листов — показываем модалку выбора
             modal = dmc.Modal(
@@ -241,16 +296,32 @@ def on_excel_upload(local_path, local_name):
         elif ext == '.pkl':
             # Для .pkl выбора листа нет — читаем сразу здесь.
             df = pd.read_pickle(local_path)
-            js = df.to_json(date_format='iso', orient='split')
+            js = frame_to_store(df)
             meta = meta_from_df(df)
-            return "", dash.no_update, None, None, js, js, meta, []
+            return "", dash.no_update, None, None, js, js, meta, done_notif
         elif ext in {'.csv', '.txt', '.tsv'}:
             df, import_info = read_delimited_dataset(local_path, filename)
-            js = df.to_json(date_format='iso', orient='split')
+            js = frame_to_store(df)
             meta = meta_from_df(df)
             meta["import"] = import_info.as_meta()
-            return "", dash.no_update, None, None, js, dash.no_update, meta, []
+            return "", dash.no_update, None, None, js, dash.no_update, meta, done_notif
         elif ext == '.zip':
+            previous_member = _previous_archive_member(registry) if is_reload else None
+            if previous_member:
+                try:
+                    df, import_info = read_archive_table(
+                        local_path, previous_member, filename
+                    )
+                except ValueError:
+                    previous_member = None  # таблица исчезла из архива
+                else:
+                    js = frame_to_store(df)
+                    meta = meta_from_df(df)
+                    meta["import"] = import_info.as_meta()
+                    return (
+                        "", dash.no_update, dash.no_update, None, js,
+                        dash.no_update, meta, done_notif,
+                    )
             tables, df, import_info = inspect_archive(local_path, filename)
             if len(tables) > 1:
                 return (
@@ -259,10 +330,10 @@ def on_excel_upload(local_path, local_name):
                     dash.no_update, dash.no_update, dash.no_update, [],
                 )
             member = tables[0]["name"]
-            js = df.to_json(date_format='iso', orient='split')
+            js = frame_to_store(df)
             meta = meta_from_df(df)
             meta["import"] = import_info.as_meta()
-            return "", dash.no_update, [member], None, js, dash.no_update, meta, []
+            return "", dash.no_update, [member], None, js, dash.no_update, meta, done_notif
 
     except Exception as e:
         notif = _make_error_notif(f"Ошибка загрузки файла: {str(e)}")
@@ -374,14 +445,14 @@ def load_selected_sheet(n_clicks, ids, local_path):
         return dash.no_update, html.Div("Ошибка: нет пути к файлу", style={'color': 'red'}), False, dash.no_update, dash.no_update, notif
 
     try:
-        df = pd.read_excel(local_path, engine='openpyxl', sheet_name=sheet_name)
+        df = pd.read_excel(local_path, engine=EXCEL_ENGINE, sheet_name=sheet_name)
     except Exception as e:
         notif = _make_error_notif(f"Ошибка загрузки листа: {str(e)}")
         return dash.no_update, html.Div(f"Ошибка: {e}", style={'color': 'red'}), False, dash.no_update, dash.no_update, notif
 
     try:
         meta = meta_from_df(df)
-        js = df.to_json(date_format='iso', orient='split')
+        js = frame_to_store(df)
 
         # Let callbacks.pipeline publish filtered-data once the active dataset
         # has been initialized.
@@ -419,7 +490,7 @@ def load_selected_archive_table(n_clicks, ids, source_path, source_name):
         )
         meta = meta_from_df(frame)
         meta["import"] = import_info.as_meta()
-        stored = frame.to_json(date_format="iso", orient="split")
+        stored = frame_to_store(frame)
         return stored, "", False, no_update, meta, []
     except Exception as error:
         notif = _make_error_notif(f"Ошибка чтения ZIP: {error}")

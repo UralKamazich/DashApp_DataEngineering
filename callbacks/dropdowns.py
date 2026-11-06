@@ -7,11 +7,16 @@ from dash_app import app
 from dash import Output, Input, State
 from dash.exceptions import PreventUpdate
 from utils import read_df_from_store, classify_simple
+from lazy_options import lazy_callback
 
 
 def _select_options(columns):
-    """Return renderer-safe options even when dataframe labels are numeric."""
-    return [{"label": str(column), "value": str(column)} for column in columns]
+    """Return renderer-safe options even when dataframe labels are numeric.
+
+    Plain strings are accepted by both dcc.Dropdown and Mantine selects and are
+    half the size of {"label", "value"} dicts — this matters with 1000+ columns.
+    """
+    return [str(column) for column in columns]
 
 
 GRAPH_PATHS = {None, "", "/"}
@@ -40,9 +45,8 @@ def _options_for_dataset(filtered_json, meta):
     return {
         "all": all_options,
         "numeric": _select_options(numeric_cols),
-        "color": [{"label": "Нет", "value": "Нет"}]
-        + _select_options(categorical_cols + numeric_cols),
-        "facet": [{"label": "Нет", "value": "Нет"}] + all_options,
+        "color": ["Нет"] + _select_options(categorical_cols + numeric_cols),
+        "facet": ["Нет"] + all_options,
     }
 
 
@@ -59,7 +63,9 @@ def update_dropdown_options_all(filtered_json, meta):
     )
 
 
-@app.callback(
+@lazy_callback(
+    "/",
+    "graph-options",
     [
         Output("dropdown_x", "options"),
         Output("dropdown_y", "options"),
@@ -74,13 +80,10 @@ def update_dropdown_options_all(filtered_json, meta):
         Output("dropdown_hierarchy_value", "options"),
     ],
     Input("filtered-data", "data"),
-    Input("url", "pathname"),
     State("meta-columns", "data"),
     prevent_initial_call=False
 )
-def update_graph_dropdown_options(filtered_json, pathname, meta):
-    if pathname not in GRAPH_PATHS:
-        raise PreventUpdate
+def update_graph_dropdown_options(filtered_json, meta):
     options = update_dropdown_options_all(filtered_json, meta)
     return (*options[:6], *options[7:10], options[0], options[1])
 

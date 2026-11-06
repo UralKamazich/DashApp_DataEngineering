@@ -3,6 +3,7 @@
 
 from dash import dcc, html
 import dash_mantine_components as dmc
+from config import COLUMN_LIST_LIMIT
 
 
 GRAPH_CONFIG = {
@@ -281,7 +282,7 @@ def _metric_card(title, value_id, hint, help_key):
 
 def create_clustering_workspace():
     features = dmc.MultiSelect(
-        id="cluster-cols",
+        id="cluster-cols", limit=COLUMN_LIST_LIMIT,
         data=[],
         value=[],
         searchable=True,

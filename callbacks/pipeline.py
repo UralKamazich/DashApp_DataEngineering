@@ -6,7 +6,7 @@ from dash.exceptions import PreventUpdate
 
 from dash_app import app
 from callbacks.filters import _clean_filter_state
-from utils import apply_filter_conditions, meta_from_df, read_df_from_store
+from utils import frame_to_store, apply_filter_conditions, meta_from_df, read_df_from_store
 
 
 @app.callback(
@@ -58,6 +58,6 @@ def apply_filters(
         logic_mode or "and",
     )
     return (
-        frame.to_json(date_format="iso", orient="split"),
+        frame_to_store(frame),
         meta_from_df(frame),
     )

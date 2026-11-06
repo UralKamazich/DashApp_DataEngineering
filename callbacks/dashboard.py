@@ -6,11 +6,14 @@ from dash import Input, Output, State
 from callbacks.dropdowns import update_dropdown_options_all
 from callbacks.graph import build_main_figure
 from dash_app import app
+from lazy_options import lazy_callback
 from dashboard_workspace import DASHBOARD_WORKSPACES
 
 
 def _register_option_callback(workspace):
-    @app.callback(
+    @lazy_callback(
+        "/dashboard",
+        f"options-{workspace.field_id('x')}",
         Output(workspace.field_id("x"), "options"),
         Output(workspace.field_id("y"), "options"),
         Output(workspace.field_id("z"), "options"),
@@ -24,6 +27,7 @@ def _register_option_callback(workspace):
         Output(workspace.field_id("hierarchy-value"), "options"),
         Input("filtered-data", "data"),
         State("meta-columns", "data"),
+        prevent_initial_call=False,
     )
     def update_options(filtered_json, meta):
         options = update_dropdown_options_all(filtered_json, meta)

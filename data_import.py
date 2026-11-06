@@ -16,6 +16,12 @@ from urllib.request import Request, urlopen
 import pandas as pd
 from charset_normalizer import from_bytes
 
+try:  # Rust-based reader, noticeably faster than openpyxl on large workbooks.
+    import python_calamine  # noqa: F401
+    EXCEL_ENGINE = "calamine"
+except ImportError:  # pragma: no cover - optional speed-up
+    EXCEL_ENGINE = "openpyxl"
+
 
 MAX_REMOTE_BYTES = 512 * 1024 * 1024
 MAX_ARCHIVE_MEMBER_BYTES = 1024 * 1024 * 1024
@@ -333,7 +339,7 @@ def _archive_payload_to_frame(
         })
         return frame, DelimitedImportInfo(**values)
     if extension == ".xlsx":
-        frame = pd.read_excel(BytesIO(payload), engine="openpyxl")
+        frame = pd.read_excel(BytesIO(payload), engine=EXCEL_ENGINE)
         info = DelimitedImportInfo(
             format="ZIP/XLSX", encoding=None, delimiter=None, decimal=None,
             remote=is_remote_source(source), archive=archive_label,

@@ -32,10 +32,15 @@ from utils import meta_from_df, read_df_from_store
 def initialize_dataset_registry(stored_json, meta, source_name):
     if not stored_json:
         raise PreventUpdate
-    try:
-        source_meta = meta_from_df(read_df_from_store(stored_json, meta))
-    except Exception:
-        source_meta = meta or {}
+    if isinstance(meta, dict) and meta.get("columns") is not None:
+        # The loader has just computed this metadata from the same frame;
+        # re-parsing the whole payload here only delayed the first render.
+        source_meta = {key: value for key, value in meta.items() if key != "import"}
+    else:
+        try:
+            source_meta = meta_from_df(read_df_from_store(stored_json, meta))
+        except Exception:
+            source_meta = meta or {}
     if isinstance(meta, dict) and meta.get("import"):
         source_meta["import"] = dict(meta["import"])
     registry = create_source_registry(stored_json, source_meta, source_name)

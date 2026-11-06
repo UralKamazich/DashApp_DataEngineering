@@ -6,6 +6,11 @@
 import re
 import logging
 import os
+import hashlib
+import json
+import threading
+import uuid
+from collections import OrderedDict
 
 import pandas as pd
 import numpy as np
@@ -83,15 +88,127 @@ def meta_from_df(df: pd.DataFrame) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Server-side frame store.
+#
+# dcc.Store keeps its value in the browser and Dash sends it back to the server
+# with every callback that lists it as Input/State.  With the full dataset as
+# JSON this meant ~45 uploads of the whole table per file load.  Stores now
+# hold only a short reference; the DataFrame itself stays in server memory.
+# ---------------------------------------------------------------------------
+STORE_REF_PREFIX = "dfref:"
+_FRAME_STORE: "OrderedDict[str, pd.DataFrame]" = OrderedDict()
+_FRAME_STORE_LOCK = threading.Lock()
+_FRAME_STORE_MIN_KEEP = 32
+_FRAME_STORE_MAX_BYTES = 3 * 1024 ** 3
+
+
+def _frame_nbytes(frame: pd.DataFrame) -> int:
+    try:
+        return int(frame.memory_usage(index=True, deep=False).sum())
+    except Exception:
+        return 0
+
+
+def frame_to_store(frame: pd.DataFrame) -> str:
+    """Keep *frame* on the server and return a short reference for dcc.Store."""
+    reference = f"{STORE_REF_PREFIX}{uuid.uuid4().hex}"
+    stored = frame.copy(deep=True)
+    with _FRAME_STORE_LOCK:
+        _FRAME_STORE[reference] = stored
+        total = sum(_frame_nbytes(item) for item in _FRAME_STORE.values())
+        while len(_FRAME_STORE) > _FRAME_STORE_MIN_KEEP and total > _FRAME_STORE_MAX_BYTES:
+            _, evicted = _FRAME_STORE.popitem(last=False)
+            total -= _frame_nbytes(evicted)
+    return reference
+
+
+def is_store_reference(value) -> bool:
+    return isinstance(value, str) and value.startswith(STORE_REF_PREFIX)
+
+
+def store_row_count(payload) -> int:
+    """Row count of a store payload without copying the frame."""
+    if not payload:
+        return 0
+    if is_store_reference(payload):
+        with _FRAME_STORE_LOCK:
+            frame = _FRAME_STORE.get(payload)
+        return 0 if frame is None else int(len(frame.index))
+    try:
+        return len(json.loads(payload).get("index") or [])
+    except Exception:
+        return 0
+
+
+# Small LRU of already parsed store payloads.  A single file load fans the
+# same JSON out to a dozen callbacks (dropdowns, sidebar, graph, filters, ...);
+# without this cache every one of them re-ran pd.read_json on the full dataset.
+_STORE_FRAME_CACHE: "OrderedDict[tuple, pd.DataFrame]" = OrderedDict()
+_STORE_FRAME_CACHE_SIZE = 6
+_STORE_FRAME_CACHE_LOCK = threading.Lock()
+
+
+def _store_cache_key(json_str: str, meta: dict | None, dayfirst: bool) -> tuple:
+    digest = hashlib.blake2b(
+        json_str.encode("utf-8", "surrogatepass"), digest_size=16
+    ).hexdigest()
+    hints = None
+    if isinstance(meta, dict):
+        hints = json.dumps(
+            [
+                meta.get("datetime") or [],
+                meta.get("categorical") or [],
+                meta.get("dtypes") or {},
+            ],
+            sort_keys=True,
+            default=str,
+        )
+    return digest, len(json_str), hints, bool(dayfirst)
+
+
 def read_df_from_store(json_str: str | None, meta: dict | None = None, *, dayfirst: bool = True) -> pd.DataFrame:
     """Читает DataFrame из dcc.Store и восстанавливает семантические типы по meta.
 
     Round-trip df.to_json(date_format='iso') -> pd.read_json(...) нередко возвращает datetime как строки.
     Аналогично числоподобные строки могут быть ошибочно выведены как числа. Поэтому даты и явно
     строковые pandas-колонки восстанавливаются из метаданных.
+
+    Результат кэшируется по содержимому payload; вызывающий всегда получает
+    собственную копию, поэтому может безопасно её изменять.
     """
     if not json_str:
         return pd.DataFrame()
+
+    if is_store_reference(json_str):
+        with _FRAME_STORE_LOCK:
+            frame = _FRAME_STORE.get(json_str)
+            if frame is not None:
+                _FRAME_STORE.move_to_end(json_str)
+        if frame is None:
+            # The server was restarted while the page kept an old reference.
+            logger.warning("Dataset reference %s is no longer available", json_str)
+            return pd.DataFrame()
+        return frame.copy(deep=True)
+
+    key = _store_cache_key(json_str, meta, dayfirst)
+    with _STORE_FRAME_CACHE_LOCK:
+        cached = _STORE_FRAME_CACHE.get(key)
+        if cached is not None:
+            _STORE_FRAME_CACHE.move_to_end(key)
+    if cached is not None:
+        return cached.copy(deep=True)
+
+    df = _parse_store_payload(json_str, meta, dayfirst=dayfirst)
+    with _STORE_FRAME_CACHE_LOCK:
+        _STORE_FRAME_CACHE[key] = df
+        _STORE_FRAME_CACHE.move_to_end(key)
+        while len(_STORE_FRAME_CACHE) > _STORE_FRAME_CACHE_SIZE:
+            _STORE_FRAME_CACHE.popitem(last=False)
+    return df.copy(deep=True)
+
+
+def _parse_store_payload(json_str: str, meta: dict | None, *, dayfirst: bool) -> pd.DataFrame:
 
     dt_cols = []
     dtype_hints = {}

@@ -11,6 +11,7 @@ from dash import Input, Output, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
+from lazy_options import lazy_callback
 from clustering_engine import (
     cache_result,
     cached_result,
@@ -24,7 +25,7 @@ from dataset_registry import (
     input_payload,
     suggest_dataset_name,
 )
-from utils import meta_from_df, read_df_from_store
+from utils import frame_to_store, meta_from_df, read_df_from_store
 
 
 def _notification(message, *, color="green", notification_id="cluster"):
@@ -200,7 +201,8 @@ def sync_dataset_selector(registry, active_id, current):
     return options, selected, label, "blue"
 
 
-@app.callback(
+@lazy_callback(
+    "/clustering", "cluster-cols",
     Output("cluster-cols", "data"),
     Output("cluster-cols", "value"),
     Input("cluster-input-dataset", "value"),
@@ -452,7 +454,7 @@ def commit_clustering_result(
         )
 
     result_meta = meta_from_df(cached.frame)
-    result_payload = cached.frame.to_json(date_format="iso", orient="split")
+    result_payload = frame_to_store(cached.frame)
     resolved_name = output_name
     if (output_mode or "new") == "new" and not str(output_name or "").strip():
         resolved_name = suggest_dataset_name(

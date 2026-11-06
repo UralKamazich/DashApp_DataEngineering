@@ -8,6 +8,7 @@ from dash import Input, Output, State, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
+from lazy_options import lazy_callback
 from callbacks.ml import (
     _diagnostics_figure,
     _empty_figure,
@@ -27,7 +28,7 @@ from ml_engine import cache_result, cached_result, ml_signature
 from ml_jobs import cancel_ml_job, ml_job_snapshot, submit_ml_job, take_ml_job_result
 from ml_models import get_model_adapter
 from torch_tabular_engine import torch_runtime
-from utils import meta_from_df, read_df_from_store
+from utils import frame_to_store, meta_from_df, read_df_from_store
 
 
 def _nn_signature(input_id, scope, task, target, id_column, features, method,
@@ -84,7 +85,8 @@ def sync_nn_dataset_selector(registry, active_id, current):
     return options, selected, label, "teal"
 
 
-@app.callback(
+@lazy_callback(
+    "/ml/neural-networks", "nn-columns",
     Output("nn-target", "data"), Output("nn-target", "value"),
     Output("nn-id-column", "data"), Output("nn-id-column", "value"),
     Output("nn-features", "data"), Output("nn-features", "value"),
@@ -769,7 +771,7 @@ def commit_nn_prediction(_clicks, store, registry, output_name, *values):
         )
     updated, _result_id = commit_result(
         registry, input_id,
-        cached.frame.to_json(date_format="iso", orient="split"),
+        frame_to_store(cached.frame),
         meta_from_df(cached.frame), cached.committed_step,
         output_mode="new", output_name=resolved_name,
     )

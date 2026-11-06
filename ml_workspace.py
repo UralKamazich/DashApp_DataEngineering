@@ -3,6 +3,7 @@
 
 from dash import dcc, html, dash_table
 import dash_mantine_components as dmc
+from config import COLUMN_LIST_LIMIT
 
 from ml_models import MODEL_ADAPTERS
 
@@ -127,7 +128,7 @@ def create_catboost_workspace():
     )
 
     feature_select = dmc.MultiSelect(
-        id="ml-features", data=[], value=[], searchable=True, clearable=True,
+        id="ml-features", limit=COLUMN_LIST_LIMIT, data=[], value=[], searchable=True, clearable=True,
         nothingFoundMessage="Ничего не найдено", maxDropdownHeight=300,
         comboboxProps={"shadow": "md"}, size="xs",
     )
@@ -140,10 +141,10 @@ def create_catboost_workspace():
             ], justify="space-between"),
             dmc.SimpleGrid([
                 _field("Целевой канал · число", dmc.Select(
-                    id="ml-target", data=[], searchable=True, clearable=True, size="xs",
+                    id="ml-target", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True, size="xs",
                 ), label_id="ml-target-label"),
                 _field("ID / подпись · необязательно", dmc.Select(
-                    id="ml-id-column", data=[], searchable=True, clearable=True, size="xs",
+                    id="ml-id-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True, size="xs",
                 )),
             ], cols=2, spacing="xs", mt=4),
             html.Div([
@@ -175,11 +176,11 @@ def create_catboost_workspace():
             ], cols=2, spacing="xs", mt=4),
             dmc.SimpleGrid([
                 _field("Канал группы", dmc.Select(
-                    id="ml-group-column", data=[], searchable=True, clearable=True,
+                    id="ml-group-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True,
                     size="xs", disabled=True,
                 )),
                 _field("Время / порядок", dmc.Select(
-                    id="ml-time-column", data=[], searchable=True, clearable=True,
+                    id="ml-time-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True,
                     size="xs", disabled=True,
                 )),
             ], cols=2, spacing="xs", mt=4),
@@ -411,10 +412,10 @@ def create_random_forest_workspace():
         ], justify="space-between"),
         dmc.SimpleGrid([
             _field("Целевой канал · число", dmc.Select(
-                id="rf-target", data=[], searchable=True, clearable=True, size="xs",
+                id="rf-target", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True, size="xs",
             ), label_id="rf-target-label"),
             _field("ID / подпись · необязательно", dmc.Select(
-                id="rf-id-column", data=[], searchable=True, clearable=True, size="xs",
+                id="rf-id-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True, size="xs",
             )),
         ], cols=2, spacing="xs", mt=4),
         html.Div([
@@ -423,7 +424,7 @@ def create_random_forest_workspace():
                 dmc.Text("числа и категории", size="8px", c="dimmed"),
             ], justify="space-between"),
             dmc.MultiSelect(
-                id="rf-features", data=[], value=[], searchable=True, clearable=True,
+                id="rf-features", limit=COLUMN_LIST_LIMIT, data=[], value=[], searchable=True, clearable=True,
                 nothingFoundMessage="Ничего не найдено", maxDropdownHeight=300,
                 comboboxProps={"shadow": "md"}, size="xs",
             ),
@@ -447,11 +448,11 @@ def create_random_forest_workspace():
         ], cols=2, spacing="xs", mt=4),
         dmc.SimpleGrid([
             _field("Канал группы", dmc.Select(
-                id="rf-group-column", data=[], searchable=True, clearable=True,
+                id="rf-group-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True,
                 size="xs", disabled=True,
             )),
             _field("Время / порядок", dmc.Select(
-                id="rf-time-column", data=[], searchable=True, clearable=True,
+                id="rf-time-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True,
                 size="xs", disabled=True,
             )),
         ], cols=2, spacing="xs", mt=4),
@@ -659,10 +660,10 @@ def create_neural_network_workspace():
         ], justify="space-between"),
         dmc.SimpleGrid([
             _field("Целевой канал · число", dmc.Select(
-                id="nn-target", data=[], searchable=True, clearable=True, size="xs",
+                id="nn-target", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True, size="xs",
             ), label_id="nn-target-label"),
             _field("ID / подпись · необязательно", dmc.Select(
-                id="nn-id-column", data=[], searchable=True, clearable=True, size="xs",
+                id="nn-id-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True, size="xs",
             )),
         ], cols=2, spacing="xs", mt=4),
         html.Div([
@@ -671,7 +672,7 @@ def create_neural_network_workspace():
                 dmc.Text("числа и категории", size="8px", c="dimmed"),
             ], justify="space-between"),
             dmc.MultiSelect(
-                id="nn-features", data=[], value=[], searchable=True, clearable=True,
+                id="nn-features", limit=COLUMN_LIST_LIMIT, data=[], value=[], searchable=True, clearable=True,
                 nothingFoundMessage="Ничего не найдено", maxDropdownHeight=300,
                 comboboxProps={"shadow": "md"}, size="xs",
             ),
@@ -695,11 +696,11 @@ def create_neural_network_workspace():
         ], cols=2, spacing="xs", mt=4),
         dmc.SimpleGrid([
             _field("Канал группы", dmc.Select(
-                id="nn-group-column", data=[], searchable=True, clearable=True,
+                id="nn-group-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True,
                 size="xs", disabled=True,
             )),
             _field("Время / порядок", dmc.Select(
-                id="nn-time-column", data=[], searchable=True, clearable=True,
+                id="nn-time-column", limit=COLUMN_LIST_LIMIT, data=[], searchable=True, clearable=True,
                 size="xs", disabled=True,
             )),
         ], cols=2, spacing="xs", mt=4),
@@ -938,7 +939,7 @@ def create_data_profile_workspace():
                 ],
             )),
             _field("Целевой канал", dmc.Select(
-                id="ml-profile-target", data=[], searchable=True,
+                id="ml-profile-target", limit=COLUMN_LIST_LIMIT, data=[], searchable=True,
                 clearable=True, size="xs",
             )),
             _field("Интерпретация цели", dmc.SegmentedControl(

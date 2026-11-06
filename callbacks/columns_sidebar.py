@@ -1,20 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Render the active dataset channel rail, with optional windowing."""
+"""Render the active dataset channel rail.
+
+The rail used to be built from Dash components: five React components per
+column.  With 1000+ columns that put ~5000 extra components into the Dash
+tree, and Dash 4 re-evaluates every component on every store update — a wide
+workbook froze the window for more than a minute after loading.
+
+Now the server sends a compact column model and a clientside callback draws
+plain DOM rows (same classes and data-* attributes as ``make_column_badge``,
+so drag-and-drop keeps working).  The full list is always present.
+"""
 
 from __future__ import annotations
 
 import json
 
-from dash import Input, Output, State, html
+from dash import Input, Output, State
 
 from dash_app import app
 from utils import read_df_from_store, classify_simple
-from components import make_column_badge
-
-
-VIRTUALIZATION_THRESHOLD = 200
-DEFAULT_VIRTUAL_WINDOW = 48
-VIRTUAL_ROW_HEIGHT = 29
+from components import COLUMN_TYPE_LABELS
 
 
 def _column_model(filtered_json, meta):
@@ -36,45 +41,9 @@ def _column_model(filtered_json, meta):
     return [str(column) for column in frame.columns], numeric, categorical, datetime
 
 
-def _window_bounds(total, enabled, window_state):
-    if not enabled:
-        return 0, total
-    state = window_state if isinstance(window_state, dict) else {}
-    try:
-        start = max(0, int(state.get("start", 0)))
-        size = max(16, int(state.get("size", DEFAULT_VIRTUAL_WINDOW)))
-    except (TypeError, ValueError):
-        start, size = 0, DEFAULT_VIRTUAL_WINDOW
-    start = min(start, max(0, total - 1))
-    return start, min(total, start + size)
-
-
-@app.callback(
-    Output("columns-badges", "children"),
-    Output("dataset-column-catalog", "children"),
-    Output("dataset-virtualization-status", "children"),
-    Input("filtered-data", "data"),
-    Input("dataset-virtualize-columns", "checked"),
-    Input("dataset-virtual-window", "data"),
-    State("meta-columns", "data"),
-    State("dataset-registry", "data"),
-    State("active-dataset-id", "data"),
-    prevent_initial_call=False,
-)
-def update_column_badges(
-    filtered_json,
-    virtualize_columns,
-    virtual_window,
-    meta,
-    registry=None,
-    active_id=None,
-):
-    """Render all channels or only the visible window for wide datasets."""
+def build_column_rail_model(filtered_json, meta, registry=None, active_id=None):
+    """Compact, JSON-friendly description of the channel rail."""
     columns, numeric, categorical, datetime = _column_model(filtered_json, meta)
-    catalog = json.dumps(columns, ensure_ascii=False, separators=(",", ":"))
-    if not columns:
-        return [], catalog, ""
-
     all_types = {str(column): "numeric" for column in numeric}
     all_types.update({str(column): "categorical" for column in categorical})
     all_types.update({str(column): "datetime" for column in datetime})
@@ -85,66 +54,91 @@ def update_column_badges(
         for step in (record.get("steps") or [])
         for output in (step.get("outputs") or [])
     }
+    return {
+        "columns": columns,
+        "types": [all_types.get(column, "categorical") for column in columns],
+        "derived": [index for index, column in enumerate(columns) if column in derived_columns],
+        "datasetId": str(active_id or ""),
+    }
 
-    virtualized = bool(
-        virtualize_columns and len(columns) > VIRTUALIZATION_THRESHOLD
-    )
-    start, end = _window_bounds(len(columns), virtualized, virtual_window)
-    children = []
-    if virtualized and start:
-        children.append(
-            html.Div(
-                className="column-virtual-spacer",
-                style={"height": f"{start * VIRTUAL_ROW_HEIGHT}px"},
-                **{"aria-hidden": "true"},
-            )
-        )
 
-    children.extend(
-        make_column_badge(
-            column,
-            all_types.get(column, "categorical"),
-            derived=column in derived_columns,
-            dataset_id=active_id,
-        )
-        for column in columns[start:end]
-    )
+@app.callback(
+    Output("dataset-column-model", "data"),
+    Input("filtered-data", "data"),
+    State("meta-columns", "data"),
+    State("dataset-registry", "data"),
+    State("active-dataset-id", "data"),
+    prevent_initial_call=False,
+)
+def update_column_badges(filtered_json, meta, registry=None, active_id=None):
+    return build_column_rail_model(filtered_json, meta, registry, active_id)
 
-    if virtualized and end < len(columns):
-        children.append(
-            html.Div(
-                className="column-virtual-spacer",
-                style={"height": f"{(len(columns) - end) * VIRTUAL_ROW_HEIGHT}px"},
-                **{"aria-hidden": "true"},
-            )
-        )
 
-    status = f"Виртуализация активна · {len(columns)} каналов" if virtualized else ""
-    return children, catalog, status
-
+_TYPE_LABELS_JS = {
+    key: {"mark": mark, "name": name} for key, (mark, name) in COLUMN_TYPE_LABELS.items()
+}
 
 app.clientside_callback(
     """
-    function(activeDatasetId, enabled) {
-        var sidebar = document.getElementById("columns-sidebar");
-        var isEnabled = Boolean(enabled);
-        if (sidebar) {
-            sidebar.scrollTop = 0;
-            sidebar.setAttribute(
-                "data-virtualization-enabled",
-                isEnabled ? "true" : "false"
-            );
+    function(model) {
+        var container = document.getElementById("columns-badges");
+        var catalog = document.getElementById("dataset-column-catalog");
+        model = model || {};
+        var columns = model.columns || [];
+        var types = model.types || [];
+        var derived = new Set(model.derived || []);
+        var datasetId = model.datasetId || "";
+        var labels = __TYPE_LABELS__;
+        if (catalog) catalog.textContent = JSON.stringify(columns);
+        if (!container) return window.dash_clientside.no_update;
+
+        var fragment = document.createDocumentFragment();
+        for (var i = 0; i < columns.length; i++) {
+            var name = String(columns[i]);
+            var type = types[i] || "categorical";
+            var label = labels[type] || {mark: "\\u2026", name: "Другой тип"};
+            var isDerived = derived.has(i);
+
+            var badge = document.createElement("div");
+            badge.className = "column-badge column-badge--" + type;
+            badge.draggable = true;
+            badge.title = name + " · " + label.name + (isDerived ? " · производный канал" : "");
+            badge.setAttribute("aria-label", "Перетащить канал «" + name + "»");
+            badge.setAttribute("data-column-name", name);
+            badge.setAttribute("data-column-type", type);
+            badge.setAttribute("data-dataset-id", datasetId);
+            badge.setAttribute("data-derived", isDerived ? "true" : "false");
+
+            var row = document.createElement("div");
+            row.className = "column-channel-row";
+            var marker = document.createElement("sup");
+            marker.className = "column-type-marker column-type-marker--" + type;
+            marker.setAttribute("aria-hidden", "true");
+            marker.textContent = label.mark;
+            row.appendChild(marker);
+            if (isDerived) {
+                var fx = document.createElement("sup");
+                fx.className = "column-derived-marker";
+                fx.title = "Создан в Data Engineering";
+                fx.textContent = "fx";
+                row.appendChild(fx);
+            }
+            var text = document.createElement("span");
+            text.className = "column-channel-name";
+            text.textContent = name;
+            row.appendChild(text);
+            var handle = document.createElement("span");
+            handle.className = "column-drag-handle";
+            handle.setAttribute("aria-hidden", "true");
+            row.appendChild(handle);
+
+            badge.appendChild(row);
+            fragment.appendChild(badge);
         }
-        return {
-            start: 0,
-            size: 48,
-            datasetId: activeDatasetId || null,
-            enabled: isEnabled
-        };
+        container.replaceChildren(fragment);
+        return columns.length;
     }
-    """,
-    Output("dataset-virtual-window", "data"),
-    Input("active-dataset-id", "data"),
-    Input("dataset-virtualize-columns", "checked"),
-    prevent_initial_call=False,
+    """.replace("__TYPE_LABELS__", json.dumps(_TYPE_LABELS_JS, ensure_ascii=False)),
+    Output("dataset-column-rendered", "data"),
+    Input("dataset-column-model", "data"),
 )

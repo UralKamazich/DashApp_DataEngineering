@@ -35,7 +35,6 @@ from layout import (
     MULTIVARIATE_WORKSPACE,
     create_layout,
 )
-app.layout = create_layout()
 GRAPH_WORKSPACE.register_callbacks(app)
 for dashboard_workspace in DASHBOARD_WORKSPACES:
     dashboard_workspace.register_callbacks(app)
@@ -65,3 +64,7 @@ from callbacks import (
     multivariate,
     pipeline,
 )
+
+# Layout is built after every callback module is imported: lazy option
+# callbacks (lazy_options.py) register the signature stores it must contain.
+app.layout = create_layout()

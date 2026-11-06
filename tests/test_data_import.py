@@ -160,3 +160,54 @@ class DataImportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StoreFrameCacheTests(unittest.TestCase):
+    def test_cached_read_returns_independent_copies(self):
+        from utils import meta_from_df, read_df_from_store
+
+        frame = pd.DataFrame({"code": ["001", "002"], "value": [1.5, 2.5]})
+        frame["code"] = frame["code"].astype("string")
+        meta = meta_from_df(frame)
+        payload = frame.to_json(date_format="iso", orient="split")
+
+        first = read_df_from_store(payload, meta)
+        first.loc[0, "value"] = 999.0
+        second = read_df_from_store(payload, meta)
+
+        self.assertEqual(second.loc[0, "value"], 1.5)
+        self.assertEqual(list(second["code"]), ["001", "002"])
+
+
+class ServerFrameStoreTests(unittest.TestCase):
+    def test_reference_round_trip_keeps_dtypes_and_isolates_copies(self):
+        from utils import frame_to_store, read_df_from_store, store_row_count
+
+        frame = pd.DataFrame({
+            "code": pd.array(["001", "002", "003"], dtype="string"),
+            "when": pd.to_datetime(["2026-01-02", "2026-03-04", "2026-05-06"]),
+            "value": [1.5, 2.5, 3.5],
+        })
+        reference = frame_to_store(frame)
+        self.assertLess(len(reference), 64)
+        self.assertEqual(store_row_count(reference), 3)
+
+        first = read_df_from_store(reference)
+        first.loc[0, "value"] = -1.0
+        frame.loc[1, "value"] = -2.0
+        second = read_df_from_store(reference)
+
+        pd.testing.assert_frame_equal(
+            second,
+            pd.DataFrame({
+                "code": pd.array(["001", "002", "003"], dtype="string"),
+                "when": pd.to_datetime(["2026-01-02", "2026-03-04", "2026-05-06"]),
+                "value": [1.5, 2.5, 3.5],
+            }),
+        )
+
+    def test_unknown_reference_returns_empty_frame(self):
+        from utils import read_df_from_store, store_row_count
+
+        self.assertTrue(read_df_from_store("dfref:missing").empty)
+        self.assertEqual(store_row_count("dfref:missing"), 0)

@@ -103,3 +103,7 @@ STYLE_CARD = {
 }
 PAPER_BASE = {"height": "auto", "overflow": "visible"}
 initial_fig = go.Figure()
+
+# Mantine column pickers render only this many matching options at once;
+# the rest are reachable through search.  Keeps 1000+ column lists snappy.
+COLUMN_LIST_LIMIT = 100

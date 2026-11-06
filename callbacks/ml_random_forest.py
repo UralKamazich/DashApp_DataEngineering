@@ -8,6 +8,7 @@ from dash import Input, Output, State, html, no_update
 from dash.exceptions import PreventUpdate
 
 from dash_app import app
+from lazy_options import lazy_callback
 from callbacks.ml import (
     _diagnostics_figure,
     _empty_figure,
@@ -26,7 +27,7 @@ from dataset_registry import (
 from ml_engine import cache_result, cached_result, ml_signature
 from ml_jobs import cancel_ml_job, ml_job_snapshot, submit_ml_job, take_ml_job_result
 from ml_models import get_model_adapter
-from utils import meta_from_df, read_df_from_store
+from utils import frame_to_store, meta_from_df, read_df_from_store
 
 
 def _rf_signature(input_id, scope, task, target, id_column, features, method,
@@ -76,7 +77,8 @@ def sync_rf_dataset_selector(registry, active_id, current):
     return options, selected, label, "teal"
 
 
-@app.callback(
+@lazy_callback(
+    "/ml/random-forest", "rf-columns",
     Output("rf-target", "data"), Output("rf-target", "value"),
     Output("rf-id-column", "data"), Output("rf-id-column", "value"),
     Output("rf-features", "data"), Output("rf-features", "value"),
@@ -640,7 +642,7 @@ def commit_rf_prediction(_clicks, store, registry, output_name, *values):
         resolved_name = suggest_dataset_name(registry, [{"operation": operation}], scope or "base")
     updated, _result_id = commit_result(
         registry, input_id,
-        cached.frame.to_json(date_format="iso", orient="split"),
+        frame_to_store(cached.frame),
         meta_from_df(cached.frame), cached.committed_step,
         output_mode="new", output_name=resolved_name,
     )

@@ -3,6 +3,7 @@
 
 from dash import html
 import dash_mantine_components as dmc
+from config import COLUMN_LIST_LIMIT
 
 from components import (
     agg_cols_select,
@@ -269,6 +270,7 @@ def _reshape_panel():
         "clearable": True,
         "nothingFoundMessage": "Ничего не найдено",
         "maxDropdownHeight": 420,
+        "limit": COLUMN_LIST_LIMIT,
         "comboboxProps": {"shadow": "md"},
         "size": "xs",
     }

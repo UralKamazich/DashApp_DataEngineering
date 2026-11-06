@@ -19,6 +19,7 @@ from utils import (
     classify_simple,
     create_value_control,
     read_df_from_store,
+    store_row_count,
 )
 
 
@@ -247,13 +248,7 @@ def _filter_card(filter_id, column, filters_state, frame):
 
 
 def _serialized_row_count(payload):
-    if not payload:
-        return 0
-    try:
-        decoded = json.loads(payload)
-        return len(decoded.get("index") or [])
-    except Exception:
-        return 0
+    return store_row_count(payload)
 
 
 @app.callback(
