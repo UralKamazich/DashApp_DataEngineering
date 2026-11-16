@@ -10,7 +10,7 @@ from dash import Input, Output, State, no_update
 from flask import jsonify, request
 
 from dash_app import app
-from express_correlation import METHODS, crossplot_points, rank_correlations
+from express_correlation import crossplot_points, rank_correlations
 from express_correlation_workspace import PAGE_PATH
 from lazy_options import lazy_callback
 from utils import frame_to_store, is_store_reference, read_df_shared
@@ -48,8 +48,7 @@ def update_express_options(filtered_json, meta, target, start_after):
 MIN_PAIRS = 3
 
 
-def build_rating(payload, meta, target, method, exclude_zero, start_after,
-                 min_periods=10):
+def build_rating(payload, meta, target, exclude_zero, start_after, min_periods=10):
     """Compute the rating dict sent to the browser (pure, testable)."""
     if not payload:
         return {"error": "Сначала загрузите датасет."}
@@ -61,7 +60,7 @@ def build_rating(payload, meta, target, method, exclude_zero, start_after,
         if frame is None or frame.empty:
             return {"error": "Датасет пуст или больше недоступен — откройте файл заново."}
         result = rank_correlations(
-            frame, target, method,
+            frame, target,
             min_periods=max(MIN_PAIRS, int(min_periods or MIN_PAIRS)),
             exclude_zero=bool(exclude_zero),
             start_after=start_after or None,
@@ -77,7 +76,7 @@ def status_text(result):
     if result.get("error"):
         return result["error"]
     parts = [
-        f"{METHODS.get(result['method'], result['method'])} · «{result['target']}»",
+        f"Пирсон и Спирмен · «{result['target']}»",
         f"каналов: {len(result['rows'])}",
     ]
     if result.get("excluded"):
@@ -98,20 +97,19 @@ def status_text(result):
     State("filtered-data", "data"),
     State("meta-columns", "data"),
     State("xcorr-target", "value"),
-    State("xcorr-method", "value"),
     State("xcorr-exclude-zero", "checked"),
     State("xcorr-start-after", "value"),
     State("xcorr-min-periods", "value"),
     running=[(Output("xcorr-run", "loading"), True, False)],
     prevent_initial_call=True,
 )
-def calculate_express_rating(n_clicks, payload, meta, target, method, exclude_zero,
+def calculate_express_rating(n_clicks, payload, meta, target, exclude_zero,
                              start_after, min_periods):
     if not n_clicks:
         return no_update, no_update
     try:
         result = build_rating(
-            payload, meta, target, method, exclude_zero, start_after, min_periods
+            payload, meta, target, exclude_zero, start_after, min_periods
         )
     except Exception as error:  # surfaced in the table area, not a crash
         result = {"error": f"Не удалось рассчитать: {error}"}

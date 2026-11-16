@@ -9,8 +9,8 @@
 (function () {
   "use strict";
 
-  const METHOD_LABELS = { pearson: "Пирсон", spearman: "Спирмен" };
-  const state = { result: null, sortKey: "abs_r", asc: false, filter: "" };
+  // Sort keys: "pearson"/"spearman" sort by |coefficient|; "channel" by name.
+  const state = { result: null, sortKey: "pearson", asc: false, filter: "" };
   const openedCount = new Map();
   let zIndex = 1500;
   let windowSeq = 0;
@@ -45,6 +45,13 @@
   }
 
   // ------------------------------------------------------------------ table
+  function sortValue(row, key) {
+    if (key === "pearson" || key === "spearman") {
+      return row[key] == null ? -Infinity : Math.abs(row[key]);
+    }
+    return row[key] == null ? -Infinity : row[key];
+  }
+
   function sortedRows() {
     const result = state.result;
     if (!result || !Array.isArray(result.rows)) return [];
@@ -55,13 +62,23 @@
     const key = state.sortKey;
     const dir = state.asc ? 1 : -1;
     rows.sort((a, b) => {
-      if (key === "rank") return (a.index - b.index) * dir;
-      if (key === "channel") return a.row.channel.localeCompare(b.row.channel, "ru") * dir;
-      const av = a.row[key], bv = b.row[key];
-      const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
-      return (an - bn) * dir;
+      if (key === "channel") {
+        // Ignore stray leading/trailing spaces in column names (common in Excel).
+        return a.row.channel.trim().localeCompare(b.row.channel.trim(), "ru", { sensitivity: "base", numeric: true }) * dir;
+      }
+      return (sortValue(a.row, key) - sortValue(b.row, key)) * dir;
     });
     return rows;
+  }
+
+  function coefficientCell(value) {
+    if (value == null || !isFinite(value)) return '<td class="num">—</td><td></td>';
+    const sign = value >= 0 ? "pos" : "neg";
+    const width = Math.round(Math.min(1, Math.abs(value)) * 100);
+    return (
+      '<td class="num xcorr-r-' + sign + '">' + fmtR(value) + "</td>" +
+      '<td><div class="xcorr-bar"><span class="' + sign + '" style="width:' + width + '%"></span></div></td>'
+    );
   }
 
   function draw() {
@@ -77,28 +94,35 @@
       return;
     }
     const rows = sortedRows();
-    const head = [
-      ["rank", "№", "num"], ["channel", "Канал", ""], ["r", "r", "num"],
-      ["abs_r", "|r|", ""], ["n", "N", "num"], ["p", "p-value", "num"],
-    ].map(([key, label, cls]) => {
+    const header = (key, label, cls, colspan, title) => {
+      if (!key) return '<th class="' + (cls || "") + '"' + (colspan ? ' colspan="' + colspan + '"' : "") + ">" + label + "</th>";
       const sorted = state.sortKey === key;
-      const classes = [cls, sorted ? "is-sorted" : "", sorted && state.asc ? "is-asc" : ""]
+      const classes = ["is-sortable", cls, sorted ? "is-sorted" : "", sorted && state.asc ? "is-asc" : ""]
         .filter(Boolean).join(" ");
-      return '<th data-key="' + key + '" class="' + classes + '">' + label + "</th>";
-    }).join("");
+      return '<th data-key="' + key + '" class="' + classes + '"' +
+        (colspan ? ' colspan="' + colspan + '"' : "") +
+        (title ? ' title="' + esc(title) + '"' : "") + ">" + label + "</th>";
+    };
+    const head =
+      header(null, "№", "num") +
+      header("channel", "Канал", "", 0, "Сортировать по названию") +
+      header("pearson", "Пирсон r", "", 2, "Сортировать по |r| Пирсона") +
+      header("spearman", "Спирмен ρ", "", 2, "Сортировать по |ρ| Спирмена") +
+      header("n", "N", "num", 0, "Число пар значений") +
+      header("p_pearson", "p (r)", "num", 0, "p-value для r Пирсона") +
+      header("p_spearman", "p (ρ)", "num", 0, "p-value для ρ Спирмена");
 
-    const body = rows.map(({ row, index }) => {
-      const sign = row.r >= 0 ? "pos" : "neg";
-      const width = Math.round(Math.min(1, Math.abs(row.r)) * 100);
+    const body = rows.map(({ row, index }, position) => {
       const opened = openedCount.get(row.channel) ? ' class="is-opened"' : "";
       return (
         '<tr data-index="' + index + '"' + opened + ">" +
-        '<td class="rank num">' + (index + 1) + "</td>" +
+        '<td class="rank num">' + (position + 1) + "</td>" +
         '<td class="channel" title="' + esc(row.channel) + '">' + esc(row.channel) + "</td>" +
-        '<td class="num xcorr-r-' + sign + '">' + fmtR(row.r) + "</td>" +
-        '<td><div class="xcorr-bar"><span class="' + sign + '" style="width:' + width + '%"></span></div></td>' +
+        coefficientCell(row.pearson) +
+        coefficientCell(row.spearman) +
         '<td class="num">' + fmtInt(row.n) + "</td>" +
-        '<td class="num">' + fmtP(row.p) + "</td>" +
+        '<td class="num">' + fmtP(row.p_pearson) + "</td>" +
+        '<td class="num">' + fmtP(row.p_spearman) + "</td>" +
         "</tr>"
       );
     }).join("");
@@ -114,14 +138,15 @@
   }
 
   document.addEventListener("click", function (event) {
-    const header = event.target.closest && event.target.closest("#xcorr-table thead th");
+    const header = event.target.closest && event.target.closest("#xcorr-table thead th[data-key]");
     if (header) {
       const key = header.getAttribute("data-key");
       if (state.sortKey === key) {
         state.asc = !state.asc;
       } else {
         state.sortKey = key;
-        state.asc = key === "channel" || key === "rank" || key === "p";
+        // names and p-values ascending, coefficients/N strongest first
+        state.asc = key === "channel" || key.startsWith("p_");
       }
       draw();
       return;
@@ -227,24 +252,47 @@
     }
     ctx.restore();
 
-    // titles (kept inside the image so a copied picture is self-describing)
-    ctx.fillStyle = "#212529";
-    ctx.textAlign = "left";
+    // titles (kept inside the image so a copied picture is self-describing).
+    // Coefficients are drawn first; the title gets only the space left of
+    // them and is cut with an ellipsis instead of overlapping/squeezing.
+    const regular = "11px -apple-system, Segoe UI, Roboto, sans-serif";
+    const bold = "600 12px -apple-system, Segoe UI, Roboto, sans-serif";
     ctx.textBaseline = "alphabetic";
-    ctx.font = "600 12px -apple-system, Segoe UI, Roboto, sans-serif";
-    const title = data.y_column + "  vs  " + data.x_column;
-    ctx.fillText(title, m.left, 16, pw);
-    ctx.font = "11px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.font = regular;
     ctx.textAlign = "right";
     ctx.fillStyle = "#495057";
-    ctx.fillText("r = " + fmtR(data.pearson) + "   ρ = " + fmtR(data.spearman), width - m.right, 16);
+    const coefficients = "r = " + fmtR(data.pearson) + "   ρ = " + fmtR(data.spearman);
+    ctx.fillText(coefficients, width - m.right, 16);
+    const coefficientsWidth = ctx.measureText(coefficients).width;
+
+    ctx.font = bold;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#212529";
+    const titleLeft = 10;
+    const titleWidth = width - m.right - coefficientsWidth - 16 - titleLeft;
+    ctx.fillText(ellipsize(ctx, data.y_column + "  vs  " + data.x_column, titleWidth), titleLeft, 16);
+
+    ctx.font = regular;
+    ctx.fillStyle = "#495057";
     ctx.textAlign = "center";
-    ctx.fillText(data.x_column, m.left + pw / 2, height - 8, pw);
+    ctx.fillText(ellipsize(ctx, data.x_column, pw), m.left + pw / 2, height - 8);
     ctx.save();
     ctx.translate(13, m.top + ph / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(data.y_column, 0, 0, ph);
+    ctx.fillText(ellipsize(ctx, data.y_column, ph), 0, 0);
     ctx.restore();
+  }
+
+  function ellipsize(ctx, text, maxWidth) {
+    text = String(text);
+    if (maxWidth <= 0) return "";
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let low = 0, high = text.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (ctx.measureText(text.slice(0, mid) + "…").width <= maxWidth) low = mid; else high = mid - 1;
+    }
+    return low > 0 ? text.slice(0, low) + "…" : "";
   }
 
   // ---------------------------------------------------------------- windows
@@ -394,5 +442,5 @@
       });
   }
 
-  window.expressCorr = Object.freeze({ render, openWindow, methodLabels: METHOD_LABELS });
+  window.expressCorr = Object.freeze({ render, openWindow });
 })();

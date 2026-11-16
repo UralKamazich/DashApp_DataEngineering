@@ -47,9 +47,16 @@
     text-align: left;
     font-weight: 600;
     color: #495057;
-    cursor: pointer;
     user-select: none;
     white-space: nowrap;
+}
+
+.xcorr-table thead th.is-sortable {
+    cursor: pointer;
+}
+
+.xcorr-table thead th.is-sortable:hover {
+    color: #1c7ed6;
 }
 
 .xcorr-table thead th.is-sorted::after {
@@ -105,7 +112,7 @@
 
 .xcorr-bar {
     position: relative;
-    width: 140px;
+    width: 110px;
     height: 10px;
     background: #f1f3f5;
     border-radius: 3px;

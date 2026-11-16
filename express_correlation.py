@@ -24,7 +24,6 @@ from scipy import special, stats
 
 CHUNK_ELEMENTS = 8_000_000          # ~64 MB of float64 per working block
 MAX_SCATTER_POINTS = 50_000
-METHODS = {"pearson": "Пирсон", "spearman": "Спирмен"}
 _WORKERS = max(1, min(8, (os.cpu_count() or 2)))
 
 
@@ -109,16 +108,19 @@ def _iter_blocks(columns, n_rows):
         yield columns[start:start + size]
 
 
-def rank_correlations(frame: pd.DataFrame, target: str, method: str = "pearson",
-                      min_periods: int = 10, *, exclude_zero: bool = True,
-                      start_after: str | None = None) -> dict:
-    """Correlate *target* with every other numeric channel, strongest first.
+def _round(value):
+    return round(float(value), 6) if np.isfinite(value) else None
 
-    ``exclude_zero`` treats zeros as missing values (in the target and every
-    channel); ``start_after`` limits the analysis to columns located to the
-    right of that column.
+
+def rank_correlations(frame: pd.DataFrame, target: str, min_periods: int = 10, *,
+                      exclude_zero: bool = True, start_after: str | None = None) -> dict:
+    """Pearson and Spearman of *target* against every other numeric channel.
+
+    Both coefficients are computed in one pass over the data (each column
+    block is read once).  ``exclude_zero`` treats zeros as missing values (in
+    the target and every channel); ``start_after`` limits the analysis to
+    columns located to the right of that column.  Rows are ordered by |r|.
     """
-    method = method if method in METHODS else "pearson"
     min_periods = max(int(min_periods or 3), 3)
     lookup = _column_lookup(frame)
     if target not in lookup:
@@ -129,69 +131,66 @@ def rank_correlations(frame: pd.DataFrame, target: str, method: str = "pearson",
     valid_y = np.isfinite(y)
     n_rows = len(frame.index)
 
-    r_all = np.full(len(channels), np.nan)
-    n_all = np.zeros(len(channels), dtype=np.int64)
+    pearson = np.full(len(channels), np.nan)
+    spearman = np.full(len(channels), np.nan)
+    pairs = np.zeros(len(channels), dtype=np.int64)
     position = {column: index for index, column in enumerate(channels)}
 
-    if method == "pearson":
-        for block in _iter_blocks(channels, n_rows):
-            X = frame[[lookup[c] for c in block]].to_numpy(dtype=np.float64, na_value=np.nan, copy=True)
+    y_sub = y[valid_y]
+    y_rank = stats.rankdata(y_sub) if y_sub.size else y_sub
+    y_centered = y_rank - (y_rank.mean() if y_rank.size else 0.0)
+    y_norm = float(np.sqrt(np.dot(y_centered, y_centered))) if y_rank.size else 0.0
+
+    def spearman_column(x):
+        joint = np.isfinite(x)
+        count = int(joint.sum())
+        if count < 3:
+            return math.nan
+        if count == x.size:
+            rx = stats.rankdata(x)
+            rx -= rx.mean()
+            denominator = float(np.sqrt(np.dot(rx, rx))) * y_norm
+            if denominator <= 0:
+                return math.nan
+            return float(np.dot(rx, y_centered) / denominator)
+        r, _ = _pearson_pair(stats.rankdata(x[joint]), stats.rankdata(y_sub[joint]))
+        return r
+
+    # numpy sorting releases the GIL, so Spearman ranking parallelises.
+    with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+        for block in _iter_blocks(channels, max(1, n_rows)):
+            X = frame[[lookup[c] for c in block]].to_numpy(
+                dtype=np.float64, na_value=np.nan, copy=True
+            )
             _clean_block(X, exclude_zero)
-            r, n = _pearson_block(X, y)
             idx = [position[c] for c in block]
-            r_all[idx], n_all[idx] = r, n
-    else:
-        y_sub = y[valid_y]
-        y_rank = stats.rankdata(y_sub)
-        y_centered = y_rank - y_rank.mean()
-        y_norm = float(np.sqrt(np.dot(y_centered, y_centered)))
+            r, n = _pearson_block(X, y)
+            pearson[idx], pairs[idx] = r, n
+            X_sub = X[valid_y]
+            spearman[idx] = list(pool.map(
+                spearman_column, (X_sub[:, i] for i in range(X_sub.shape[1]))
+            ))
 
-        def spearman_column(x):
-            joint = np.isfinite(x)
-            count = int(joint.sum())
-            if count < 3:
-                return math.nan, count
-            if count == x.size:
-                rx = stats.rankdata(x)
-                rx -= rx.mean()
-                denominator = float(np.sqrt(np.dot(rx, rx))) * y_norm
-                if denominator <= 0:
-                    return math.nan, count
-                return float(np.dot(rx, y_centered) / denominator), count
-            r, _ = _pearson_pair(stats.rankdata(x[joint]), stats.rankdata(y_sub[joint]))
-            return r, count
-
-        sub_rows = max(1, int(valid_y.sum()))
-        # numpy sorting releases the GIL, so ranking parallelises across cores.
-        with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
-            for block in _iter_blocks(channels, sub_rows):
-                X = frame[[lookup[c] for c in block]].to_numpy(
-                    dtype=np.float64, na_value=np.nan, copy=True
-                )[valid_y]
-                _clean_block(X, exclude_zero)
-                results = pool.map(spearman_column, (X[:, i] for i in range(X.shape[1])))
-                for column, (r, count) in zip(block, results):
-                    idx = position[column]
-                    r_all[idx], n_all[idx] = r, count
-
-    p_all = _p_values(r_all, n_all)
+    p_pearson = _p_values(pearson, pairs)
+    p_spearman = _p_values(spearman, pairs)
     rows = []
     excluded = 0
-    for column, r, n, p in zip(channels, r_all, n_all, p_all):
-        if not np.isfinite(r) or n < min_periods:
+    for i, column in enumerate(channels):
+        if pairs[i] < min_periods or not (np.isfinite(pearson[i]) or np.isfinite(spearman[i])):
             excluded += 1
             continue
         rows.append({
             "channel": column,
-            "r": round(float(r), 6),
-            "abs_r": round(abs(float(r)), 6),
-            "n": int(n),
-            "p": float(p) if np.isfinite(p) else None,
+            "pearson": _round(pearson[i]),
+            "spearman": _round(spearman[i]),
+            "n": int(pairs[i]),
+            "p_pearson": float(p_pearson[i]) if np.isfinite(p_pearson[i]) else None,
+            "p_spearman": float(p_spearman[i]) if np.isfinite(p_spearman[i]) else None,
         })
-    rows.sort(key=lambda row: row["abs_r"], reverse=True)
+    rows.sort(key=lambda row: abs(row["pearson"] if row["pearson"] is not None else 0.0),
+              reverse=True)
     return {
         "target": target,
-        "method": method,
         "rows": rows,
         "channels_total": len(channels),
         "excluded": excluded,

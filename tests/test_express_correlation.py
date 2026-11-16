@@ -29,28 +29,36 @@ def _frame(seed=1, n=2000):
 
 
 class RankCorrelationTests(unittest.TestCase):
-    def _assert_matches_pandas(self, method, exclude_zero):
+    def _assert_matches_pandas(self, exclude_zero):
         frame = _frame()
         numeric = frame.drop(columns=["name"])
         if exclude_zero:
             numeric = numeric.replace(0, np.nan)
-        expected = numeric.corr(method=method)["target"].drop("target").dropna()
-        result = rank_correlations(frame, "target", method, exclude_zero=exclude_zero)
-        got = pd.Series({row["channel"]: row["r"] for row in result["rows"]})
-        self.assertEqual(set(got.index), set(expected.index))
-        self.assertLess(float((got - expected[got.index]).abs().max()), 1e-5)
+        result = rank_correlations(frame, "target", exclude_zero=exclude_zero)
+        for method in ("pearson", "spearman"):
+            expected = numeric.corr(method=method)["target"].drop("target").dropna()
+            got = pd.Series({row["channel"]: row[method] for row in result["rows"]})
+            self.assertEqual(set(got.index), set(expected.index), method)
+            self.assertLess(float((got - expected[got.index]).abs().max()), 1e-5, method)
 
-    def test_pearson_matches_pandas_with_and_without_zeros(self):
-        self._assert_matches_pandas("pearson", exclude_zero=False)
-        self._assert_matches_pandas("pearson", exclude_zero=True)
+    def test_both_coefficients_match_pandas_without_zero_exclusion(self):
+        self._assert_matches_pandas(exclude_zero=False)
 
-    def test_spearman_matches_pandas_with_and_without_zeros(self):
-        self._assert_matches_pandas("spearman", exclude_zero=False)
-        self._assert_matches_pandas("spearman", exclude_zero=True)
+    def test_both_coefficients_match_pandas_with_zero_exclusion(self):
+        self._assert_matches_pandas(exclude_zero=True)
 
-    def test_rows_are_sorted_by_absolute_r_and_constant_is_excluded(self):
+    def test_p_values_match_scipy(self):
+        from scipy import stats
+
+        frame = _frame()
+        row = next(r for r in rank_correlations(frame, "target")["rows"] if r["channel"] == "c1")
+        pair = frame[["target", "c1"]].replace(0, np.nan).dropna()
+        self.assertAlmostEqual(row["p_pearson"], stats.pearsonr(pair.target, pair.c1).pvalue, places=8)
+        self.assertAlmostEqual(row["p_spearman"], stats.spearmanr(pair.target, pair.c1).pvalue, places=8)
+
+    def test_rows_are_sorted_by_absolute_pearson_and_constant_is_excluded(self):
         result = rank_correlations(_frame(), "target")
-        strengths = [row["abs_r"] for row in result["rows"]]
+        strengths = [abs(row["pearson"]) for row in result["rows"]]
         self.assertEqual(strengths, sorted(strengths, reverse=True))
         self.assertEqual(result["rows"][0]["channel"], "c0")
         self.assertNotIn("const", [row["channel"] for row in result["rows"]])
@@ -103,12 +111,13 @@ class ExpressPageTests(unittest.TestCase):
     def test_build_rating_returns_reference_and_status(self):
         frame = _frame()
         ref = frame_to_store(frame)
-        result = build_rating(ref, meta_from_df(frame), "target", "spearman", True, None)
+        result = build_rating(ref, meta_from_df(frame), "target", True, None)
         self.assertEqual(result["ref"], ref)
         self.assertTrue(result["rows"])
-        self.assertIn("Спирмен", status_text(result))
+        self.assertIn("Пирсон и Спирмен", status_text(result))
+        self.assertIn("spearman", result["rows"][0])
         self.assertIn("без нулей", status_text(result))
-        self.assertIn("error", build_rating(None, {}, "target", "pearson", True, None))
+        self.assertIn("error", build_rating(None, {}, "target", True, None))
 
     def test_page_is_in_layout_and_navigation(self):
         layout = json.dumps(
@@ -116,7 +125,7 @@ class ExpressPageTests(unittest.TestCase):
             ensure_ascii=False,
         )
         for component_id in (
-            "page-express-correlation", "xcorr-target", "xcorr-method",
+            "page-express-correlation", "xcorr-target",
             "xcorr-exclude-zero", "xcorr-start-after", "xcorr-run", "xcorr-table",
         ):
             self.assertIn(f'"{component_id}"', layout)

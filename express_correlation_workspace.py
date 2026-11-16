@@ -57,22 +57,6 @@ def create_express_correlation_workspace():
                     className="xcorr-dropdown",
                     labels=DROPDOWN_LABELS,
                 ), width=260),
-                dmc.Stack(
-                    gap=3,
-                    children=[
-                        dmc.Text("Метод", size="xs", fw=500),
-                        dmc.SegmentedControl(
-                            id="xcorr-method",
-                            data=[
-                                {"label": "Пирсон", "value": "pearson"},
-                                {"label": "Спирмен", "value": "spearman"},
-                            ],
-                            value="pearson",
-                            size="xs",
-                            persistence=True,
-                        ),
-                    ],
-                ),
                 _labeled("Начать правее столбца", dcc.Dropdown(
                     id="xcorr-start-after",
                     options=[],
