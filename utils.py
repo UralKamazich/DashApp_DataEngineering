@@ -127,6 +127,21 @@ def is_store_reference(value) -> bool:
     return isinstance(value, str) and value.startswith(STORE_REF_PREFIX)
 
 
+def read_df_shared(payload, meta: dict | None = None) -> pd.DataFrame:
+    """Like read_df_from_store, but returns the server-side frame without a copy.
+
+    For read-only analysis of very large datasets.  Callers MUST NOT mutate
+    the returned frame.
+    """
+    if is_store_reference(payload):
+        with _FRAME_STORE_LOCK:
+            frame = _FRAME_STORE.get(payload)
+            if frame is not None:
+                _FRAME_STORE.move_to_end(payload)
+        return frame if frame is not None else pd.DataFrame()
+    return read_df_from_store(payload, meta)
+
+
 def store_row_count(payload) -> int:
     """Row count of a store payload without copying the frame."""
     if not payload:

@@ -1,0 +1,243 @@
+/* «Экспресс корр. анализ»: rating table and floating cross-plot windows. */
+
+.xcorr-workspace {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.xcorr-dropdown {
+    font-size: 12px;
+}
+
+.xcorr-dropdown .Select-control,
+.xcorr-dropdown .dash-dropdown {
+    min-height: 30px;
+}
+
+.xcorr-table-host {
+    max-height: calc(100vh - 250px);
+    overflow: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.xcorr-empty {
+    padding: 24px;
+    color: #868e96;
+    font-size: 12px;
+    text-align: center;
+}
+
+.xcorr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.xcorr-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.xcorr-table thead th.is-sorted::after {
+    content: " ▼";
+    font-size: 9px;
+    color: #228be6;
+}
+
+.xcorr-table thead th.is-sorted.is-asc::after {
+    content: " ▲";
+}
+
+.xcorr-table th.num,
+.xcorr-table td.num {
+    text-align: right;
+}
+
+.xcorr-table tbody tr {
+    cursor: pointer;
+}
+
+.xcorr-table tbody tr:nth-child(even) {
+    background: #fcfcfd;
+}
+
+.xcorr-table tbody tr:hover {
+    background: #e7f5ff;
+}
+
+.xcorr-table tbody tr.is-opened td:first-child {
+    box-shadow: inset 3px 0 0 #228be6;
+}
+
+.xcorr-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #f1f3f5;
+    white-space: nowrap;
+}
+
+.xcorr-table td.channel {
+    max-width: 420px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.xcorr-table td.rank {
+    color: #adb5bd;
+    width: 1%;
+}
+
+.xcorr-r-pos { color: #c92a2a; font-weight: 600; }
+.xcorr-r-neg { color: #1864ab; font-weight: 600; }
+
+.xcorr-bar {
+    position: relative;
+    width: 140px;
+    height: 10px;
+    background: #f1f3f5;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.xcorr-bar > span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 3px;
+}
+
+.xcorr-bar > span.pos { background: #ff8787; }
+.xcorr-bar > span.neg { background: #74c0fc; }
+
+/* ---- Floating cross-plot windows ---- */
+
+.xcorr-window {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    width: 460px;
+    height: 400px;
+    min-width: 280px;
+    min-height: 220px;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    resize: both;
+    overflow: hidden;
+    font-family: inherit;
+}
+
+.xcorr-window.is-dragging {
+    opacity: 0.92;
+    user-select: none;
+}
+
+.xcorr-window-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px 5px 10px;
+    background: #f1f3f5;
+    border-bottom: 1px solid #dee2e6;
+    cursor: move;
+    flex: 0 0 auto;
+}
+
+.xcorr-window-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #343a40;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.xcorr-window-note {
+    font-size: 11px;
+    color: #2b8a3e;
+    white-space: nowrap;
+}
+
+.xcorr-window-note.is-error {
+    color: #c92a2a;
+}
+
+.xcorr-window-btn {
+    flex: 0 0 auto;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 12px;
+    line-height: 18px;
+    color: #495057;
+    cursor: pointer;
+}
+
+.xcorr-window-btn:hover {
+    background: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.xcorr-window-close {
+    font-size: 17px;
+    padding: 0 7px;
+}
+
+.xcorr-window-close:hover {
+    background: #ffe3e3;
+    color: #c92a2a;
+}
+
+.xcorr-window-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.xcorr-window-body canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+.xcorr-window-foot {
+    flex: 0 0 auto;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: #495057;
+    border-top: 1px solid #f1f3f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+}
+
+.xcorr-window-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #868e96;
+}

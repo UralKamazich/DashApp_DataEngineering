@@ -54,6 +54,7 @@ from callbacks import (
     datasets,
     download,
     dropdowns,
+    express_correlation,
     file_handling,
     filters,
     graph,

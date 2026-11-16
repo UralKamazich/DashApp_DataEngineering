@@ -14,6 +14,7 @@ from dash_iconify import DashIconify
 from config import APP_NAME, STYLE_CARD
 from data_import import POPULAR_DATASETS
 from correlation_workspace import CorrelationWorkspace
+from express_correlation_workspace import create_express_correlation_workspace
 from data_engineering_workspace import create_data_engineering_workspace
 from dashboard_workspace import DASHBOARD_WORKSPACES, create_dashboard_workspace
 from clustering_workspace import create_clustering_workspace
@@ -50,6 +51,7 @@ NAV_LINKS = [
     {"label": "Дашборд", "href": "/dashboard"},
     {"label": "Multi‑Y", "href": "/multi-y"},
     {"label": "Корреляционный анализ", "href": "/correlation"},
+    {"label": "Экспресс корр. анализ", "href": "/express-correlation"},
     {"label": "Data Engineering", "href": "/data-engineering"},
     {"label": "Кластеризация", "href": "/clustering"},
     {"label": "ML", "href": "/ml/experiments"},
@@ -423,6 +425,12 @@ def create_layout():
                     html.Div(id="page-multi-y", style={"display": "none"}, children=[
                         multi_y_workspace,
                     ]),
+
+                    html.Div(
+                        id="page-express-correlation",
+                        style={"display": "none", "minWidth": "0", "width": "100%"},
+                        children=[create_express_correlation_workspace()],
+                    ),
 
                     html.Div(id="page-correlation", style={"display": "none"}, children=[
                         correlation_workspace,

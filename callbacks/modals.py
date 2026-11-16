@@ -35,6 +35,7 @@ app.clientside_callback(
         "/dashboard": "page-dashboard",
             "/multi-y": "page-multi-y",
             "/correlation": "page-correlation",
+            "/express-correlation": "page-express-correlation",
             "/data-engineering": "page-data-engineering",
             "/clustering": "page-clustering",
             "/ml": "page-ml"
